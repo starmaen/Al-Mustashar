@@ -1,0 +1,30 @@
+# Build
+build/
+app/build/
+.gradle/
+*.apk
+*.aab
+
+# Secrets
+google-services.json
+app/google-services.json
+serviceAccount.json
+*.jks
+*.keystore
+
+# Data & Temp
+*.pdf
+*.json
+!package.json
+*.png
+*.jpg
+ocr_old/
+node_modules/
+*.log
+*.tmp
+*.py
+
+# IDE
+.idea/
+*.iml
+.vscode/

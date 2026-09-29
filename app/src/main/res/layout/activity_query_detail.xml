@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#F5F5F5">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical" android:padding="16dp">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="السؤال" android:textColor="#1A237E" android:textSize="18sp"
+            android:textStyle="bold" />
+        <TextView android:id="@+id/tvQueryDetailQuestion" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:padding="12dp" android:background="#FFFFFF"
+            android:textColor="#212121" android:textSize="15sp" android:textIsSelectable="true" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:text="الإجابة" android:textColor="#1A237E"
+            android:textSize="18sp" android:textStyle="bold" />
+        <TextView android:id="@+id/tvQueryDetailAnswer" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:padding="12dp" android:background="#FFFFFF"
+            android:textColor="#212121" android:textSize="14sp" android:textIsSelectable="true" />
+        <Button android:id="@+id/btnCopy" android:layout_width="match_parent"
+            android:layout_height="52dp" android:layout_marginTop="16dp"
+            android:text="📋 نسخ النص" android:textColor="#FFFFFF" android:backgroundTint="#1A237E" />
+        <Button android:id="@+id/btnShare" android:layout_width="match_parent"
+            android:layout_height="52dp" android:layout_marginTop="10dp"
+            android:text="📤 مشاركة" android:textColor="#FFFFFF" android:backgroundTint="#FFB800" />
+        <Button android:id="@+id/btnPrint" android:layout_width="match_parent"
+            android:layout_height="52dp" android:layout_marginTop="10dp"
+            android:text="🖨️ طباعة" android:textColor="#FFFFFF" android:backgroundTint="#4CAF50" />
+        <Button android:id="@+id/btnDelete" android:layout_width="match_parent"
+            android:layout_height="52dp" android:layout_marginTop="10dp"
+            android:text="🗑️ حذف" android:textColor="#FFFFFF" android:backgroundTint="#F44336" />
+    </LinearLayout>
+</ScrollView>

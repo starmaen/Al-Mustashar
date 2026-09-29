@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- اسم التطبيق -->
+    <string name="app_name">المستشار</string>
+    <string name="app_tagline">المستشار القانوني الذكي</string>
+
+    <!-- شاشة تسجيل الدخول -->
+    <string name="login_title">تسجيل الدخول</string>
+    <string name="login_email">البريد الإلكتروني</string>
+    <string name="login_password">كلمة المرور</string>
+    <string name="login_button">دخول</string>
+    <string name="login_google">الدخول بحساب Google</string>
+    <string name="login_register">إنشاء حساب جديد</string>
+    <string name="login_forgot">نسيت كلمة المرور؟</string>
+
+    <!-- الشاشة الرئيسية -->
+    <string name="home_title">المستشار</string>
+    <string name="home_search">ابحث في القوانين</string>
+    <string name="home_consult">استشارة سريعة</string>
+    <string name="home_account">حسابي</string>
+
+    <!-- شاشة الاستشارة -->
+    <string name="consult_title">الاستشارة القانونية</string>
+    <string name="consult_hint">اكتب سؤالك القانوني هنا…</string>
+    <string name="consult_button">احصل على استشارة</string>
+    <string name="consult_wait">جارٍ التحليل…</string>
+
+    <!-- شاشة البحث -->
+    <string name="search_title">البحث في القوانين</string>
+    <string name="search_hint">ابحث عن مادة قانونية…</string>
+
+    <!-- شاشة الحساب -->
+    <string name="account_title">حسابي</string>
+    <string name="account_logout">تسجيل الخروج</string>
+    <string name="account_subscription">الاشتراك</string>
+
+    <!-- أخطاء -->
+    <string name="error_email">أدخل البريد الإلكتروني</string>
+    <string name="error_password">أدخل كلمة المرور</string>
+    <string name="error_network">تحقق من اتصالك بالإنترنت</string>
+    <string name="error_general">حدث خطأ، حاول لاحقًا</string>
+
+    <!-- نجاح -->
+    <string name="success_login">تم تسجيل الدخول بنجاح</string>
+    <string name="success_logout">تم تسجيل الخروج</string>
+
+    <!-- الأزرار العامة -->
+    <string name="button_ok">حسناً</string>
+    <string name="button_cancel">إلغاء</string>
+    <string name="button_save">حفظ</string>
+    <string name="button_copy">نسخ</string>
+    <string name="button_send">إرسال</string>
+
+    <!-- حول التطبيق -->
+    <string name="about_title">حول التطبيق</string>
+    <string name="about_version">الإصدار</string>
+    <string name="about_contact">للتواصل</string>
+    <string name="about_email">starsyia2500@gmail.com</string>
+    <string name="about_whatsapp">+963 938 466 549</string>
+    <string name="about_telegram">@maenstar</string>
+</resources>

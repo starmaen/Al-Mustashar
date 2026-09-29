@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="#F5F5F5" android:padding="16dp">
+    <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="أرشيف الأسئلة" android:textColor="#1A237E"
+        android:textSize="22sp" android:textStyle="bold" />
+    <TextView android:id="@+id/tvEmpty" android:layout_width="wrap_content"
+        android:layout_height="wrap_content" android:layout_gravity="center"
+        android:layout_marginTop="100dp" android:text="لا توجد أسئلة محفوظة"
+        android:textColor="#9E9E9E" android:textSize="16sp" android:visibility="gone" />
+    <androidx.recyclerview.widget.RecyclerView android:id="@+id/recyclerQueries"
+        android:layout_width="match_parent" android:layout_height="match_parent"
+        android:layout_marginTop="16dp" />
+</LinearLayout>
