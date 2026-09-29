@@ -23,7 +23,13 @@ object LawsRepository {
     private suspend fun loadAll(): List<LawArticle> {
         if (cachedLaws.isNotEmpty()) return cachedLaws
         val db = FirebaseFirestore.getInstance()
-        val collections = listOf("penal_code", "civil_code", "personal_status")
+        val collections = listOf(
+            "penal_code",
+            "civil_code",
+            "personal_status",
+            "civil_procedure",
+            "criminal_procedure"
+        )
 
         for (col in collections) {
             try {
@@ -40,6 +46,8 @@ object LawsRepository {
                         "penal_code" -> "قانون العقوبات السوري"
                         "civil_code" -> "القانون المدني السوري"
                         "personal_status" -> "قانون الأحوال الشخصية السوري"
+                        "civil_procedure" -> "قانون أصول المحاكمات المدنية (القانون 1 لعام 2016)"
+                        "criminal_procedure" -> "قانون أصول المحاكمات الجزائية (المرسوم 112 لعام 1950 وتعديلاته)"
                         else -> "التشريع السوري"
                     }
 
@@ -47,6 +55,8 @@ object LawsRepository {
                         "penal_code" -> "عقوبات"
                         "civil_code" -> "مدني"
                         "personal_status" -> "أحوال شخصية"
+                        "civil_procedure" -> "أصول مدنية"
+                        "criminal_procedure" -> "أصول جزائية"
                         else -> "عام"
                     }
 
@@ -109,7 +119,7 @@ object LawsRepository {
 
         val normQuery = normalize(query)
 
-        // 1. البحث برقم المادة الصريح
+        // 1. البحث الصريح برقم المادة مع اسم القانون
         val articleRegex = Regex("""(?:ماده|الماده|مادة|المادة)\s*(\d+)""")
         val match = articleRegex.find(normQuery)
         val targetNumber = match?.groupValues?.get(1)?.toIntOrNull()
@@ -120,6 +130,10 @@ object LawsRepository {
             if (byNumber.isNotEmpty()) {
                 val matched = if (normQuery.contains("عقوب")) {
                     byNumber.firstOrNull { it.category == "عقوبات" } ?: byNumber.first()
+                } else if (normQuery.contains("اصول جزائ") || normQuery.contains("اجراءات جزائ")) {
+                    byNumber.firstOrNull { it.category == "أصول جزائية" } ?: byNumber.first()
+                } else if (normQuery.contains("اصول مدن") || normQuery.contains("محاكمات مدن")) {
+                    byNumber.firstOrNull { it.category == "أصول مدنية" } ?: byNumber.first()
                 } else if (normQuery.contains("مدن")) {
                     byNumber.firstOrNull { it.category == "مدني" } ?: byNumber.first()
                 } else if (normQuery.contains("احوال") || normQuery.contains("شخصي")) {
@@ -131,7 +145,7 @@ object LawsRepository {
             }
         }
 
-        // 2. فحص القوانين الخاصة غير المدرجة بعد
+        // 2. توجيه القوانين التخصصية التي لم تُرفع بعد
         val specialLawsTerms = mapOf(
             "مخدر" to "قانون المخدرات السوري (القانون رقم 2 لعام 1993 وتعديلاته)",
             "مخدرات" to "قانون المخدرات السوري (القانون رقم 2 لعام 1993 وتعديلاته)",
@@ -146,11 +160,11 @@ object LawsRepository {
 
         for ((term, lawTitle) in specialLawsTerms) {
             if (normQuery.contains(term)) {
-                return "ℹ️ تنبيه وإرشاد قانوني:\nمسألة ($term) ينظمها في سوريا تشريع خاص وهو:\n[$lawTitle].\n\nنصوص هذا القانون الخاص قيد الإدراج حالياً في قاعدة البيانات.\nيمكنك الحصول على التحليل القانوني والعقوبة فوراً عبر نافذة [الاستشارة القانونية] أو [بحث قانوني عام]."
+                return "ℹ️️ تنبيه وإرشاد قانوني:\nمسألة ($term) ينظمها في سوريا تشريع خاص وهو:\n[$lawTitle].\n\nنصوص هذا القانون الخاص قيد الإدراج حالياً في قاعدة البيانات.\nيمكنك الحصول على التحليل القانوني والعقوبة فوراً عبر نافذة [الاستشارة القانونية] أو [بحث قانوني عام]."
             }
         }
 
-        // 3. استخراج الكلمات بعد استبعاد الكلمات الشائعة
+        // 3. البحث بالكلمات المفتاحية الجوهرية
         val rawKws = normQuery
             .split(" ", "،", "؟", "?", ".", ",", "\n", "\t", ":", ";", "\"", "'")
             .map { it.trim() }
