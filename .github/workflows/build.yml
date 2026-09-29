@@ -41,7 +41,13 @@ jobs:
 
     - name: Decode Keystore
       run: |
-        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/al-mustashar.jks
+        ls -la app/al-mustashar.jks
+
+    - name: Create google-services.json
+      run: |
+        echo '${{ secrets.GOOGLE_SERVICES_JSON }}' > app/google-services.json
+        ls -la app/google-services.json
 
     - name: Build Debug APK
       env:
