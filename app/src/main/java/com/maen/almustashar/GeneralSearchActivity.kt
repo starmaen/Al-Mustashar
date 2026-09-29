@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.webkit.WebView
@@ -18,6 +19,7 @@ import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.launch
+import java.net.URLEncoder
 
 class GeneralSearchActivity : AppCompatActivity() {
 
@@ -26,6 +28,8 @@ class GeneralSearchActivity : AppCompatActivity() {
     private lateinit var progressBar: ProgressBar
     private lateinit var tvResult: TextView
     private lateinit var resultActions: LinearLayout
+
+    private var lastQuery: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -59,6 +63,27 @@ class GeneralSearchActivity : AppCompatActivity() {
         }
     }
 
+    private fun cleanMarkdown(raw: String): String {
+        var clean = raw
+        clean = clean.replace(Regex("""(?m)^#{1,6}\s*"""), "")
+        clean = clean.replace(Regex("""\*{2,3}(.*?)\*{2,3}"""), "$1")
+        clean = clean.replace(Regex("""\*(.*?)\*"""), "$1")
+        clean = clean.replace(Regex("""---|\*\*\*|___"""), "─────────────────────────────")
+        return clean.trim()
+    }
+
+    private fun openGoogleSearch(query: String) {
+        val q = if (query.isNotBlank()) query else etQuestion.text?.toString()?.trim() ?: ""
+        if (q.isBlank()) {
+            Toast.makeText(this, "يرجى كتابة نص البحث أولاً", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val refinedQuery = "$q القانون السوري"
+        val url = "https://www.google.com/search?q=" + URLEncoder.encode(refinedQuery, "UTF-8")
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        startActivity(intent)
+    }
+
     private fun onSearch() {
         val question = etQuestion.text?.toString()?.trim() ?: ""
         if (question.isEmpty()) {
@@ -66,6 +91,7 @@ class GeneralSearchActivity : AppCompatActivity() {
             return
         }
 
+        lastQuery = question
         btnSubmit.isEnabled = false
         progressBar.visibility = View.VISIBLE
         tvResult.visibility = View.GONE
@@ -75,28 +101,31 @@ class GeneralSearchActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             val answer = AIClient.askGeneralQuestion(question)
-
             val isReal = answer.isNotEmpty() &&
                     !answer.startsWith("❌") &&
                     !answer.contains("فشل جميع المزودين") &&
                     answer.length > 30
 
-            tvResult.text = answer
+            val cleaned = cleanMarkdown(answer)
+            tvResult.text = cleaned
             tvResult.visibility = View.VISIBLE
             progressBar.visibility = View.GONE
             btnSubmit.isEnabled = true
 
             if (isReal) {
                 resultActions.visibility = View.VISIBLE
-                FirebaseFirestore.getInstance().collection("general_queries").add(hashMapOf(
-                    "question" to question,
-                    "answer" to answer,
-                    "userId" to (user?.uid ?: "anonymous"),
-                    "email" to (user?.email ?: ""),
-                    "timestamp" to System.currentTimeMillis()
-                ))
+                FirebaseFirestore.getInstance().collection("general_queries").add(
+                    hashMapOf(
+                        "question" to question,
+                        "answer" to cleaned,
+                        "userId" to (user?.uid ?: "anonymous"),
+                        "email" to (user?.email ?: ""),
+                        "timestamp" to System.currentTimeMillis()
+                    )
+                )
             } else {
-                Toast.makeText(this@GeneralSearchActivity, "⚠️ لم يتم الحفظ", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this@GeneralSearchActivity, "⚠️ لم يتم الحصول على جواب كامل — يمكنك البحث في Google", Toast.LENGTH_LONG).show()
+                openGoogleSearch(question)
             }
         }
     }
@@ -117,17 +146,4 @@ class GeneralSearchActivity : AppCompatActivity() {
         val pm = getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
         pm.print("بحث قانوني", wv.createPrintDocumentAdapter("بحث قانوني"), null)
     }
-}
-    private fun openGoogleSearch(query: String) {
-        val q = if (query.isNotBlank()) query else etQuestion.text?.toString()?.trim() ?: ""
-        if (q.isBlank()) {
-            Toast.makeText(this, "يرجى كتابة نص البحث أولاً", Toast.LENGTH_SHORT).show()
-            return
-        }
-        val refinedQuery = "$q القانون السوري"
-        val url = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(refinedQuery, "UTF-8")
-        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
-        startActivity(intent)
-    }
-
 }
