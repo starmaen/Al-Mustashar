@@ -118,3 +118,16 @@ class GeneralSearchActivity : AppCompatActivity() {
         pm.print("بحث قانوني", wv.createPrintDocumentAdapter("بحث قانوني"), null)
     }
 }
+    private fun openGoogleSearch(query: String) {
+        val q = if (query.isNotBlank()) query else etQuestion.text?.toString()?.trim() ?: ""
+        if (q.isBlank()) {
+            Toast.makeText(this, "يرجى كتابة نص البحث أولاً", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val refinedQuery = "$q القانون السوري"
+        val url = "https://www.google.com/search?q=" + java.net.URLEncoder.encode(refinedQuery, "UTF-8")
+        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+        startActivity(intent)
+    }
+
+}
