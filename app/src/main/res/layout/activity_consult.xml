@@ -1,23 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/background">
+    android:background="#F8FAFC"
+    android:layoutDirection="rtl">
 
+    <!-- شريط علوي -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="#1A237E"
-        android:padding="12dp"
-        android:gravity="center_vertical">
+        android:layout_height="?attr/actionBarSize"
+        android:background="#0F2042"
+        android:paddingHorizontal="16dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="الاستشارة القانونية"
+            android:text="الاستشارة القانونية الذكية"
             android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold" />
@@ -28,108 +31,142 @@
             android:layout_height="wrap_content"
             android:padding="8dp"
             android:text="📚 الأرشيف"
-            android:textColor="#FFB800"
+            android:textColor="#F59E0B"
             android:textSize="14sp"
             android:textStyle="bold"
             android:background="?android:attr/selectableItemBackground" />
     </LinearLayout>
 
-    <ScrollView
+    <!-- منطقة عرض الاستشارات (مساحة تمرير تكيفية غير محدودة) -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollAnswers"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:padding="12dp">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:orientation="vertical">
 
-            <EditText
-                android:id="@+id/etQuestion"
+            <!-- بطاقة الجواب التكيفية -->
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardResult"
                 android:layout_width="match_parent"
-                android:layout_height="150dp"
-                android:gravity="top|start"
-                android:hint="اكتب سؤالك القانوني هنا..."
-                android:inputType="textMultiLine"
-                android:background="#FFFFFF"
-                android:padding="12dp"
-                android:textColor="#212121"
-                android:textColorHint="#9E9E9E"
-                android:textSize="16sp" />
+                android:layout_height="wrap_content"
+                android:visibility="gone"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="#FFFFFF"
+                android:layout_marginBottom="12dp">
 
-            <Button
-                android:id="@+id/btnSubmit"
-                android:layout_width="match_parent"
-                android:layout_height="60dp"
-                android:layout_marginTop="12dp"
-                android:text="احصل على استشارة"
-                android:textSize="18sp"
-                android:backgroundTint="@color/primary"
-                android:textColor="#FFFFFF" />
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
 
+                    <TextView
+                        android:id="@+id/tvResult"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#1E293B"
+                        android:textSize="15sp"
+                        android:lineSpacingExtra="6dp"
+                        android:textIsSelectable="true" />
+
+                    <!-- شريط أدوات الجواب المدمج -->
+                    <LinearLayout
+                        android:id="@+id/resultActions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:orientation="horizontal"
+                        android:gravity="center">
+
+                        <Button
+                            android:id="@+id/btnCopyResult"
+                            android:layout_width="0dp"
+                            android:layout_height="42dp"
+                            android:layout_weight="1"
+                            android:text="📋 نسخ"
+                            android:textSize="13sp"
+                            android:textColor="#FFFFFF"
+                            android:backgroundTint="#0F2042" />
+
+                        <Button
+                            android:id="@+id/btnShareResult"
+                            android:layout_width="0dp"
+                            android:layout_height="42dp"
+                            android:layout_weight="1"
+                            android:layout_marginStart="6dp"
+                            android:text="📤 مشاركة"
+                            android:textSize="13sp"
+                            android:textColor="#FFFFFF"
+                            android:backgroundTint="#D97706" />
+
+                        <Button
+                            android:id="@+id/btnPrintResult"
+                            android:layout_width="0dp"
+                            android:layout_height="42dp"
+                            android:layout_weight="1"
+                            android:layout_marginStart="6dp"
+                            android:text="🖨️ طباعة"
+                            android:textSize="13sp"
+                            android:textColor="#FFFFFF"
+                            android:backgroundTint="#16A34A" />
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- مؤشر التحميل -->
             <ProgressBar
                 android:id="@+id/progressBar"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
-                android:layout_marginTop="16dp"
+                android:layout_marginVertical="16dp"
                 android:visibility="gone" />
 
-            <TextView
-                android:id="@+id/tvResult"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:padding="16dp"
-                android:background="#FFFFFF"
-                android:textColor="#212121"
-                android:textSize="14sp"
-                android:visibility="gone"
-                android:textIsSelectable="true" />
-
-            <LinearLayout
-                android:id="@+id/resultActions"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="horizontal"
-                android:visibility="gone">
-
-                <Button
-                    android:id="@+id/btnCopyResult"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_weight="1"
-                    android:text="📋 نسخ"
-                    android:textSize="12sp"
-                    android:textColor="#FFFFFF"
-                    android:backgroundTint="#1A237E" />
-
-                <Button
-                    android:id="@+id/btnShareResult"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="6dp"
-                    android:text="📤 مشاركة"
-                    android:textSize="12sp"
-                    android:textColor="#FFFFFF"
-                    android:backgroundTint="#FFB800" />
-
-                <Button
-                    android:id="@+id/btnPrintResult"
-                    android:layout_width="0dp"
-                    android:layout_height="50dp"
-                    android:layout_weight="1"
-                    android:layout_marginStart="6dp"
-                    android:text="🖨️ طباعة"
-                    android:textSize="12sp"
-                    android:textColor="#FFFFFF"
-                    android:backgroundTint="#4CAF50" />
-            </LinearLayout>
-
         </LinearLayout>
-    </ScrollView>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- منطقة الإدخال المستمر في الأسفل -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="#FFFFFF"
+        android:elevation="8dp"
+        android:padding="12dp">
+
+        <EditText
+            android:id="@+id/etQuestion"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="56dp"
+            android:maxHeight="120dp"
+            android:gravity="top|start"
+            android:hint="اكتب وقائع استشارتك أو مسألتك القانونية هنا..."
+            android:inputType="textMultiLine"
+            android:background="@android:drawable/editbox_background_normal"
+            android:padding="12dp"
+            android:textColor="#0F2042"
+            android:textColorHint="#94A3B8"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnSubmit"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="احصل على استشارة ⚖️"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:backgroundTint="#0F2042"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
 
 </LinearLayout>
