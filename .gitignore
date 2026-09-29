@@ -14,15 +14,15 @@ serviceAccount.json
 
 # Data & Temp
 *.pdf
-*.json
+
 !package.json
-*.png
+
 *.jpg
 ocr_old/
 node_modules/
 *.log
 *.tmp
-*.py
+
 
 # IDE
 .idea/
