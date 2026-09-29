@@ -15,6 +15,8 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -27,8 +29,13 @@ class GeneralSearchActivity : AppCompatActivity() {
     private lateinit var btnSubmit: Button
     private lateinit var progressBar: ProgressBar
     private lateinit var tvResult: TextView
+    private lateinit var cardResult: CardView
     private lateinit var resultActions: LinearLayout
+    private lateinit var btnGoogleSearch: Button
+    private lateinit var btnFallbackGoogle: Button
+    private lateinit var scrollResults: NestedScrollView
 
+    private val conversationHistory = StringBuilder()
     private var lastQuery: String = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,18 +46,34 @@ class GeneralSearchActivity : AppCompatActivity() {
         btnSubmit = findViewById(R.id.btnGeneralSubmit)
         progressBar = findViewById(R.id.progressBar)
         tvResult = findViewById(R.id.tvGeneralResult)
+        cardResult = findViewById(R.id.cardGeneralResult)
         resultActions = findViewById(R.id.resultActions)
+        btnGoogleSearch = findViewById(R.id.btnGoogleSearch)
+        btnFallbackGoogle = findViewById(R.id.btnFallbackGoogle)
+        scrollResults = findViewById(R.id.scrollGeneralResults)
+
+        findViewById<TextView>(R.id.btnArchive).setOnClickListener {
+            startActivity(Intent(this, QueriesActivity::class.java))
+        }
 
         btnSubmit.setOnClickListener { onSearch() }
+
+        btnGoogleSearch.setOnClickListener {
+            openGoogleSearch(lastQuery)
+        }
+
+        btnFallbackGoogle.setOnClickListener {
+            openGoogleSearch(lastQuery)
+        }
 
         findViewById<Button>(R.id.btnCopyResult).setOnClickListener {
             val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
             cb.setPrimaryClip(ClipData.newPlainText("Answer", tvResult.text))
-            Toast.makeText(this, "تم النسخ", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "تم نسخ النص", Toast.LENGTH_SHORT).show()
         }
 
         findViewById<Button>(R.id.btnShareResult).setOnClickListener {
-            val text = "السؤال:\n${etQuestion.text}\n\nالإجابة:\n${tvResult.text}"
+            val text = "السؤال:\n${lastQuery}\n\nالإجابة:\n${tvResult.text}"
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
                 putExtra(Intent.EXTRA_TEXT, text)
@@ -59,7 +82,7 @@ class GeneralSearchActivity : AppCompatActivity() {
         }
 
         findViewById<Button>(R.id.btnPrintResult).setOnClickListener {
-            printText(etQuestion.text.toString(), tvResult.text.toString())
+            printText(lastQuery, tvResult.text.toString())
         }
     }
 
@@ -94,26 +117,52 @@ class GeneralSearchActivity : AppCompatActivity() {
         lastQuery = question
         btnSubmit.isEnabled = false
         progressBar.visibility = View.VISIBLE
-        tvResult.visibility = View.GONE
-        resultActions.visibility = View.GONE
+        cardResult.visibility = View.GONE
+        btnFallbackGoogle.visibility = View.GONE
 
         val user = FirebaseAuth.getInstance().currentUser
 
         lifecycleScope.launch {
-            val answer = AIClient.askGeneralQuestion(question)
+            val promptToSend = if (conversationHistory.isNotEmpty()) {
+                "سياق البحث السابق:\n$conversationHistory\nالاستفسار الجديد:\n$question"
+            } else {
+                question
+            }
+
+            val answer = AIClient.askGeneralQuestion(promptToSend)
             val isReal = answer.isNotEmpty() &&
                     !answer.startsWith("❌") &&
                     !answer.contains("فشل جميع المزودين") &&
+                    !answer.contains("الخدمة تواجه ضغطاً") &&
                     answer.length > 30
 
-            val cleaned = cleanMarkdown(answer)
-            tvResult.text = cleaned
-            tvResult.visibility = View.VISIBLE
             progressBar.visibility = View.GONE
             btnSubmit.isEnabled = true
 
             if (isReal) {
-                resultActions.visibility = View.VISIBLE
+                val cleaned = cleanMarkdown(answer)
+
+                if (conversationHistory.isNotEmpty()) {
+                    conversationHistory.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+                        .append("سؤال: ").append(question).append("\n\n")
+                        .append("الإجابة:\n").append(cleaned).append("\n\n")
+                } else {
+                    conversationHistory.append("السؤال: ").append(question).append("\n\n")
+                        .append("الإجابة:\n").append(cleaned).append("\n\n")
+                }
+
+                tvResult.text = conversationHistory.toString()
+                cardResult.visibility = View.VISIBLE
+                btnFallbackGoogle.visibility = View.GONE
+
+                scrollResults.post {
+                    scrollResults.fullScroll(View.FOCUS_DOWN)
+                }
+
+                etQuestion.text.clear()
+                etQuestion.hint = "اطرح استفساراً آخر في نفس الموضوع..."
+                btnSubmit.text = "متابعة البحث 🔍"
+
                 FirebaseFirestore.getInstance().collection("general_queries").add(
                     hashMapOf(
                         "question" to question,
@@ -124,8 +173,8 @@ class GeneralSearchActivity : AppCompatActivity() {
                     )
                 )
             } else {
-                Toast.makeText(this@GeneralSearchActivity, "⚠️ لم يتم الحصول على جواب كامل — يمكنك البحث في Google", Toast.LENGTH_LONG).show()
-                openGoogleSearch(question)
+                btnFallbackGoogle.visibility = View.VISIBLE
+                Toast.makeText(this@GeneralSearchActivity, "تعذر الحصول على استجابة كاملة من الذكاء الاصطناعي — يمكنك استخدام خيار Google المباشر", Toast.LENGTH_LONG).show()
             }
         }
     }
@@ -135,15 +184,15 @@ class GeneralSearchActivity : AppCompatActivity() {
         val wv = WebView(this)
         val html = """
             <html dir="rtl"><head><meta charset="utf-8"></head>
-            <body style="font-family:sans-serif;padding:20px;">
+            <body style="font-family:sans-serif;padding:20px;line-height:1.6;">
             <h2>بحث قانوني عام</h2>
-            <h3>السؤال:</h3><p>$q</p><hr>
-            <h3>الإجابة:</h3><p>$a</p><hr>
+            <pre style="white-space: pre-wrap; font-family: inherit;">$a</pre>
+            <hr>
             <p style="color:#666;font-size:12px;">تطبيق المستشار القانوني الذكي</p>
             </body></html>
         """.trimIndent()
         wv.loadDataWithBaseURL(null, html, "text/HTML", "UTF-8", null)
         val pm = getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
-        pm.print("بحث قانوني", wv.createPrintDocumentAdapter("بحث قانوني"), null)
+        pm.print("بحث_قانوني", wv.createPrintDocumentAdapter("بحث_قانوني"), null)
     }
 }
