@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "476568631604",
+    "project_id": "al-mustashar-7f6b7",
+    "storage_bucket": "al-mustashar-7f6b7.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:476568631604:android:c9bf8c2a813faa22264d61",
+        "android_client_info": {
+          "package_name": "com.maen.almustashar"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "476568631604-07p1ef3qpqqgnhjkn4c6t4fh6n7lctmu.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCFiqK6kVzWqRIXhOSp7nO_yUJiuBTaju4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "476568631604-07p1ef3qpqqgnhjkn4c6t4fh6n7lctmu.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

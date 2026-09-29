@@ -6,8 +6,6 @@ app/build/
 *.aab
 
 # Secrets
-google-services.json
-app/google-services.json
 serviceAccount.json
 *.jks
 *.keystore
