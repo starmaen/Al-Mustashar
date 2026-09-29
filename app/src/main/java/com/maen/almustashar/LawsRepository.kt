@@ -145,35 +145,58 @@ object LawsRepository {
         return sb.toString()
     }
 
-    private fun isStop(w: String): Boolean {
-        return w in setOf("من", "في", "على", "الى", "عن", "مع", "ما", "هو", "هي", "قانون", "الماده", "ماده")
+        private fun isStop(w: String): Boolean {
+        val stops = setOf(
+            "من", "في", "على", "الى", "إلى", "عن", "مع", "ما", "هو", "هي", "هذا", "هذه", "تلك", "ذلك",
+            "قانون", "القانون", "الماده", "المادة", "ماده", "مادة", "المواد", "مواد", "المتعلقه", "المتعلقة",
+            "احكام", "أحكام", "حكم", "نص", "رقم", "سنة", "لسنة", "عام", "سوريا", "السوري", "السورية",
+            "شأن", "بشأن", "حول", "كيف", "متى", "هل", "بين", "أو", "و"
+        )
+        return w in stops
     }
 
-    private suspend fun searchByKeywords(question: String, limit: Int): String {
+        private suspend fun searchByKeywords(question: String, limit: Int): String {
         val all = loadAll()
         if (all.isEmpty()) return ""
 
-        val kws = normalize(question)
-            .split(" ", "،", "؟", "?", ".", ",", "\n", "\t", ":", ";", "\"", "'")
+        val rawKws = normalize(question)
+            .split(" ", "،", "؟", "?", ".", ",", "
+", "	", ":", ";", "\"", "'")
             .map { it.trim() }
             .filter { it.length >= 3 && !isStop(it) }
             .distinct()
 
-        if (kws.isEmpty()) return ""
+        if (rawKws.isEmpty()) return ""
 
+        // احتساب التطابق فقط على الكلمات الجوهرية
         val scored = all.map { a ->
             var s = 0
-            val txt = "${a.text} ${a.originalText} ${a.keywords.joinToString(" ")}"
-            for (k in kws) if (txt.contains(k, true)) s += 5
-            a to s
+            val fullText = normalize("${a.lawName} ${a.text} ${a.originalText} ${a.keywords.joinToString(" ")}")
+            var matchedKeywordsCount = 0
+            for (k in rawKws) {
+                if (fullText.contains(k)) {
+                    s += 10
+                    matchedKeywordsCount++
+                }
+            }
+            // استبعاد أي مادة لا تحتوي على الكلمات الأساسية فعلياً
+            val finalScore = if (matchedKeywordsCount > 0) s else 0
+            a to finalScore
         }.filter { it.second > 0 }
             .sortedByDescending { it.second }
             .take(limit)
 
-        if (scored.isEmpty()) return ""
+        if (scored.isEmpty()) {
+            return "⚠️ لم يتم العثور على مواد قانونية تحتوي على هذه الكلمات في قاعدة البيانات المرفوعة."
+        }
 
-        return scored.joinToString("\n\n") { (a, _) ->
-            "📖 ${a.lawName} (${a.category}) - المادة ${a.number}:\n${a.text}"
+        return scored.joinToString("
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+") { (a, _) ->
+            "📖 ${a.lawName} (${a.category}) - المادة ${a.number}:
+${a.text}"
         }
     }
 
