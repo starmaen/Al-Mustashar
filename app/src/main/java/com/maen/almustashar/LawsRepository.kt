@@ -31,19 +31,26 @@ object LawsRepository {
     private fun normalize(s: String): String {
         val ar = "٠١٢٣٤٥٦٧٨٩"; val fa = "۰۱۲۳۴۵۶۷۸۹"; var r = s
         for (i in 0..9) { r = r.replace(ar[i], '0' + i); r = r.replace(fa[i], '0' + i) }
-        return r
+        return r.replace('ة', 'ه')
+            .replace('أ', 'ا')
+            .replace('إ', 'ا')
+            .replace('آ', 'ا')
     }
 
     private fun extractNumber(q: String): String? {
         val n = normalize(q)
         val pats = listOf(
-            Regex("""المادة\s*رقم\s*[:\(]?\s*(\d+)"""),
-            Regex("""نص\s+المادة\s*[:\(]?\s*(\d+)"""),
-            Regex("""المادة\s*[:\(]?\s*(\d+)\s*\)?"""),
-            Regex("""\bمادة\s*[:\(]?\s*(\d+)"""),
-            Regex("""article\s*[:\(]?\s*(\d+)""", RegexOption.IGNORE_CASE)
+            Regex("""الماده\s*رقم\s*[:\(]?\s*(\d+)"""),
+            Regex("""نص\s+الماده\s*[:\(]?\s*(\d+)"""),
+            Regex("""الماده\s*[:\(]?\s*(\d+)"""),
+            Regex("""\bماده\s*[:\(]?\s*(\d+)"""),
+            Regex("""\bرقم\s*[:\(]?\s*(\d+)"""),
+            Regex("""article\s*[:\(]?\s*(\d+)""", RegexOption.IGNORE_CASE),
+            Regex("""\b(\d+)\b""")
         )
-        for (p in pats) { p.find(n)?.let { return it.groupValues[1] } }
+        for (p in pats) {
+            p.find(n)?.let { return it.groupValues[1] }
+        }
         return null
     }
 
@@ -51,29 +58,47 @@ object LawsRepository {
     suspend fun searchRelevantLaws(question: String, limit: Int = 6): String {
         val num = extractNumber(question)
         if (num != null) {
-            val direct = fetchArticleByNumber(num)
-            if (direct.isNotEmpty()) return direct
+            val direct = fetchArticleByNumber(num, question)
+            if (direct.isNotBlank() && !direct.startsWith("⚠️")) {
+                return direct
+            }
         }
         return searchByKeywords(question, limit)
     }
 
-    // ============ البحث برقم المادة في كل القوانين ============
-    private suspend fun fetchArticleByNumber(num: String): String {
+    // ============ البحث برقم المادة في القوانين ============
+    private suspend fun fetchArticleByNumber(num: String, question: String = ""): String {
         val db = FirebaseFirestore.getInstance()
         val results = mutableListOf<String>()
+        val qNorm = normalize(question)
 
         try {
             val lawsSnapshot = db.collection("laws").get().await()
             for (lawDoc in lawsSnapshot.documents) {
-                val lawName = lawDoc.getString("name") ?: lawDoc.id
+                val lawId = lawDoc.id
+                val lawName = lawDoc.getString("name") ?: lawId
                 val category = lawDoc.getString("category") ?: ""
 
-                for (col in listOf("articles", "مقالات", "المواد")) {
+                // إذا حدد المستخدم قانوناً معيناً، نعطي الأولوية أو نقتصر عليه
+                val matchesLaw = when {
+                    qNorm.contains("عقوبات") || qNorm.contains("جزائي") -> lawId.contains("penal") || category.contains("جزائي")
+                    qNorm.contains("مدني") -> lawId.contains("civil") || category.contains("مدني")
+                    qNorm.contains("احوال") || qNorm.contains("شخصي") -> lawId.contains("personal") || category.contains("احوال")
+                    else -> true
+                }
+
+                for (col in listOf("articles", "المواد", "مقالات")) {
                     try {
                         val doc = lawDoc.reference.collection(col).document(num).get().await()
                         if (doc.exists()) {
                             val block = buildArticleBlock(lawName, category, num, doc)
-                            if (block.isNotEmpty()) results.add(block)
+                            if (block.isNotEmpty()) {
+                                if (matchesLaw) {
+                                    results.add(0, block) // الأولوية للقانون المطابق
+                                } else {
+                                    results.add(block)
+                                }
+                            }
                         }
                     } catch (_: Exception) {}
                 }
@@ -81,7 +106,7 @@ object LawsRepository {
         } catch (_: Exception) {}
 
         return if (results.isEmpty()) {
-            "⚠️ لم أجد المادة $num في القوانين المرفوعة."
+            ""
         } else {
             results.joinToString("\n\n")
         }
@@ -93,56 +118,43 @@ object LawsRepository {
         num: String,
         doc: com.google.firebase.firestore.DocumentSnapshot
     ): String {
-        val text = doc.getString("text") ?: doc.getString("currentText") ?: ""
-        val original = doc.getString("originalText") ?: ""
-        val status = doc.getString("status") ?: "سارية"
+        val effective = doc.getString("effectiveText") ?: doc.getString("text") ?: doc.getString("currentText") ?: ""
+        val original = doc.getString("originalText") ?: effective
+        val year = doc.getLong("year")?.toString() ?: "1949"
 
-        if (text.isEmpty() && original.isEmpty()) return ""
+        if (effective.isEmpty() && original.isEmpty()) return ""
 
         val sb = StringBuilder()
-        sb.append("📖 $lawName")
-        if (category.isNotEmpty()) sb.append(" ($category)")
-        sb.append(" - المادة $num:\n")
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("⚖️ المادة $num — $lawName\n")
+        sb.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+        sb.append("📜 [1] النص الأصلي ($year):\n")
+        sb.append(original.trim()).append("\n\n")
 
-        if (original.isNotEmpty() && original != text) {
-            sb.append("\n【 النص الأصلي 】\n")
-            sb.append(original).append("\n")
+        sb.append("📝 [2] التعديلات:\n")
+        val isAmended = doc.getBoolean("isAmended") ?: false
+        if (isAmended) {
+            sb.append("• تم تعديل هذه المادة وفق القوانين النافذة اللاحقة.\n\n")
+        } else {
+            sb.append("• لا توجد تعديلات (النص باقٍ على أصله).\n\n")
         }
 
-        if (text.isNotEmpty()) {
-            sb.append("\n【 النص النافذ 】\n")
-            sb.append(text).append("\n")
-        }
-
-        try {
-            val am = doc.get("amendments") as? List<*>
-            if (!am.isNullOrEmpty()) {
-                sb.append("\n【 التعديلات 】\n")
-                for (a in am) {
-                    if (a is Map<*, *>) {
-                        val y = a["year"] ?: ""
-                        val l = a["law"] ?: ""
-                        val c = a["change"] ?: ""
-                        sb.append("🔹 $y - $l: $c\n")
-                    }
-                }
-            }
-        } catch (_: Exception) {}
-
-        if (status.isNotEmpty() && status != "سارية") {
-            sb.append("\n⚠️ الحالة: $status\n")
-        }
+        sb.append("✅ [3] النص النافذ المعتمد أصولاً:\n")
+        sb.append(effective.trim())
 
         return sb.toString()
     }
 
-    // ============ البحث بكلمات ============
+    private fun isStop(w: String): Boolean {
+        return w in setOf("من", "في", "على", "الى", "عن", "مع", "ما", "هو", "هي", "قانون", "الماده", "ماده")
+    }
+
     private suspend fun searchByKeywords(question: String, limit: Int): String {
         val all = loadAll()
         if (all.isEmpty()) return ""
 
         val kws = normalize(question)
-            .split(" ", "،","؟","?",".",",","\n","\t",":",";","\"","'")
+            .split(" ", "،", "؟", "?", ".", ",", "\n", "\t", ":", ";", "\"", "'")
             .map { it.trim() }
             .filter { it.length >= 3 && !isStop(it) }
             .distinct()
@@ -173,49 +185,40 @@ object LawsRepository {
         val result = mutableListOf<Article>()
         try {
             val db = FirebaseFirestore.getInstance()
-            for (lawDoc in db.collection("laws").get().await()) {
-                val lawName = lawDoc.getString("name") ?: lawDoc.id
+            val lawsSnapshot = db.collection("laws").get().await()
+            for (lawDoc in lawsSnapshot.documents) {
+                val lawId = lawDoc.id
+                val lawName = lawDoc.getString("name") ?: lawId
                 val category = lawDoc.getString("category") ?: ""
 
-                for (col in listOf("articles", "مقالات", "المواد")) {
-                    try {
-                        val snap = lawDoc.reference.collection(col).get().await()
-                        if (snap.isEmpty) continue
-                        for (d in snap.documents) {
-                            val number = d.getLong("number")?.toString()
-                                ?: d.getString("number") ?: d.id
-                            val text = d.getString("text")
-                                ?: d.getString("currentText") ?: ""
-                            val original = d.getString("originalText") ?: ""
-                            val status = d.getString("status") ?: "سارية"
-                            val kws = (d.get("keywords") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-                            val ams = mutableListOf<Amendment>()
-                            (d.get("amendments") as? List<*>)?.forEach { a ->
-                                if (a is Map<*, *>) ams.add(Amendment(
-                                    a["year"]?.toString() ?: "",
-                                    a["law"]?.toString() ?: "",
-                                    a["change"]?.toString() ?: "",
-                                    a["effectiveFrom"]?.toString() ?: ""
-                                ))
-                            }
-                            if (text.isNotEmpty() || original.isNotEmpty()) {
-                                result.add(Article(lawDoc.id, lawName, category, number, text, original, status, ams, kws))
-                            }
-                        }
-                        if (snap.size() > 0) break
-                    } catch (_: Exception) {}
+                val articlesSnapshot = lawDoc.reference.collection("articles").get().await()
+                for (artDoc in articlesSnapshot.documents) {
+                    val num = artDoc.getString("id") ?: artDoc.getLong("number")?.toString() ?: artDoc.id
+                    val eff = artDoc.getString("effectiveText") ?: artDoc.getString("text") ?: ""
+                    val orig = artDoc.getString("originalText") ?: eff
+                    val status = artDoc.getString("status") ?: "سارية"
+                    @Suppress("UNCHECKED_CAST")
+                    val kws = artDoc.get("keywords") as? List<String> ?: emptyList()
+
+                    result.add(
+                        Article(
+                            lawId = lawId,
+                            lawName = lawName,
+                            category = category,
+                            number = num,
+                            text = eff,
+                            originalText = orig,
+                            status = status,
+                            amendments = emptyList(),
+                            keywords = kws
+                        )
+                    )
                 }
             }
-            cache = result; cacheTime = now
+            cache = result
+            cacheTime = now
         } catch (_: Exception) {}
+
         return result
     }
-
-    private fun isStop(w: String) = setOf(
-        "من","في","على","عن","إلى","التي","الذي","هذا","هذه","ذلك","تلك",
-        "أريد","أحتاج","أطلب","نص","رقم","هو","هي","ما","لا","مع","بين",
-        "عند","حتى","قد","كان","لكن","أو","ثم","كل","بعض","مادة","المادة"
-    ).contains(w)
-
-    fun clearCache() { cache = null; cacheTime = 0 }
 }
