@@ -1,34 +1,173 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="#F5F5F5">
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="vertical" android:padding="16dp">
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="السؤال" android:textColor="#1A237E" android:textSize="18sp"
-            android:textStyle="bold" />
-        <TextView android:id="@+id/tvQueryDetailQuestion" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:layout_marginTop="8dp"
-            android:padding="12dp" android:background="#FFFFFF"
-            android:textColor="#212121" android:textSize="15sp" android:textIsSelectable="true" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="16dp" android:text="الإجابة" android:textColor="#1A237E"
-            android:textSize="18sp" android:textStyle="bold" />
-        <TextView android:id="@+id/tvQueryDetailAnswer" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:layout_marginTop="8dp"
-            android:padding="12dp" android:background="#FFFFFF"
-            android:textColor="#212121" android:textSize="14sp" android:textIsSelectable="true" />
-        <Button android:id="@+id/btnCopy" android:layout_width="match_parent"
-            android:layout_height="52dp" android:layout_marginTop="16dp"
-            android:text="📋 نسخ النص" android:textColor="#FFFFFF" android:backgroundTint="#1A237E" />
-        <Button android:id="@+id/btnShare" android:layout_width="match_parent"
-            android:layout_height="52dp" android:layout_marginTop="10dp"
-            android:text="📤 مشاركة" android:textColor="#FFFFFF" android:backgroundTint="#FFB800" />
-        <Button android:id="@+id/btnPrint" android:layout_width="match_parent"
-            android:layout_height="52dp" android:layout_marginTop="10dp"
-            android:text="🖨️ طباعة" android:textColor="#FFFFFF" android:backgroundTint="#4CAF50" />
-        <Button android:id="@+id/btnDelete" android:layout_width="match_parent"
-            android:layout_height="52dp" android:layout_marginTop="10dp"
-            android:text="🗑️ حذف" android:textColor="#FFFFFF" android:backgroundTint="#F44336" />
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F8FAFC"
+    android:layoutDirection="rtl">
+
+    <!-- شريط العنوان العلوي -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/detailToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="#0F2042"
+        app:title="تفاصيل الاستشارة"
+        app:titleTextColor="#FFFFFF" />
+
+    <!-- مساحة عرض تفاصيل السؤال والجواب -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <!-- بطاقة السؤال -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="14dp"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="#FFFFFF">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="❓ السؤال:"
+                        android:textColor="#0F2042"
+                        android:textStyle="bold"
+                        android:textSize="15sp"
+                        android:layout_marginBottom="6dp" />
+
+                    <TextView
+                        android:id="@+id/tvQueryDetailQuestion"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#334155"
+                        android:textSize="14sp"
+                        android:lineSpacingExtra="4dp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- بطاقة الإجابة -->
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="#FFFFFF">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="⚖️ الإجابة والسند القانوني:"
+                        android:textColor="#0F2042"
+                        android:textStyle="bold"
+                        android:textSize="15sp"
+                        android:layout_marginBottom="6dp" />
+
+                    <TextView
+                        android:id="@+id/tvQueryDetailAnswer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#1E293B"
+                        android:textSize="14sp"
+                        android:lineSpacingExtra="5dp" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <!-- زر متابعة الاستشارة بنفس الموضوع -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnContinueConsult"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="💬 متابعة السؤال في نفس الموضوع"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="#FFFFFF"
+                app:backgroundTint="#0F2042"
+                app:cornerRadius="8dp" />
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- شريط الأزرار الأفقي المدمج في أسفل الشاشة -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="10dp"
+        android:background="#FFFFFF"
+        android:elevation="8dp"
+        android:gravity="center">
+
+        <!-- نسخ -->
+        <Button
+            android:id="@+id/btnCopy"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="📋 نسخ"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#1E40AF" />
+
+        <!-- مشاركة -->
+        <Button
+            android:id="@+id/btnShare"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="📤 مشاركة"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#D97706" />
+
+        <!-- طباعة -->
+        <Button
+            android:id="@+id/btnPrint"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="🖨️ طباعة"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#15803D" />
+
+        <!-- حذف بأيقونة وتأكيد -->
+        <Button
+            android:id="@+id/btnDelete"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="0.8"
+            android:text="🗑️ حذف"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#DC2626" />
+
     </LinearLayout>
-</ScrollView>
+
+</LinearLayout>

@@ -27,6 +27,10 @@ class ConsultActivity : AppCompatActivity() {
     private lateinit var tvResult: TextView
     private lateinit var resultActions: LinearLayout
 
+    private var previousQueryId: String? = null
+    private var previousQuestion: String? = null
+    private var previousAnswer: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_consult)
@@ -36,6 +40,16 @@ class ConsultActivity : AppCompatActivity() {
         progressBar = findViewById(R.id.progressBar)
         tvResult = findViewById(R.id.tvResult)
         resultActions = findViewById(R.id.resultActions)
+
+        previousQueryId = intent.getStringExtra("previous_query_id")
+        previousQuestion = intent.getStringExtra("previous_question")
+        previousAnswer = intent.getStringExtra("previous_answer")
+
+        if (!previousQuestion.isNullOrEmpty()) {
+            etQuestion.hint = "اكتب استفسارك التكميلي حول هذا الموضوع..."
+            tvResult.text = "📜 الاستشارة السابقة:\n$previousQuestion\n\n$previousAnswer"
+            tvResult.visibility = View.VISIBLE
+        }
 
         findViewById<TextView>(R.id.btnArchive).setOnClickListener {
             startActivity(Intent(this, QueriesActivity::class.java))
@@ -78,7 +92,21 @@ class ConsultActivity : AppCompatActivity() {
         val user = FirebaseAuth.getInstance().currentUser
 
         lifecycleScope.launch {
-            val answer = AIClient.askLegalQuestion(question)
+            // دمج السياق السابق إذا كان استفساراً تكميلياً
+            val fullPrompt = if (!previousQuestion.isNullOrEmpty()) {
+                "سياق الاستشارة السابقة:\nالسؤال السابق: $previousQuestion\nالإجابة السابقة: $previousAnswer\n\nسؤال المستخدم التكميلي الجديد:\n$question"
+            } else {
+                question
+            }
+
+            val lawsContext = LawsRepository.searchRelevantLaws(question)
+            val combinedPrompt = if (lawsContext.isNotBlank()) {
+                "النصوص القانونية ذات الصلة من قاعدة البيانات المعتمدة:\n$lawsContext\n\n$fullPrompt"
+            } else {
+                fullPrompt
+            }
+
+            val answer = AIClient.askLegalQuestion(combinedPrompt)
 
             val isRealAnswer = answer.isNotEmpty() &&
                     !answer.startsWith("❌") &&
@@ -93,13 +121,26 @@ class ConsultActivity : AppCompatActivity() {
 
             if (isRealAnswer) {
                 resultActions.visibility = View.VISIBLE
-                FirebaseFirestore.getInstance().collection("queries").add(hashMapOf(
-                    "question" to question,
-                    "answer" to answer,
-                    "userId" to (user?.uid ?: "anonymous"),
-                    "email" to (user?.email ?: ""),
-                    "timestamp" to System.currentTimeMillis()
-                ))
+                val db = FirebaseFirestore.getInstance().collection("queries")
+
+                // إذا كانت متابعة لنفس الاستشارة، نحدث الوثيقة نفسها بدلاً من مضاعفة السجلات
+                if (!previousQueryId.isNullOrEmpty()) {
+                    db.document(previousQueryId!!).update(
+                        mapOf(
+                            "question" to "$previousQuestion\n\n[استفسار تكميلي]: $question",
+                            "answer" to "$previousAnswer\n\n━━━━━━━━━━━━━━━━━━━━\n[متابعة الاستشارة]:\n$answer",
+                            "timestamp" to System.currentTimeMillis()
+                        )
+                    )
+                } else {
+                    db.add(hashMapOf(
+                        "question" to question,
+                        "answer" to answer,
+                        "userId" to (user?.uid ?: "anonymous"),
+                        "email" to (user?.email ?: ""),
+                        "timestamp" to System.currentTimeMillis()
+                    ))
+                }
             } else {
                 Toast.makeText(this@ConsultActivity, "⚠️ لم يتم الحفظ — الجواب غير مكتمل", Toast.LENGTH_LONG).show()
             }
