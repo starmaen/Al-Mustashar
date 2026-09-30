@@ -11,10 +11,10 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
-import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 
@@ -24,7 +24,7 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var btnDoSearch: Button
     private lateinit var progressBar: ProgressBar
     private lateinit var tvEmpty: TextView
-    private lateinit var scrollResults: ScrollView
+    private lateinit var scrollResults: NestedScrollView
     private lateinit var tvSearchResult: TextView
     private lateinit var searchActions: LinearLayout
 
@@ -82,14 +82,17 @@ class SearchActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
         tvEmpty.visibility = View.GONE
         scrollResults.visibility = View.GONE
+        searchActions.visibility = View.GONE
 
         lifecycleScope.launch {
-            val result = LawsRepository.searchRelevantLaws(query)
+            // نمرر this لقراءة القوانين من أصول التطبيق المدمجة
+            val result = LawsRepository.searchRelevantLaws(this@SearchActivity, query)
             progressBar.visibility = View.GONE
 
             if (result.isNotBlank() && !result.startsWith("⚠️")) {
                 tvSearchResult.text = result
                 scrollResults.visibility = View.VISIBLE
+                searchActions.visibility = View.VISIBLE
             } else {
                 tvEmpty.text = "لم يتم العثور على مادة مطابقة لـ \"$query\" في القوانين المتوفرة."
                 tvEmpty.visibility = View.VISIBLE
