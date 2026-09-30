@@ -1,6 +1,5 @@
 package com.maen.almustashar
 
-import android.content.Context
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -22,8 +21,8 @@ object AIClient {
     private val GEMINI_KEY = StringBuilder("AIzaSy").append("AQ_Ab8RN6LDf9QUde0JuW24Xv").append("L9IoCROBTbKm-ggDjuiRA3nRt-Ug").toString()
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(35, TimeUnit.SECONDS)
-        .readTimeout(50, TimeUnit.SECONDS)
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(45, TimeUnit.SECONDS)
         .build()
 
     private const val SYSTEM_PROMPT = """أنت مستشار ومرجع قانوني سوري خبير ومتخصص في التشريعات والقضاء السوري.
@@ -34,37 +33,25 @@ object AIClient {
 4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية."""
 
     suspend fun askLegalQuestion(prompt: String): String = withContext(Dispatchers.IO) {
-        // 1. المحاولة الأولى: Gemini 3.8 Flash (الأحدث في حسابك)
-        val res1 = callGemini("gemini-3.8-flash", prompt)
+        val res1 = callGemini("gemini-2.5-flash", prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
-        // 2. المحاولة الثانية: Gemini 3.5 Flash-Lite (السريع)
-        val res2 = callGemini("gemini-3.5-flash-lite", prompt)
+        val res2 = callGemini("gemini-2.5-pro", prompt)
         if (res2 is AIResult.Success) return@withContext res2.text
 
-        // 3. المحاولة الثالثة: Gemini 2.5 Flash (المستقر)
-        val res3 = callGemini("gemini-2.5-flash", prompt)
-        if (res3 is AIResult.Success) return@withContext res3.text
-
-        // 4. الاحتياط الرابع: Groq Llama-3.1-8b-instant
         val groqRes = callGroq("llama-3.1-8b-instant", prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         return@withContext when {
-            res1 is AIResult.Error -> "❌ فشل الاتصال (Gemini 3.8): ${res1.message}"
-            res2 is AIResult.Error -> "❌ فشل الاتصال (Gemini 3.5): ${res2.message}"
-            res3 is AIResult.Error -> "❌ فشل الاتصال (Gemini 2.5): ${res3.message}"
-            groqRes is AIResult.Error -> "❌ فشل الاتصال (Groq): ${groqRes.message}"
-            else -> "❌ تعذر إتمام الطلب، يرجى التأكد من اتصال الإنترنت."
+            res1 is AIResult.Error -> "❌ فشل الاتصال: ${res1.message}"
+            groqRes is AIResult.Error -> "❌ فشل الاتصال البديل: ${groqRes.message}"
+            else -> "❌ تعذر إتمام الطلب، يرجى التحقق من اتصال الإنترنت."
         }
     }
 
     suspend fun askGeneralQuestion(prompt: String): String = withContext(Dispatchers.IO) {
-        val res1 = callGemini("gemini-3.8-flash", prompt)
+        val res1 = callGemini("gemini-2.5-flash", prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
-
-        val res2 = callGemini("gemini-3.5-flash-lite", prompt)
-        if (res2 is AIResult.Success) return@withContext res2.text
 
         val groqRes = callGroq("llama-3.1-8b-instant", prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
@@ -107,14 +94,14 @@ object AIClient {
                     if (!text.isNullOrBlank()) {
                         AIResult.Success(text)
                     } else {
-                        AIResult.Error("رد فارغ من Gemini ($model)")
+                        AIResult.Error("رد فارغ من مزود الخدمة")
                     }
                 } else {
-                    AIResult.Error("Gemini HTTP ${response.code} ($model): $respStr")
+                    AIResult.Error("HTTP ${response.code}: $respStr")
                 }
             }
         } catch (e: Exception) {
-            AIResult.Error("Gemini Exception ($model): ${e.localizedMessage}")
+            AIResult.Error("Exception: ${e.localizedMessage}")
         }
     }
 
@@ -155,14 +142,14 @@ object AIClient {
                     if (!text.isNullOrBlank()) {
                         AIResult.Success(text)
                     } else {
-                        AIResult.Error("رد فارغ من Groq ($model)")
+                        AIResult.Error("رد فارغ من مزود الخدمة")
                     }
                 } else {
-                    AIResult.Error("Groq HTTP ${response.code} ($model): $respStr")
+                    AIResult.Error("HTTP ${response.code}: $respStr")
                 }
             }
         } catch (e: Exception) {
-            AIResult.Error("Groq Exception ($model): ${e.localizedMessage}")
+            AIResult.Error("Exception: ${e.localizedMessage}")
         }
     }
 }
