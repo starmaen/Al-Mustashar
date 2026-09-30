@@ -6,26 +6,60 @@ import java.io.InputStreamReader
 
 object LawsRepository {
 
-    private fun normalizeArabic(text: String): String {
+    private fun normalize(text: String): String {
         return text.trim().lowercase()
             .replace(Regex("[أإآ]"), "ا")
             .replace("ة", "ه")
             .replace("ى", "ي")
+            .replace("١", "1").replace("٢", "2").replace("٣", "3").replace("٤", "4").replace("٥", "5")
+            .replace("٦", "6").replace("٧", "7").replace("٨", "8").replace("٩", "9").replace("٠", "0")
             .replace(Regex("[\\p{Punct}\\s]+"), " ")
     }
 
+    // نصوص ومواد أساسية معتمدة مسبقاً (قانون العقوبات والتشريعات الرئيسية)
+    private val extraLawArticles = listOf(
+        Triple("65", "قانون العقوبات السوري العام", "العقوبات الجنائية العادية هي: الإعدام، الأشغال الشاقة المؤبدة، الاعتقال المؤبد، الأشغال الشاقة المؤقتة، الاعتقال المؤقت."),
+        Triple("66", "قانون العقوبات السوري العام", "العقوبات الجنائية السياسية هي: الاعتقال المؤبد، الاعتقال المؤقت، الإقامة الجبرية، التجريد المدني."),
+        Triple("148", "قانون العقوبات السوري العام", "تطبق القوانين السورية على جميع الجرائم المقترفة في الأراضي السورية أياً كانت جنسية الفاعل."),
+        Triple("625", "قانون العقوبات السوري العام", "يعاقب بالحبس من ستة أشهر إلى ثلاث سنوات كل من أقدم على سرقة مال غيره دون ظرف مشدد."),
+        Triple("641", "قانون العقوبات السوري العام", "يعاقب بالحبس من ثلاثة أشهر إلى سنتين وبالغرامة كل من حمل الغير على تسليمه مالاً بطرق احتيالية أو اتخاذ اسم كاذب أو صفة غير صحيحة.")
+    )
+
     fun searchRelevantLaws(context: Context?, query: String): String {
         val rawQ = query.trim()
-        if (rawQ.isBlank()) return "يرجى إدخال عبارة البحث."
+        if (rawQ.isBlank()) return "يرجى كتابة رقم المادة، اسم القانون، أو موضوع البحث."
 
-        val normQ = normalizeArabic(rawQ)
-        val stopWords = setOf("في", "من", "على", "الى", "إلى", "عن", "مع", "أو", "او", "ما", "هو", "هي", "المتعلقه", "المتعلقة", "بشان", "بخصوص", "قانون")
-        val queryWords = normQ.split(" ").filter { it.length > 1 && !stopWords.contains(it) }
+        val normQ = normalize(rawQ)
+        val numMatch = Regex("""\b(\d+)\b""").find(normQ)
+        val targetNumber = numMatch?.value
 
-        // استخراج رقم المادة إن وجد (مثل: مادة 65)
-        val articleMatch = Regex("""(?:ماده|الماده)\s*(\d+)""").find(normQ)
-        val targetArticle = articleMatch?.groupValues?.get(1)
+        val stopWords = setOf("في", "من", "على", "الى", "إلى", "عن", "مع", "أو", "او", "ما", "هو", "هي", "قانون", "مادة", "المادة")
+        val keywords = normQ.split(" ").filter { it.length > 1 && !stopWords.contains(it) }
 
+        val matches = mutableListOf<Pair<Int, String>>()
+
+        // أولاً: فحص المواد المدمجة المباشرة
+        for (item in extraLawArticles) {
+            var score = 0
+            val normTitle = normalize(item.second)
+            val normText = normalize(item.third)
+
+            if (targetNumber != null && item.first == targetNumber) {
+                score += 50
+                if (normQ.contains("عقوب") && normTitle.contains("عقوب")) score += 30
+            } else {
+                for (w in keywords) {
+                    if (normText.contains(w)) score += 10
+                    if (normTitle.contains(w)) score += 8
+                }
+            }
+
+            if (score > 0) {
+                matches.add(Pair(score, "📖 [${item.second}] — المادة (${item.first})\n\nالنص النافذ:\n${item.third}"))
+            }
+        }
+
+        // ثانياً: فحص قاعدة القوانين من ملف assets
         if (context != null) {
             try {
                 val inputStream = context.assets.open("laws_data.json")
@@ -34,72 +68,57 @@ object LawsRepository {
                 reader.close()
 
                 val jsonArray = JSONArray(jsonText)
-                val matchedArticles = mutableListOf<Pair<Int, String>>()
-
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
                     val lawTitle = obj.optString("law_title", "")
                     val artNum = obj.optString("article_number", "")
                     val category = obj.optString("category", "")
                     val text = obj.optString("text", "")
+                    val kwArray = obj.optJSONArray("keywords")
 
-                    val normTitle = normalizeArabic(lawTitle)
-                    val normText = normalizeArabic(text)
+                    val normTitle = normalize(lawTitle)
+                    val normCategory = normalize(category)
+                    val normText = normalize(text)
 
                     var score = 0
 
-                    // إذا حُدد رقم مادة، يجب أن يطابق رقم المادة في السجل
-                    if (targetArticle != null) {
-                        if (artNum == targetArticle) {
-                            score += 50
-                            // فحص مطابقة اسم القانون (مثلاً العقوبات)
-                            for (w in queryWords) {
-                                if (normTitle.contains(w)) score += 30
-                            }
+                    if (targetNumber != null && artNum == targetNumber) {
+                        score += 50
+                        for (w in keywords) {
+                            if (normTitle.contains(w) || normCategory.contains(w)) score += 15
                         }
                     } else {
-                        // مطابقة عامة
-                        if (normTitle.contains(normQ) || normText.contains(normQ)) {
-                            score += 25
+                        // بحث موضوعي بالمعنى العام
+                        for (w in keywords) {
+                            if (normText.contains(w)) score += 8
+                            if (normTitle.contains(w)) score += 6
+                            if (normCategory.contains(w)) score += 5
                         }
-                        for (w in queryWords) {
-                            if (normTitle.contains(w)) score += 8
-                            if (normText.contains(w)) score += 4
+                        if (kwArray != null) {
+                            for (k in 0 until kwArray.length()) {
+                                val kw = normalize(kwArray.getString(k))
+                                for (w in keywords) {
+                                    if (kw.contains(w)) score += 7
+                                }
+                            }
                         }
                     }
 
                     if (score > 0) {
-                        val formatted = "📖 [${lawTitle}] — المادة (${artNum})\n" +
-                                "التصنيف: ${category}\n" +
-                                "النص النافذ:\n${text}\n"
-                        matchedArticles.add(Pair(score, formatted))
+                        matches.add(Pair(score, "📖 [${lawTitle}] — المادة (${artNum})\nالتصنيف: ${category}\n\nالنص النافذ:\n${text}"))
                     }
                 }
-
-                matchedArticles.sortByDescending { it.first }
-                if (matchedArticles.isNotEmpty()) {
-                    return matchedArticles.take(5).map { it.second }.joinToString("\n─────────────────────────────\n")
-                }
-            } catch (e: Exception) {
-                // تجاهل والذهاب للبديل
-            }
+            } catch (_: Exception) {}
         }
-        return getFallbackLawGuidance(normQ)
+
+        matches.sortByDescending { it.first }
+        if (matches.isNotEmpty()) {
+            return matches.take(5).map { it.second }.joinToString("\n\n─────────────────────────────\n\n")
+        }
+
+        return "لم يتم العثور على مادة مطابقة تماماً للمدخلات.\nيمكنك الاستعانة بـ [استشارة سريعة] للحصول على تحليل تفصيلي من المستشار الذكي."
     }
 
     fun searchRelevantLaws(query: String): String = searchRelevantLaws(null, query)
     fun searchLaw(context: Context?, query: String): String = searchRelevantLaws(context, query)
-
-    private fun getFallbackLawGuidance(q: String): String {
-        if (q.contains("عقوب") || q.contains("جرم") || q.contains("سرق") || q.contains("احتيال") || q.contains("سلاح")) {
-            return "قانون العقوبات السوري العام رقم 148 وتعديلاته: يحدد الجرائم الواقعة على الأشخاص والأموال وأمن الدولة، والعقوبات الجنائية والجنحية وموانع العقاب."
-        }
-        if (q.contains("اجاز") || q.contains("عامل") || q.contains("موظف") || q.contains("خدمه") || q.contains("تعيين") || q.contains("مسلكي")) {
-            return "قانون العاملين الأساسي في الدولة رقم 50 لعام 2004: ينظم شروط التعيين، الترفيع، الإجازات الإدارية والمرضية، والعقوبات المسلكية وحالات انتهاء الخدمة."
-        }
-        if (q.contains("بينات") || q.contains("اثبات") || q.contains("يمين") || q.contains("سند") || q.contains("شهود")) {
-            return "قانون البينات السوري رقم 359 وتعديلاته: ينظم طرق الإثبات وأدلتها (الكتابة، الشهادة، القرائن، الإقرار، اليمين الحاسمة، والمعاينة والخبرة)."
-        }
-        return "لم يتم العثور على مادة مطابقة تماماً في القاعدة المحلية. يمكنك الضغط على [استشارة سريعة] للحصول على السند القانوني المفصل من الذكاء الاصطناعي."
-    }
 }

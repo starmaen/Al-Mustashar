@@ -21,65 +21,70 @@ class ConsultActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_consult)
+        try {
+            setContentView(R.layout.activity_consult)
 
-        val etQuestion = findViewById<EditText>(R.id.etQuestion)
-        val btnAsk = findViewById<Button>(R.id.btnAsk)
-        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
-        val tvAnswer = findViewById<TextView>(R.id.tvAnswer)
-        val btnCopy = findViewById<Button>(R.id.btnCopy)
-        val btnShare = findViewById<Button>(R.id.btnShare)
+            val etQuestion = findViewById<EditText>(R.id.etQuestion)
+            val btnAsk = findViewById<Button>(R.id.btnAsk)
+            val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+            val tvAnswer = findViewById<TextView>(R.id.tvAnswer)
+            val btnCopy = findViewById<Button>(R.id.btnCopy)
+            val btnShare = findViewById<Button>(R.id.btnShare)
 
-        btnAsk.setOnClickListener {
-            val q = etQuestion.text.toString().trim()
-            if (q.isNotEmpty()) {
-                progressBar.visibility = View.VISIBLE
-                btnAsk.isEnabled = false
+            btnAsk?.setOnClickListener {
+                val q = etQuestion?.text?.toString()?.trim() ?: ""
+                if (q.isNotEmpty()) {
+                    progressBar?.visibility = View.VISIBLE
+                    btnAsk.isEnabled = false
 
-                val fullPrompt = if (conversationHistory.isNotEmpty()) {
-                    "$conversationHistory\n\nسؤال إضافي:\n$q"
-                } else {
-                    q
-                }
+                    val prompt = if (conversationHistory.isNotEmpty()) {
+                        "$conversationHistory\n\nسؤال جديد:\n$q"
+                    } else {
+                        q
+                    }
 
-                lifecycleScope.launch {
-                    try {
-                        val result = AIClient.askLegalQuestion(fullPrompt)
-                        tvAnswer.text = result
-                        if (!result.startsWith("❌")) {
-                            conversationHistory.append("\nالسؤال: ").append(q)
-                                .append("\nالجواب: ").append(result).append("\n")
-                            etQuestion.text.clear()
-                            etQuestion.hint = "تابع نفس الاستشارة بسؤال إضافي..."
+                    lifecycleScope.launch {
+                        try {
+                            val result = AIClient.askLegalQuestion(prompt, this@ConsultActivity)
+                            tvAnswer?.text = result
+                            if (!result.startsWith("❌")) {
+                                conversationHistory.append("\nالاستشارة: ").append(q)
+                                    .append("\nالرأي القانوني:\n").append(result).append("\n")
+                                etQuestion?.text?.clear()
+                                etQuestion?.hint = "تابع نفس الاستشارة بسؤال إضافي..."
+                            }
+                        } catch (e: Throwable) {
+                            tvAnswer?.text = "❌ تعذر إتمام الاستشارة حالياً: ${e.localizedMessage}"
+                        } finally {
+                            progressBar?.visibility = View.GONE
+                            btnAsk.isEnabled = true
                         }
-                    } catch (e: Exception) {
-                        tvAnswer.text = "❌ حدث خطأ غير متوقع: ${e.localizedMessage}"
-                    } finally {
-                        progressBar.visibility = View.GONE
-                        btnAsk.isEnabled = true
                     }
                 }
             }
-        }
 
-        btnCopy.setOnClickListener {
-            val txt = tvAnswer.text.toString()
-            if (txt.isNotEmpty()) {
-                val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                cm.setPrimaryClip(ClipData.newPlainText("Consultation", txt))
-                Toast.makeText(this, "تم نسخ النص", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        btnShare.setOnClickListener {
-            val txt = tvAnswer.text.toString()
-            if (txt.isNotEmpty()) {
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, txt)
+            btnCopy?.setOnClickListener {
+                val txt = tvAnswer?.text?.toString() ?: ""
+                if (txt.isNotEmpty()) {
+                    val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    cm.setPrimaryClip(ClipData.newPlainText("Consultation", txt))
+                    Toast.makeText(this, "تم نسخ نص الاستشارة والرأي القانوني", Toast.LENGTH_SHORT).show()
                 }
-                startActivity(Intent.createChooser(intent, "مشاركة الاستشارة"))
             }
+
+            btnShare?.setOnClickListener {
+                val txt = tvAnswer?.text?.toString() ?: ""
+                if (txt.isNotEmpty()) {
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, txt)
+                    }
+                    startActivity(Intent.createChooser(intent, "مشاركة الرأي القانوني"))
+                }
+            }
+        } catch (_: Exception) {
+            Toast.makeText(this, "حدث خطأ غير متوقع", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 }

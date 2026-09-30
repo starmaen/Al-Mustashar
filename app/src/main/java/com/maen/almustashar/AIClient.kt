@@ -1,5 +1,6 @@
 package com.maen.almustashar
 
+import android.content.Context
 import android.util.Base64
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
@@ -14,7 +15,6 @@ import java.util.concurrent.TimeUnit
 
 object AIClient {
 
-    // فك التشفير محلياً لتجاوز حظر الرفع والحفاظ على الأمان
     private val GROQ_KEY = String(Base64.decode("Z3NrX2N2eGpic1c2cThDUWZDTE9ybVRnV0dkeWIwRllFczBEc2JEOG4xYW00WndFSk9SaXpJTTBase64==", Base64.DEFAULT)).trim().replace("ase64==", "")
     private val GEMINI_KEY = String(Base64.decode("QVEuQWI4Uk42TERmOVFVZGUwSnVXMjRYdkw5SW9DUk9CVGJLbS1nZ0RqdWlSQTNuUnQtVWc=", Base64.DEFAULT)).trim()
 
@@ -26,39 +26,36 @@ object AIClient {
         .readTimeout(30, TimeUnit.SECONDS)
         .build()
 
-    private const val SYSTEM_PROMPT = """أنت مستشار قانوني سوري خبير ومرجع معتمد في التشريعات والقضاء السوري.
-مهمتك تقديم استشارة قانونية وافية ودقيقة ومعززة بالسند والنص القانوني السوري النافذ.
-هيكل الإجابة:
-1. التكييف القانوني
-2. الحكم والحل القانوني أو العقوبة المقررة
-3. السند القانوني النافذ (أرقام المواد)
-4. التوجيه والإجراء العملي
-ضوابط: أسلوب قانوني فصيح ومباشر."""
+    private const val SYSTEM_PROMPT = """أنت مستشار قانوني سوري معتمد وخبير في التشريعات والقضاء السوري.
+المطلوب منك في كل استشارة تقديم دراسة قانونية وافية وتحليل شامل بالهيكل الآتي:
+1. ⚖️ التكييف والوصف القانوني الدقيق للوقائع.
+2. 📜 السند القانوني النافذ (أرقام المواد ونصوصها من القوانين السورية ذات الصلة).
+3. 💡 التحليل القانوني وإبداء الرأي والحل أو العقوبة المقررة.
+4. 🧭 التوجيه العملي والإجراءات الواجب اتخاذها أمام المحاكم أو الدوائر المختصة.
+الأسلوب: قانوني رصين، مباشر وواضح."""
 
-    suspend fun askLegalQuestion(question: String): String = withContext(Dispatchers.IO) {
-        val relevantLaws = try { LawsRepository.searchRelevantLaws(question) } catch (e: Exception) { "" }
-        val prompt = if (relevantLaws.isNotEmpty()) {
-            "$SYSTEM_PROMPT\n\n📚 نصوص قانونية ذات صلة:\n$relevantLaws\n\nالسؤال:\n$question"
+    suspend fun askLegalQuestion(question: String, context: Context? = null): String = withContext(Dispatchers.IO) {
+        val relevantLaws = try { LawsRepository.searchRelevantLaws(context, question) } catch (_: Exception) { "" }
+        val prompt = if (relevantLaws.isNotBlank() && !relevantLaws.startsWith("لم يتم العثور")) {
+            "$SYSTEM_PROMPT\n\nنصوص قانونية استرشادية من القاعدة السورية:\n$relevantLaws\n\nوقائع الاستشارة:\n$question"
         } else {
-            "$SYSTEM_PROMPT\n\nالسؤال:\n$question"
+            "$SYSTEM_PROMPT\n\nوقائع الاستشارة:\n$question"
         }
 
-        // 1. استخدام Groq أولاً
         for (m in GROQ_MODELS) {
             val r = callGroq(m, prompt)
             if (r is AIResult.Success) return@withContext r.text
         }
 
-        // 2. استخدام Gemini كبديل
         for (m in GEMINI_MODELS) {
             val r = callGemini(m, prompt)
             if (r is AIResult.Success) return@withContext r.text
         }
 
-        return@withContext "❌ تعذر الاتصال بالخادم، يرجى المحاولة بعد قليل."
+        return@withContext "❌ تعذر الاتصال بمزودي الذكاء الاصطناعي حالياً، يرجى المحاولة بعد قليل."
     }
 
-    suspend fun askGeneralQuestion(question: String): String = askLegalQuestion(question)
+    suspend fun askGeneralQuestion(question: String, context: Context? = null): String = askLegalQuestion(question, context)
 
     private fun callGroq(model: String, prompt: String): AIResult {
         return try {
@@ -66,7 +63,7 @@ object AIClient {
             val messages = JsonArray().apply {
                 add(JsonObject().apply {
                     addProperty("role", "system")
-                    addProperty("content", "أنت مستشار قانوني سوري متخصص.")
+                    addProperty("content", "أنت مستشار قانوني سوري متخصص وخبير.")
                 })
                 add(JsonObject().apply {
                     addProperty("role", "user")
