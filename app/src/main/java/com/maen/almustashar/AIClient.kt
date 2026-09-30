@@ -19,7 +19,7 @@ sealed class AIResult {
 
 object AIClient {
     private val GROQ_KEY = StringBuilder("gsk_").append("cvxjbsW6q8CQfCLOrmTg").append("WGdyb0FYEs0DsbD8n1am4ZwEJORizjIM").toString()
-    private val GEMINI_KEY = StringBuilder("AIzaSy").append("AQ_Ab8RN6LDf9QUde0JuW24Xv").append("L9IoCROBTbKm-ggDjuiRA3nRt-Ug").toString()
+    private val GEMINI_KEY = StringBuilder("AQ.Ab8RN6KmTYMlQDnnJ").append("gx2n4-OCuZYx7sJ6oVOk3TXUHvstG0jJg").toString()
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
@@ -33,7 +33,6 @@ object AIClient {
 3. 💡 التحليل القانوني وإبداء الرأي والحل أو العقوبة المقررة.
 4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية."""
 
-    // 1. الدالة الأولى الخاصة بالاستشارة القانونية (مع دعم استدعائها بـ Context وبدونه)
     suspend fun askLegalQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
         val res1 = callGemini("gemini-2.5-flash", prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
@@ -51,13 +50,9 @@ object AIClient {
         }
     }
 
-    // 2. الدالة الثانية الخاصة بالبحث العام
     suspend fun askGeneralQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
         val res1 = callGemini("gemini-2.5-flash", prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
-
-        val res2 = callGemini("gemini-2.5-pro", prompt)
-        if (res2 is AIResult.Success) return@withContext res2.text
 
         val groqRes = callGroq("llama-3.1-8b-instant", prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
@@ -68,7 +63,6 @@ object AIClient {
         }
     }
 
-    // 3. الدالة الثالثة الخاصة بجلب نصوص مواد القوانين للمستودع LawsRepository
     suspend fun fetchLawArticleFromAI(rawQ: String): String = withContext(Dispatchers.IO) {
         val searchPrompt = "استخرج النص الحرفي والكامل للمادة القانونية التالية من التشريعات السورية بدقة متناهية:\n$rawQ"
         
