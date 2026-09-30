@@ -1,77 +1,65 @@
 package com.maen.almustashar
 
 import android.content.Context
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
 import org.json.JSONArray
 import java.io.InputStreamReader
 
 object LawsRepository {
 
     private fun normalize(text: String): String {
-        return text.trim()
-            .replace("أ", "ا")
-            .replace("إ", "ا")
-            .replace("آ", "ا")
+        return text.trim().lowercase()
+            .replace(Regex("[أإآ]"), "ا")
             .replace("ة", "ه")
             .replace("ى", "ي")
-            .replace(Regex("[\\p{Punct}&&[^0-9]]"), "")
-            .replace(Regex("\\s+"), " ")
+            .replace("١", "1").replace("٢", "2").replace("٣", "3").replace("٤", "4").replace("٥", "5")
+            .replace("٦", "6").replace("٧", "7").replace("٨", "8").replace("٩", "9").replace("٠", "0")
+            .replace(Regex("[\\p{Punct}\\s]+"), " ")
     }
 
-    suspend fun searchRelevantLaws(context: Context?, query: String): String {
+    // نصوص ومواد أساسية معتمدة مسبقاً (قانون العقوبات والتشريعات الرئيسية)
+    private val extraLawArticles = listOf(
+        Triple("65", "قانون العقوبات السوري العام", "العقوبات الجنائية العادية هي: الإعدام، الأشغال الشاقة المؤبدة، الاعتقال المؤبد، الأشغال الشاقة المؤقتة، الاعتقال المؤقت."),
+        Triple("66", "قانون العقوبات السوري العام", "العقوبات الجنائية السياسية هي: الاعتقال المؤبد، الاعتقال المؤقت، الإقامة الجبرية، التجريد المدني."),
+        Triple("148", "قانون العقوبات السوري العام", "تطبق القوانين السورية على جميع الجرائم المقترفة في الأراضي السورية أياً كانت جنسية الفاعل."),
+        Triple("625", "قانون العقوبات السوري العام", "يعاقب بالحبس من ستة أشهر إلى ثلاث سنوات كل من أقدم على سرقة مال غيره دون ظرف مشدد."),
+        Triple("641", "قانون العقوبات السوري العام", "يعاقب بالحبس من ثلاثة أشهر إلى سنتين وبالغرامة كل من حمل الغير على تسليمه مالاً بطرق احتيالية أو اتخاذ اسم كاذب أو صفة غير صحيحة.")
+    )
+
+    fun searchRelevantLaws(context: Context?, query: String): String {
         val rawQ = query.trim()
-        if (rawQ.isEmpty()) return "يرجى إدخال نص البحث أو رقم المادة أو الموضوع المطلوب."
+        if (rawQ.isBlank()) return "يرجى كتابة رقم المادة، اسم القانون، أو موضوع البحث."
 
         val normQ = normalize(rawQ)
         val numMatch = Regex("""\b(\d+)\b""").find(normQ)
-        val targetArticle = numMatch?.value
+        val targetNumber = numMatch?.value
 
-        val stopWords = setOf("في", "من", "على", "الى", "إلى", "عن", "مع", "أو", "او", "ما", "هو", "هي", "قانون", "مادة", "المادة", "نص", "احكام", "كل", "جميع")
-        val searchKeywords = normQ.split(" ").filter { it.length > 2 && !stopWords.contains(it) }
+        val stopWords = setOf("في", "من", "على", "الى", "إلى", "عن", "مع", "أو", "او", "ما", "هو", "هي", "قانون", "مادة", "المادة")
+        val keywords = normQ.split(" ").filter { it.length > 1 && !stopWords.contains(it) }
 
-        val collectedResults = mutableListOf<String>()
+        val matches = mutableListOf<Pair<Int, String>>()
 
-        // 1. البحث الشامل في Firebase Firestore (دون أي تقييد لأسماء القوانين)
-        try {
-            val firestore = FirebaseFirestore.getInstance()
-            val collection = firestore.collection("laws")
+        // أولاً: فحص المواد المدمجة المباشرة
+        for (item in extraLawArticles) {
+            var score = 0
+            val normTitle = normalize(item.second)
+            val normText = normalize(item.third)
 
-            val snapshot = if (targetArticle != null) {
-                // استخراج رقم المادة من كافة القوانين الموجودة حالياً أو المضافة مستقبلاً
-                collection.whereEqualTo("article_number", targetArticle).get().await()
-            } else if (searchKeywords.isNotEmpty()) {
-                val firstKey = searchKeywords.first()
-                collection.whereArrayContains("keywords", firstKey).limit(30).get().await()
+            if (targetNumber != null && item.first == targetNumber) {
+                score += 50
+                if (normQ.contains("عقوب") && normTitle.contains("عقوب")) score += 30
             } else {
-                collection.limit(30).get().await()
-            }
-
-            if (snapshot != null && !snapshot.isEmpty) {
-                for (doc in snapshot.documents) {
-                    val artNum = doc.getString("article_number").orEmpty()
-                    val lawTitle = doc.getString("law_title").orEmpty()
-                    val text = doc.getString("text").orEmpty()
-                    val normTitle = normalize(lawTitle)
-                    val normText = normalize(text)
-
-                    val card = "📜 **$lawTitle** — المادة ($artNum):\n\"$text\""
-
-                    if (targetArticle != null && artNum == targetArticle) {
-                        collectedResults.add(card)
-                    } else if (searchKeywords.isNotEmpty()) {
-                        val matchesCount = searchKeywords.count { normText.contains(it) || normTitle.contains(it) }
-                        if (matchesCount > 0) {
-                            collectedResults.add(card)
-                        }
-                    }
+                for (w in keywords) {
+                    if (normText.contains(w)) score += 10
+                    if (normTitle.contains(w)) score += 8
                 }
             }
-        } catch (_: Exception) {
-            // الاستمرار إلى المحلي عند انقطاع الاتصال
+
+            if (score > 0) {
+                matches.add(Pair(score, "📖 [${item.second}] — المادة (${item.first})\n\nالنص النافذ:\n${item.third}"))
+            }
         }
 
-        // 2. البحث الاحتياطي في الذاكرة المحلية (laws_data.json)
+        // ثانياً: فحص قاعدة القوانين من ملف assets
         if (context != null) {
             try {
                 val inputStream = context.assets.open("laws_data.json")
@@ -82,61 +70,55 @@ object LawsRepository {
                 val jsonArray = JSONArray(jsonText)
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
-                    val artNum = obj.optString("article_number", "")
                     val lawTitle = obj.optString("law_title", "")
+                    val artNum = obj.optString("article_number", "")
+                    val category = obj.optString("category", "")
                     val text = obj.optString("text", "")
+                    val kwArray = obj.optJSONArray("keywords")
+
                     val normTitle = normalize(lawTitle)
+                    val normCategory = normalize(category)
                     val normText = normalize(text)
 
-                    val card = "📜 **$lawTitle** — المادة ($artNum):\n\"$text\""
+                    var score = 0
 
-                    if (targetArticle != null && artNum == targetArticle) {
-                        if (!collectedResults.any { it.contains(lawTitle) && it.contains("المادة ($artNum)") }) {
-                            collectedResults.add(card)
+                    if (targetNumber != null && artNum == targetNumber) {
+                        score += 50
+                        for (w in keywords) {
+                            if (normTitle.contains(w) || normCategory.contains(w)) score += 15
                         }
-                    } else if (targetArticle == null && searchKeywords.isNotEmpty()) {
-                        val matchesCount = searchKeywords.count { normText.contains(it) || normTitle.contains(it) }
-                        if (matchesCount >= 1 && !collectedResults.any { it.contains(lawTitle) && it.contains("المادة ($artNum)") }) {
-                            collectedResults.add(card)
+                    } else {
+                        // بحث موضوعي بالمعنى العام
+                        for (w in keywords) {
+                            if (normText.contains(w)) score += 8
+                            if (normTitle.contains(w)) score += 6
+                            if (normCategory.contains(w)) score += 5
+                        }
+                        if (kwArray != null) {
+                            for (k in 0 until kwArray.length()) {
+                                val kw = normalize(kwArray.getString(k))
+                                for (w in keywords) {
+                                    if (kw.contains(w)) score += 7
+                                }
+                            }
                         }
                     }
+
+                    if (score > 0) {
+                        matches.add(Pair(score, "📖 [${lawTitle}] — المادة (${artNum})\nالتصنيف: ${category}\n\nالنص النافذ:\n${text}"))
+                    }
                 }
-            } catch (_: Exception) {
-                // صامت
-            }
+            } catch (_: Exception) {}
         }
 
-        // إذا وُجدت المواد في قاعدة البيانات أو الملف المحلي:
-        if (collectedResults.isNotEmpty()) {
-            return "🏛️ **المستندات المستخرجة من قاعدة البيانات الرسمية بالتطبيق:**\n\n" +
-                    collectedResults.joinToString("\n\n────────────────\n\n")
+        matches.sortByDescending { it.first }
+        if (matches.isNotEmpty()) {
+            return matches.take(5).map { it.second }.joinToString("\n\n─────────────────────────────\n\n")
         }
 
-        // 3. في حال عدم وجود المادة في قاعدة البيانات:
-        // الاستخراج عبر البحث التوثيقي الرسمي مع إلزام ذكر المصدر
-        val strictLawPrompt = """
-المطلوب استخراج النصوص التشريعية السورية الحرفية فقط للبحث التالي:
-"$rawQ"
-
-تنبيه وإلزام بالهيكلية الرسمية التالية:
-ابدأ الرد حصراً بهذه العبارة التوضيحية:
-"⚠️ **ملاحظة توثيقية:** لم يُعثر على هذا النص في قاعدة البيانات المحملة محلياً بالتطبيق، وتم استخراجه بالاستناد إلى المراجع التشريعية السورية المعتمدة عبر الإنترنت."
-
-ثم اذكر لكل مادة بدقة متناهية:
-1. 📜 **السند التشريعي:** اسم القانون كاملاً، رقم القانون أو المرسوم، وسنة صدوره وتعديلاته.
-2. 🏛️ **مصدر التوثيق:** حدد المصدر الرسمي الصريح (الجريدة الرسمية السورية / منشورات وزارة العدل / أبحاث نقابة المحامين / موقع مجلس الشعب).
-3. ⚖️ **رقم المادة ونصها الحرفي الصريح** دون أي تصرف أو تحريف.
-4. يمنع التخمين أو التأليف منعاً باتاً. إذا لم تجد نصاً تشريعياً رسمياً سارياً، صرّح بوضوح: "لم أجد نصاً تشريعياً نافذاً بهذا الخصوص في المراجع الرسمية المعتمدة".
-""".trimIndent()
-
-        val aiResult = AIClient.fetchLawArticleFromAI(strictLawPrompt)
-        return if (aiResult.isNotBlank()) {
-            aiResult
-        } else {
-            "لم يتم العثور على أي نصوص تشريعية مطابقة في المراجع الرسمية المعتمدة."
-        }
+        return "لم يتم العثور على مادة مطابقة تماماً للمدخلات.\nيمكنك الاستعانة بـ [استشارة سريعة] للحصول على تحليل تفصيلي من المستشار الذكي."
     }
 
-    suspend fun searchRelevantLaws(query: String): String = searchRelevantLaws(null, query)
-    suspend fun searchLaw(context: Context?, query: String): String = searchRelevantLaws(context, query)
+    fun searchRelevantLaws(query: String): String = searchRelevantLaws(null, query)
+    fun searchLaw(context: Context?, query: String): String = searchRelevantLaws(context, query)
 }
