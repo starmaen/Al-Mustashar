@@ -1,86 +1,183 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#0F172A"
-    android:padding="12dp">
+    android:background="#0F2042"
+    android:layoutDirection="rtl">
 
+    <!-- شريط علوي -->
     <LinearLayout
-        android:id="@+id/layoutSearchInput"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:layout_height="56dp"
+        android:background="#0B172E"
         android:gravity="center_vertical"
-        android:layout_marginBottom="8dp">
+        android:paddingHorizontal="16dp">
 
-        <EditText
-            android:id="@+id/etSearchQuery"
+        <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:minHeight="48dp"
-            android:hint="ابحث في القوانين أو تابع السؤال..."
+            android:text="🌐 بحث قانوني عام"
             android:textColor="#FFFFFF"
-            android:textColorHint="#94A3B8"
-            android:background="@android:drawable/editbox_background"
-            android:backgroundTint="#1E293B"
-            android:padding="10dp"
-            android:gravity="right|top"
-            android:textDirection="rtl"
-            android:textSize="14sp" />
-
-        <Button
-            android:id="@+id/btnSearch"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="بحث"
-            android:backgroundTint="#059669"
-            android:textColor="#FFFFFF" />
-    </LinearLayout>
-
-    <ProgressBar
-        android:id="@+id/searchProgressBar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:visibility="gone"
-        android:layout_margin="8dp" />
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true">
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
         <TextView
-            android:id="@+id/tvSearchResult"
-            android:layout_width="match_parent"
+            android:id="@+id/btnArchive"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#E2E8F0"
-            android:textSize="15sp"
-            android:lineSpacingExtra="4dp"
-            android:textIsSelectable="true"
-            android:gravity="right"
-            android:textDirection="rtl" />
-    </ScrollView>
+            android:text="📚 الأرشيف"
+            android:textColor="#F39C12"
+            android:textSize="14sp"
+            android:padding="8dp" />
+    </LinearLayout>
 
+    <!-- حقل الإدخال وزر البحث بالأعلى -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginTop="8dp">
+        android:orientation="vertical"
+        android:background="#15284F"
+        android:padding="12dp">
 
-        <Button
-            android:id="@+id/btnFallbackGoogle"
+        <EditText
+            android:id="@+id/etGeneralQuestion"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="بحث في مراجع Google القانونية"
-            android:backgroundTint="#1E293B"
-            android:textColor="#38BDF8"
-            android:visibility="gone" />
+            android:minHeight="48dp"
+            android:background="@android:drawable/editbox_background_normal"
+            android:hint="اكتب استفسارك القانوني العام هنا..."
+            android:textColor="#000000"
+            android:textColorHint="#7F8C8D"
+            android:padding="10dp"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/btnGeneralSubmit"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:backgroundTint="#00796B"
+            android:text="🔍 بحث شامل"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:textStyle="bold" />
     </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/progressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="16dp"
+        android:visibility="gone" />
+
+    <!-- نتائج البحث -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollGeneralResults"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="12dp"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:id="@+id/cardGeneralResult"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="10dp"
+                app:cardElevation="3dp"
+                app:cardBackgroundColor="#FFFFFF"
+                android:layout_marginBottom="12dp"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <TextView
+                        android:id="@+id/tvGeneralResult"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="#1E293B"
+                        android:textSize="15sp"
+                        android:lineSpacingExtra="5dp"
+                        android:textIsSelectable="true" />
+
+                    <!-- أزرار العمليات (نسخ، مشاركة، طباعة، غوغل) -->
+                    <LinearLayout
+                        android:id="@+id/resultActions"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center"
+                        android:layout_marginTop="12dp">
+
+                        <Button
+                            android:id="@+id/btnCopyResult"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:text="نسخ"
+                            android:textSize="12sp"
+                            android:backgroundTint="#0F2042"
+                            android:textColor="#FFFFFF" />
+
+                        <Button
+                            android:id="@+id/btnShareResult"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:layout_marginStart="4dp"
+                            android:text="مشاركة"
+                            android:textSize="12sp"
+                            android:backgroundTint="#0F2042"
+                            android:textColor="#FFFFFF" />
+
+                        <Button
+                            android:id="@+id/btnPrintResult"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:layout_marginStart="4dp"
+                            android:text="طباعة"
+                            android:textSize="12sp"
+                            android:backgroundTint="#0F2042"
+                            android:textColor="#FFFFFF" />
+
+                        <Button
+                            android:id="@+id/btnGoogleSearch"
+                            android:layout_width="0dp"
+                            android:layout_height="40dp"
+                            android:layout_weight="1"
+                            android:layout_marginStart="4dp"
+                            android:text="Google"
+                            android:textSize="12sp"
+                            android:backgroundTint="#D97706"
+                            android:textColor="#FFFFFF" />
+                    </LinearLayout>
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
+
+            <Button
+                android:id="@+id/btnFallbackGoogle"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="🌐 البحث في Google عن القانون السوري"
+                android:backgroundTint="#1E293B"
+                android:textColor="#38BDF8"
+                android:visibility="gone"
+                android:layout_marginTop="8dp" />
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
 
 </LinearLayout>
