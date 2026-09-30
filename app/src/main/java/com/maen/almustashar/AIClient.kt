@@ -72,56 +72,109 @@ object AIClient {
     }
 
     // 3. البحث في مواد القوانين
-    suspend fun fetchLawArticleFromAI(query: String): String {
-        val prompt = """
-أنت المستشار القانوني الرسمي للجمهورية العربية السورية.
-المطلوب منك الإجابة بدقة متناهية ودون أي تخمين أو افتراض حول الاستفسار التالي:
-""
+    suspend fun fetchLawArticleFromAI(rawQ: String): String = withContext(Dispatchers.IO) {
+        val searchPrompt = "استخرج النص الحرفي والكامل للمادة القانونية التالية من التشريعات السورية بدقة متناهية:\n$rawQ"
+        
+        val res1 = callGemini("gemini-3.8-flash", searchPrompt)
+        if (res1 is AIResult.Success) return@withContext res1.text
 
-القواعد الصارمة للإجابة:
-1. اذكر نص المادة القانونية بدقة وحرفية.
-2. حدد اسم القانون الرسمي كاملاً، ورقم القانون أو المرسوم التشريعي وتاريخ صدوره وسنة نفاذه (مثال: المرسوم التشريعي رقم 148 لعام 1949 وتعديلاته).
-3. بيّن المرجع الرسمي للنص المعتمد (الجريدة الرسمية السورية / منشورات وزارة العدل / أبحاث نقابة المحامين / تشريعات مجلس الشعب).
-4. قدم شرحاً وتوضيحاً قانونياً موجزاً وعملياً لكيفية تطبيق هذه المادة وفقاً لموضوع السؤال.
-5. تنبيه قطعي: يمنع التخمين أو اختلاق أرقام مواد. إذا لم تكن المادة أو القانون مؤكداً في التشريع السوري النافذ، قل صراحة: (لم أجد نصاً تشريعياً نافذاً بهذا الخصوص في المراجع الرسمية السورية المعتمدة).
+        val res2 = callGemini("gemini-3.5-flash-lite", searchPrompt)
+        if (res2 is AIResult.Success) return@withContext res2.text
 
-الهيكلية الإلزامية للرد:
-📜 **السند التشريعي المعتمد:**
-[اسم القانون كاملاً - رقم المرسوم/القانون - سنة الصدور والتعديل]
+        val groqRes = callGroq("llama-3.1-8b-instant", searchPrompt)
+        if (groqRes is AIResult.Success) return@withContext groqRes.text
 
-⚖️ **نص المادة ([رقم المادة]):**
-"[النص الحرفي للمادة]"
-
-🏛️ **المرجعية الرسمية:**
-[الجريدة الرسمية / وزارة العدل / مجلس الشعب]
-
-💡 **الشرح والتوضيح القانوني:**
-[توضيح مبسط لكيفية تطبيق المادة على السؤال]
-""".trimIndent()
-
-        val jsonBody = JSONObject().apply {
-            val contents = JSONArray().apply {
-                val partObj = JSONObject().apply {
-                    put("parts", JSONArray().apply {
-                        put(JSONObject().apply { put("text", prompt) })
-                    })
-                }
-                put(partObj)
-            }
-            put("contents", contents)
-            val genConfig = JSONObject().apply {
-                put("temperature", 0.0)
-            }
-            put("generationConfig", genConfig)
-        }
-
-        val primaryResult = callGeminiApi("gemini-3.8-flash", jsonBody)
-        if (primaryResult != null && primaryResult.isNotBlank()) return primaryResult
-
-        val secondaryResult = callGeminiApi("gemini-3.5-flash-lite", jsonBody)
-        if (secondaryResult != null && secondaryResult.isNotBlank()) return secondaryResult
-
-        val groqFallback = callGroqFallback(prompt)
-        return groqFallback ?: "تعذر الاتصال بالمراجع القانونية حالياً. يرجى إعادة المحاولة."
+        return@withContext ""
     }
 
+    private fun callGemini(model: String, prompt: String): AIResult {
+        return try {
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$GEMINI_KEY"
+
+            val rootJson = JsonObject()
+            val contentsArr = JsonArray()
+            val contentObj = JsonObject()
+            val partsArr = JsonArray()
+            val partObj = JsonObject()
+
+            partObj.addProperty("text", "$SYSTEM_PROMPT\n\nالسؤال القانوني: $prompt")
+            partsArr.add(partObj)
+            contentObj.add("parts", partsArr)
+            contentsArr.add(contentObj)
+            rootJson.add("contents", contentsArr)
+
+            val body = rootJson.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder().url(url).post(body).build()
+
+            client.newCall(request).execute().use { response ->
+                val respStr = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    val parsed = JsonParser.parseString(respStr).asJsonObject
+                    val text = parsed.getAsJsonArray("candidates")
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("content")
+                        ?.getAsJsonArray("parts")
+                        ?.get(0)?.asJsonObject
+                        ?.get("text")?.asString
+                    if (!text.isNullOrBlank()) {
+                        AIResult.Success(text)
+                    } else {
+                        AIResult.Error("رد فارغ من مزود الخدمة")
+                    }
+                } else {
+                    AIResult.Error("HTTP ${response.code}: $respStr")
+                }
+            }
+        } catch (e: Exception) {
+            AIResult.Error("Exception: ${e.localizedMessage}")
+        }
+    }
+
+    private fun callGroq(model: String, prompt: String): AIResult {
+        return try {
+            val url = "https://api.groq.com/openai/v1/chat/completions"
+            val root = JsonObject().apply {
+                addProperty("model", model)
+                val messages = JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("role", "system")
+                        addProperty("content", SYSTEM_PROMPT)
+                    })
+                    add(JsonObject().apply {
+                        addProperty("role", "user")
+                        addProperty("content", prompt)
+                    })
+                }
+                add("messages", messages)
+                addProperty("temperature", 0.4)
+            }
+
+            val body = root.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer $GROQ_KEY")
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val respStr = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    val parsed = JsonParser.parseString(respStr).asJsonObject
+                    val text = parsed.getAsJsonArray("choices")
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("message")
+                        ?.get("content")?.asString
+                    if (!text.isNullOrBlank()) {
+                        AIResult.Success(text)
+                    } else {
+                        AIResult.Error("رد فارغ من مزود الخدمة")
+                    }
+                } else {
+                    AIResult.Error("HTTP ${response.code}: $respStr")
+                }
+            }
+        } catch (e: Exception) {
+            AIResult.Error("Exception: ${e.localizedMessage}")
+        }
+    }
+}
