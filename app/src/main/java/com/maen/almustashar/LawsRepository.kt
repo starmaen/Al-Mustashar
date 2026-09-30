@@ -6,10 +6,23 @@ import java.io.InputStreamReader
 
 object LawsRepository {
 
-    // دالة البحث الرئيسية التي تستقبل السياق
+    // تطبيع الحروف العربية لمطابقة دقيقة دون تأثر بالهمزات
+    private fun normalizeArabic(text: String): String {
+        return text.trim().lowercase()
+            .replace(Regex("[أإآ]"), "ا")
+            .replace("ة", "ه")
+            .replace("ى", "ي")
+            .replace(Regex("[\\p{Punct}\\s]+"), " ")
+    }
+
     fun searchRelevantLaws(context: Context?, query: String): String {
-        val q = query.trim().lowercase()
-        if (q.isBlank()) return "يرجى إدخال عبارة البحث."
+        val rawQ = query.trim()
+        if (rawQ.isBlank()) return "يرجى إدخال عبارة البحث."
+
+        val normQ = normalizeArabic(rawQ)
+        // تفكيك الكلمات وتجاهل حروف الجر والكلمات الشائعة
+        val stopWords = setOf("في", "من", "على", "الى", "إلى", "عن", "مع", "أو", "او", "ما", "هو", "هي", "المتعلقه", "المتعلقة", "بشان", "بخصوص")
+        val queryWords = normQ.split(" ").filter { it.length > 1 && !stopWords.contains(it) }
 
         if (context != null) {
             try {
@@ -20,7 +33,7 @@ object LawsRepository {
                 reader.close()
 
                 val jsonArray = JSONArray(jsonText)
-                val matchedArticles = mutableListOf<String>()
+                val matchedArticles = mutableListOf<Pair<Int, String>>()
 
                 for (i in 0 until jsonArray.length()) {
                     val obj = jsonArray.getJSONObject(i)
@@ -30,73 +43,89 @@ object LawsRepository {
                     val text = obj.optString("text", "")
                     val keywordsArray = obj.optJSONArray("keywords")
 
-                    var keywordMatch = false
+                    val normTitle = normalizeArabic(lawTitle)
+                    val normCategory = normalizeArabic(category)
+                    val normText = normalizeArabic(text)
+
+                    val allKeywords = mutableListOf<String>()
                     if (keywordsArray != null) {
                         for (k in 0 until keywordsArray.length()) {
-                            val kw = keywordsArray.getString(k).lowercase()
-                            if (q.contains(kw) || kw.contains(q)) {
-                                keywordMatch = true
-                                break
-                            }
+                            allKeywords.add(normalizeArabic(keywordsArray.getString(k)))
                         }
                     }
 
-                    val titleOrTextMatch = lawTitle.lowercase().contains(q) ||
-                            text.lowercase().contains(q) ||
-                            q.contains("المادة $artNum") ||
-                            q.contains("مادة $artNum") ||
-                            q == artNum
+                    var score = 0
 
-                    if (keywordMatch || titleOrTextMatch) {
+                    // 1. مطابقة رقم المادة المباشر
+                    if (normQ.contains("ماده $artNum") || normQ.contains("الماده $artNum") || normQ == artNum) {
+                        score += 20
+                    }
+
+                    // 2. مطابقة العبارة كاملة
+                    if (normTitle.contains(normQ) || normCategory.contains(normQ) || normText.contains(normQ)) {
+                        score += 15
+                    }
+
+                    // 3. مطابقة الكلمات المفردة (Word Tokens)
+                    for (w in queryWords) {
+                        if (allKeywords.any { it.contains(w) || w.contains(it) }) {
+                            score += 8
+                        }
+                        if (normCategory.contains(w)) {
+                            score += 6
+                        }
+                        if (normText.contains(w)) {
+                            score += 4
+                        }
+                        if (normTitle.contains(w)) {
+                            score += 3
+                        }
+                    }
+
+                    if (score > 0) {
                         val formatted = "📖 [${lawTitle}] — المادة (${artNum})\n" +
                                 "التصنيف: ${category}\n" +
                                 "النص النافذ:\n${text}\n"
-                        matchedArticles.add(formatted)
+                        matchedArticles.add(Pair(score, formatted))
                     }
                 }
 
+                // ترتيب النتائج حسب الأعلى تطابقاً
+                matchedArticles.sortByDescending { it.first }
+
                 if (matchedArticles.isNotEmpty()) {
-                    return matchedArticles.joinToString("\n─────────────────────────────\n")
+                    return matchedArticles.take(5).map { it.second }.joinToString("\n─────────────────────────────\n")
                 }
             } catch (e: Exception) {
-                // متابعة إلى القواعد الاحتياطية في حال تعذر قراءة الملف
+                // المتابعة إلى الرد البديل
             }
         }
 
-        // قواعد التوجيه الاحتياطية السريعة (تضمن الإجابة حتى لو استُدعي دون context)
-        return getFallbackLawGuidance(q)
+        return getFallbackLawGuidance(normQ)
     }
 
-    // دالة إضافية زائدة (Overload) في حال كان الاستدعاء يقبل query فقط
     fun searchRelevantLaws(query: String): String {
         return searchRelevantLaws(null, query)
     }
 
-    // دالة إضافية للاسم البديل searchLaw
     fun searchLaw(context: Context?, query: String): String {
         return searchRelevantLaws(context, query)
     }
 
     private fun getFallbackLawGuidance(q: String): String {
-        if (q.contains("بينات") || q.contains("اثبات") || q.contains("إثبات") || q.contains("يمين") || q.contains("سند") || q.contains("شهادة")) {
+        if (q.contains("اجاز") || q.contains("عامل") || q.contains("موظف") || q.contains("خدمه") || q.contains("تعيين") || q.contains("مسلكي")) {
+            return "قانون العاملين الأساسي في الدولة رقم 50 لعام 2004: ينظم شروط التعيين، الترفيع، الإجازات الإدارية والمرضية والأمومة، والعقوبات المسلكية وحالات انتهاء الخدمة (المادة 132)."
+        }
+        if (q.contains("بينات") || q.contains("اثبات") || q.contains("يمين") || q.contains("سند") || q.contains("شهود")) {
             return "قانون البينات السوري رقم 359 وتعديلاته: ينظم طرق الإثبات وأدلتها (الكتابة، الشهادة، القرائن، الإقرار، اليمين الحاسمة، والمعاينة والخبرة)."
         }
-        if (q.contains("محام") || q.contains("نقابة") || q.contains("أتعاب") || q.contains("وكالة") || q.contains("حصانة")) {
-            return "قانون تنظيم مهنة المحاماة رقم 30 لعام 2010: ينظم حقوق المحامي وحصانته المهنية (المادة 56)، والتزاماته وحفظ الأسرار وتقدير الأتعاب أمام مجلس الفرع."
+        if (q.contains("محام") || q.contains("نقاب") || q.contains("اتعاب") || q.contains("حصان")) {
+            return "قانون تنظيم مهنة المحاماة رقم 30 لعام 2010: ينظم حقوق المحامي وحصانته المهنية (المادة 56)، والتزاماته وحفظ الأسرار وتقدير الأتعاب."
         }
-        if (q.contains("عامل") || q.contains("موظف") || q.contains("وظيفة") || q.contains("تعيين") || q.contains("عقوبة مسلكية") || q.contains("عزل")) {
-            return "قانون العاملين الأساسي في الدولة رقم 50 لعام 2004: ينظم شروط التعيين، الترفيع، الإجازات، والعقوبات المسلكية الخفيفة والشديدة، وحالات انتهاء الخدمة."
-        }
-        if (q.contains("تأمين") || q.contains("تقاعد") || q.contains("إصابة عمل") || q.contains("معاش") || q.contains("شيخوخة")) {
-            return "قانون التأمينات الاجتماعية رقم 92 لعام 1959 وتعديلاته وقانون المعاشات: ينظم تأمين الشيخوخة والعجز والوفاة وإصابات العمل وشروط استحقاق وتوزيع الرواتب التقاعدية."
-        }
-        if (q.contains("أصول") || q.contains("محاكمات") || q.contains("دعوى") || q.contains("تبليغ") || q.contains("طعن")) {
-            return "قانون أصول المحاكمات السوري: ينظم قواعد الاختصاص القضائي، إجراءات قيد الدعاوى وتبليغ الخصوم، ومواعيد وطرق الطعن بالأحكام."
-        }
-        if (q.contains("عقوبات") || q.contains("جرم") || q.contains("جناية") || q.contains("جنحة") || q.contains("سرقة") || q.contains("احتيال")) {
-            return "قانون العقوبات السوري العام وتعديلاته: يحدد الجرائم الجنائية والجنحية والمخالفات، وأركان الجريمة والمسؤولية الجزائية والعقوبات المقررة."
+        if (q.contains("تامين") || q.contains("تقاعد") || q.contains("اصاب") || q.contains("معاش")) {
+            return "قانون التأمينات الاجتماعية رقم 92 وقانون المعاشات: ينظم تأمين الشيخوخة والعجز والوفاة وإصابات العمل وشروط استحقاق وتوزيع الرواتب التقاعدية."
         }
 
-        return "لم يتم العثور على نص مطابق مباشرة في قاعدة القوانين المدمجة.\nيمكنك الاستعانة بنافذة [الاستشارة القانونية] للتحليل المعمق أو [بحث قانوني عام] لمطالعة أحدث المراجع."
+        return "لم يتم العثور على مادة مطابقة مباشرة لنص البحث في قاعدة القوانين المدمجة.\nيمكنك الاستعانة بنافذة [الاستشارة القانونية] للتحليل أو [بحث قانوني عام] لمطالعة أحدث المراجع."
     }
 }
