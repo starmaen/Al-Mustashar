@@ -6,9 +6,8 @@
     android:background="#0F172A"
     android:padding="12dp">
 
-    <!-- شريط البحث في الأعلى -->
     <LinearLayout
-        android:id="@+id/topSearchLayout"
+        android:id="@+id/layoutSearchInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -21,12 +20,12 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:minHeight="48dp"
-            android:background="@android:drawable/editbox_background"
             android:hint="ابحث في القوانين أو تابع السؤال..."
             android:textColor="#FFFFFF"
             android:textColorHint="#94A3B8"
+            android:background="@android:drawable/editbox_background"
             android:backgroundTint="#1E293B"
-            android:padding="12dp"
+            android:padding="10dp"
             android:gravity="right|top"
             android:textDirection="rtl"
             android:textSize="14sp" />

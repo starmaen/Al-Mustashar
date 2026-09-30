@@ -7,6 +7,7 @@
     android:padding="12dp">
 
     <LinearLayout
+        android:id="@+id/layoutInput"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
@@ -22,6 +23,8 @@
             android:hint="اكتب استشارتك القانونية هنا..."
             android:textColor="#FFFFFF"
             android:textColorHint="#94A3B8"
+            android:background="@android:drawable/editbox_background"
+            android:backgroundTint="#1E293B"
             android:padding="10dp"
             android:gravity="right|top"
             android:textDirection="rtl"
@@ -33,6 +36,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:text="استشارة"
+            android:backgroundTint="#2563EB"
             android:textColor="#FFFFFF" />
     </LinearLayout>
 
@@ -50,16 +54,22 @@
         android:layout_weight="1"
         android:fillViewport="true">
 
-        <TextView
-            android:id="@+id/tvAnswer"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="#E2E8F0"
-            android:textSize="15sp"
-            android:lineSpacingExtra="4dp"
-            android:textIsSelectable="true"
-            android:gravity="right"
-            android:textDirection="rtl" />
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvAnswer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#E2E8F0"
+                android:textSize="15sp"
+                android:lineSpacingExtra="4dp"
+                android:textIsSelectable="true"
+                android:gravity="right"
+                android:textDirection="rtl" />
+        </LinearLayout>
     </ScrollView>
 
     <LinearLayout
@@ -75,6 +85,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="نسخ"
+            android:backgroundTint="#334155"
+            android:textColor="#FFFFFF"
             android:layout_marginEnd="4dp" />
 
         <Button
@@ -83,6 +95,8 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="مشاركة"
+            android:backgroundTint="#334155"
+            android:textColor="#FFFFFF"
             android:layout_marginStart="4dp" />
     </LinearLayout>
 
