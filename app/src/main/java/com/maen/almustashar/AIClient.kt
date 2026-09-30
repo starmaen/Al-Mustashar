@@ -12,14 +12,18 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
 
-object AIClient {
+sealed class AIResult {
+    data class Success(val text: String) : AIResult()
+    data class Error(val message: String) : AIResult()
+}
 
+object AIClient {
     private val GROQ_KEY = StringBuilder("gsk_").append("cvxjbsW6q8CQfCLOrmTg").append("WGdyb0FYEs0DsbD8n1am4ZwEJORizjIM").toString()
     private val GEMINI_KEY = StringBuilder("AIzaSy").append("AQ_Ab8RN6LDf9QUde0JuW24Xv").append("L9IoCROBTbKm-ggDjuiRA3nRt-Ug").toString()
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(25, TimeUnit.SECONDS)
-        .readTimeout(35, TimeUnit.SECONDS)
+        .connectTimeout(35, TimeUnit.SECONDS)
+        .readTimeout(50, TimeUnit.SECONDS)
         .build()
 
     private const val SYSTEM_PROMPT = """أنت مستشار ومرجع قانوني سوري خبير ومتخصص في التشريعات والقضاء السوري.
@@ -27,136 +31,139 @@ object AIClient {
 1. ⚖️ التكييف والوصف القانوني الدقيق للواقعة.
 2. 📜 السند القانوني النافذ (أرقام المواد ونصوصها الصريحة من القانون السوري ذي الصلة).
 3. 💡 التحليل القانوني وإبداء الرأي والحل أو العقوبة المقررة.
-4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية.
-الأسلوب: قانوني رصين، فصيح، ودقيق."""
+4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية."""
 
-    suspend fun askLegalQuestion(question: String, context: Context? = null): String = withContext(Dispatchers.IO) {
-        val prompt = "$SYSTEM_PROMPT\n\nوقائع الاستشارة والطلب:\n$question"
+    suspend fun askLegalQuestion(prompt: String): String = withContext(Dispatchers.IO) {
+        // 1. نماذج Gemini الأساسية
+        val g1 = callGemini("gemini-3.8-pro", prompt)
+        if (g1 is AIResult.Success) return@withContext g1.text
 
-        // 1. تجربة Groq
-        val groqRes = callGroq("llama-3.3-70b-versatile", prompt)
-        if (groqRes is AIResult.Success) return@withContext groqRes.text
+        val g2 = callGemini("gemini-3.8-flash", prompt)
+        if (g2 is AIResult.Success) return@withContext g2.text
 
-        val groqFast = callGroq("llama-3.1-8b-instant", prompt)
-        if (groqFast is AIResult.Success) return@withContext groqFast.text
+        val g3 = callGemini("gemini-3.5-flash-lite", prompt)
+        if (g3 is AIResult.Success) return@withContext g3.text
 
-        // 2. تجربة Gemini كبديل
-        val geminiRes = callGemini("gemini-1.5-flash", prompt)
-        if (geminiRes is AIResult.Success) return@withContext geminiRes.text
+        // 2. نماذج Groq البديلة والمؤكدة
+        val q1 = callGroq("llama-3.1-8b-instant", prompt)
+        if (q1 is AIResult.Success) return@withContext q1.text
 
-        // إرجاع سبب الخطأ الفعلي للمعالجة
-        val err = when {
-            groqRes is AIResult.Error -> "Groq: ${groqRes.message}"
-            geminiRes is AIResult.Error -> "Gemini: ${geminiRes.message}"
-            else -> "فشل غير معروف"
+        val q2 = callGroq("llama-3.3-70b-versatile", prompt)
+        if (q2 is AIResult.Success) return@withContext q2.text
+
+        return@withContext when {
+            g1 is AIResult.Error -> "❌ فشل الاتصال (Gemini Pro): ${g1.message}"
+            g2 is AIResult.Error -> "❌ فشل الاتصال (Gemini Flash): ${g2.message}"
+            q1 is AIResult.Error -> "❌ فشل الاتصال (Groq Instant): ${q1.message}"
+            q2 is AIResult.Error -> "❌ فشل الاتصال (Groq Versatile): ${q2.message}"
+            else -> "❌ تعذر إتمام الطلب من جميع المزودين، يرجى التحقق من اتصال الإنترنت."
         }
-        return@withContext "❌ تعذر إتمام الطلب من مزود الخدمة ($err)"
     }
 
-    suspend fun fetchLawArticleFromAI(query: String): String = withContext(Dispatchers.IO) {
-        val prompt = """أنت محرك بحث قانوني سوري رسمي.
-المطلوب استخراج النص القانوني بدقة للسؤال التالي:
-"$query"
+    suspend fun askGeneralQuestion(prompt: String): String = withContext(Dispatchers.IO) {
+        val g1 = callGemini("gemini-3.8-pro", prompt)
+        if (g1 is AIResult.Success) return@withContext g1.text
 
-أجب حصراً بالصيغة الآتية:
-📖 [اسم القانون السوري كاملاً] — المادة (رقم المادة)
-التصنيف: [المجال القانوني]
+        val g2 = callGemini("gemini-3.8-flash", prompt)
+        if (g2 is AIResult.Success) return@withContext g2.text
 
-النص النافذ:
-[نص المادة حرفياً كما ورد في التشريع السوري]
+        val q1 = callGroq("llama-3.1-8b-instant", prompt)
+        if (q1 is AIResult.Success) return@withContext q1.text
 
-الشرح والربط القانوني:
-[شرح موجز لأثر المادة وتطبيقها العملي]"""
-
-        val groqRes = callGroq("llama-3.3-70b-versatile", prompt)
-        if (groqRes is AIResult.Success) return@withContext groqRes.text
-
-        val geminiRes = callGemini("gemini-1.5-flash", prompt)
-        if (geminiRes is AIResult.Success) return@withContext geminiRes.text
-
-        return@withContext "لم يتم العثور على نص المادة، يرجى التأكد من اسم القانون ورقم المادة."
-    }
-
-    suspend fun askGeneralQuestion(question: String, context: Context? = null): String = askLegalQuestion(question, context)
-
-    private fun callGroq(model: String, prompt: String): AIResult {
-        return try {
-            val url = "https://api.groq.com/openai/v1/chat/completions"
-            val messages = JsonArray().apply {
-                add(JsonObject().apply {
-                    addProperty("role", "system")
-                    addProperty("content", "أنت مستشار قانوني سوري خبير.")
-                })
-                add(JsonObject().apply {
-                    addProperty("role", "user")
-                    addProperty("content", prompt)
-                })
-            }
-            val body = JsonObject().apply {
-                addProperty("model", model)
-                add("messages", messages)
-                addProperty("temperature", 0.2)
-                addProperty("max_tokens", 2048)
-            }
-            val req = Request.Builder().url(url)
-                .addHeader("Authorization", "Bearer $GROQ_KEY")
-                .addHeader("Content-Type", "application/json")
-                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
-
-            val resp = client.newCall(req).execute()
-            val respBody = resp.body?.string() ?: return AIResult.Error("رد فارغ")
-            if (resp.isSuccessful) {
-                val json = JsonParser.parseString(respBody).asJsonObject
-                val choices = json.getAsJsonArray("choices")
-                if (choices != null && choices.size() > 0) {
-                    val msg = choices[0].asJsonObject.getAsJsonObject("message")
-                    AIResult.Success(msg.get("content").asString)
-                } else AIResult.Error("تنسيق رد غير متوقع")
-            } else {
-                AIResult.Error("HTTP ${resp.code}: ${respBody.take(80)}")
-            }
-        } catch (e: Exception) {
-            AIResult.Error(e.message ?: "خطأ اتصال")
+        return@withContext when {
+            g1 is AIResult.Error -> "❌ خطأ: ${g1.message}"
+            else -> "❌ تعذر الاتصال بمزود الخدمة."
         }
     }
 
     private fun callGemini(model: String, prompt: String): AIResult {
         return try {
             val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$GEMINI_KEY"
-            val body = JsonObject().apply {
-                add("contents", JsonArray().apply {
-                    add(JsonObject().apply {
-                        add("parts", JsonArray().apply {
-                            add(JsonObject().apply {
-                                addProperty("text", prompt)
-                            })
-                        })
-                    })
-                })
-            }
-            val req = Request.Builder().url(url)
-                .post(body.toString().toRequestBody("application/json".toMediaType())).build()
 
-            val resp = client.newCall(req).execute()
-            val respBody = resp.body?.string() ?: return AIResult.Error("رد فارغ")
-            if (resp.isSuccessful) {
-                val json = JsonParser.parseString(respBody).asJsonObject
-                val cands = json.getAsJsonArray("candidates")
-                if (cands != null && cands.size() > 0) {
-                    val parts = cands[0].asJsonObject.getAsJsonObject("content").getAsJsonArray("parts")
-                    if (parts.size() > 0) AIResult.Success(parts[0].asJsonObject.get("text").asString)
-                    else AIResult.Error("محتوى فارغ")
-                } else AIResult.Error("لا توجد إجابة من Gemini")
-            } else {
-                AIResult.Error("HTTP ${resp.code}: ${respBody.take(80)}")
+            val rootJson = JsonObject()
+            val contentsArr = JsonArray()
+            val contentObj = JsonObject()
+            val partsArr = JsonArray()
+            val partObj = JsonObject()
+
+            partObj.addProperty("text", "$SYSTEM_PROMPT\n\nالسؤال القانوني: $prompt")
+            partsArr.add(partObj)
+            contentObj.add("parts", partsArr)
+            contentsArr.add(contentObj)
+            rootJson.add("contents", contentsArr)
+
+            val body = rootJson.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder().url(url).post(body).build()
+
+            client.newCall(request).execute().use { response ->
+                val respStr = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    val parsed = JsonParser.parseString(respStr).asJsonObject
+                    val text = parsed.getAsJsonArray("candidates")
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("content")
+                        ?.getAsJsonArray("parts")
+                        ?.get(0)?.asJsonObject
+                        ?.get("text")?.asString
+                    if (!text.isNullOrBlank()) {
+                        AIResult.Success(text)
+                    } else {
+                        AIResult.Error("رد فارغ من Gemini ($model)")
+                    }
+                } else {
+                    AIResult.Error("Gemini HTTP ${response.code} ($model): $respStr")
+                }
             }
         } catch (e: Exception) {
-            AIResult.Error(e.message ?: "خطأ اتصال")
+            AIResult.Error("Gemini Exception ($model): ${e.localizedMessage}")
         }
     }
 
-    sealed class AIResult {
-        data class Success(val text: String) : AIResult()
-        data class Error(val message: String) : AIResult()
+    private fun callGroq(model: String, prompt: String): AIResult {
+        return try {
+            val url = "https://api.groq.com/openai/v1/chat/completions"
+            val root = JsonObject().apply {
+                addProperty("model", model)
+                val messages = JsonArray().apply {
+                    add(JsonObject().apply {
+                        addProperty("role", "system")
+                        addProperty("content", SYSTEM_PROMPT)
+                    })
+                    add(JsonObject().apply {
+                        addProperty("role", "user")
+                        addProperty("content", prompt)
+                    })
+                }
+                add("messages", messages)
+                addProperty("temperature", 0.4)
+            }
+
+            val body = root.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer $GROQ_KEY")
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val respStr = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    val parsed = JsonParser.parseString(respStr).asJsonObject
+                    val text = parsed.getAsJsonArray("choices")
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("message")
+                        ?.get("content")?.asString
+                    if (!text.isNullOrBlank()) {
+                        AIResult.Success(text)
+                    } else {
+                        AIResult.Error("رد فارغ من Groq ($model)")
+                    }
+                } else {
+                    AIResult.Error("Groq HTTP ${response.code} ($model): $respStr")
+                }
+            }
+        } catch (e: Exception) {
+            AIResult.Error("Groq Exception ($model): ${e.localizedMessage}")
+        }
     }
 }
