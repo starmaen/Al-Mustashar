@@ -40,44 +40,51 @@ class GeneralSearchActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_general_search)
+        try {
+            setContentView(R.layout.activity_general_search)
 
-        etQuestion = findViewById(R.id.etGeneralQuestion)
-        btnSubmit = findViewById(R.id.btnGeneralSubmit)
-        progressBar = findViewById(R.id.progressBar)
-        tvResult = findViewById(R.id.tvGeneralResult)
-        cardResult = findViewById(R.id.cardGeneralResult)
-        resultActions = findViewById(R.id.resultActions)
-        btnGoogleSearch = findViewById(R.id.btnGoogleSearch)
-        btnFallbackGoogle = findViewById(R.id.btnFallbackGoogle)
-        scrollResults = findViewById(R.id.scrollGeneralResults)
+            etQuestion = findViewById(R.id.etGeneralQuestion)
+            btnSubmit = findViewById(R.id.btnGeneralSubmit)
+            progressBar = findViewById(R.id.progressBar)
+            tvResult = findViewById(R.id.tvGeneralResult)
+            cardResult = findViewById(R.id.cardGeneralResult)
+            resultActions = findViewById(R.id.resultActions)
+            btnGoogleSearch = findViewById(R.id.btnGoogleSearch)
+            btnFallbackGoogle = findViewById(R.id.btnFallbackGoogle)
+            scrollResults = findViewById(R.id.scrollGeneralResults)
 
-        findViewById<TextView>(R.id.btnArchive).setOnClickListener {
-            startActivity(Intent(this, QueriesActivity::class.java))
-        }
-
-        btnSubmit.setOnClickListener { onSearch() }
-
-        btnGoogleSearch.setOnClickListener { openGoogleSearch(lastQuery) }
-        btnFallbackGoogle.setOnClickListener { openGoogleSearch(lastQuery) }
-
-        findViewById<Button>(R.id.btnCopyResult).setOnClickListener {
-            val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cb.setPrimaryClip(ClipData.newPlainText("Answer", tvResult.text))
-            Toast.makeText(this, "تم نسخ النص", Toast.LENGTH_SHORT).show()
-        }
-
-        findViewById<Button>(R.id.btnShareResult).setOnClickListener {
-            val text = "السؤال:\n${lastQuery}\n\nالإجابة:\n${tvResult.text}"
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, text)
+            findViewById<TextView>(R.id.btnArchive)?.setOnClickListener {
+                try {
+                    startActivity(Intent(this, QueriesActivity::class.java))
+                } catch (_: Exception) {}
             }
-            startActivity(Intent.createChooser(intent, "مشاركة عبر"))
-        }
 
-        findViewById<Button>(R.id.btnPrintResult).setOnClickListener {
-            printText(lastQuery, tvResult.text.toString())
+            btnSubmit.setOnClickListener { onSearch() }
+
+            btnGoogleSearch.setOnClickListener { openGoogleSearch(lastQuery) }
+            btnFallbackGoogle.setOnClickListener { openGoogleSearch(lastQuery) }
+
+            findViewById<Button>(R.id.btnCopyResult)?.setOnClickListener {
+                val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cb.setPrimaryClip(ClipData.newPlainText("Answer", tvResult.text))
+                Toast.makeText(this, "تم نسخ النص", Toast.LENGTH_SHORT).show()
+            }
+
+            findViewById<Button>(R.id.btnShareResult)?.setOnClickListener {
+                val text = "السؤال:\n${lastQuery}\n\nالإجابة:\n${tvResult.text}"
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, text)
+                }
+                startActivity(Intent.createChooser(intent, "مشاركة عبر"))
+            }
+
+            findViewById<Button>(R.id.btnPrintResult)?.setOnClickListener {
+                printText(lastQuery, tvResult.text.toString())
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "تعذر فتح الشاشة", Toast.LENGTH_SHORT).show()
+            finish()
         }
     }
 
@@ -91,15 +98,19 @@ class GeneralSearchActivity : AppCompatActivity() {
     }
 
     private fun openGoogleSearch(query: String) {
-        val q = if (query.isNotBlank()) query else etQuestion.text?.toString()?.trim() ?: ""
-        if (q.isBlank()) {
-            Toast.makeText(this, "يرجى كتابة نص البحث أولاً", Toast.LENGTH_SHORT).show()
-            return
+        try {
+            val q = if (query.isNotBlank()) query else etQuestion.text?.toString()?.trim() ?: ""
+            if (q.isBlank()) {
+                Toast.makeText(this, "يرجى كتابة نص البحث أولاً", Toast.LENGTH_SHORT).show()
+                return
+            }
+            val refinedQuery = "$q القانون السوري"
+            val url = "https://www.google.com/search?q=" + URLEncoder.encode(refinedQuery, "UTF-8")
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "تعذر فتح المتصفح", Toast.LENGTH_SHORT).show()
         }
-        val refinedQuery = "$q القانون السوري"
-        val url = "https://www.google.com/search?q=" + URLEncoder.encode(refinedQuery, "UTF-8")
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        startActivity(intent)
     }
 
     private fun onSearch() {
@@ -114,8 +125,6 @@ class GeneralSearchActivity : AppCompatActivity() {
         progressBar.visibility = View.VISIBLE
         btnFallbackGoogle.visibility = View.GONE
 
-        val user = FirebaseAuth.getInstance().currentUser
-
         lifecycleScope.launch {
             try {
                 val promptToSend = if (conversationHistory.isNotEmpty()) {
@@ -124,7 +133,7 @@ class GeneralSearchActivity : AppCompatActivity() {
                     question
                 }
 
-                val answer = AIClient.askGeneralQuestion(promptToSend)
+                val answer = AIClient.askGeneralQuestion(promptToSend, this@GeneralSearchActivity)
 
                 if (answer.isNotEmpty() && !answer.startsWith("❌")) {
                     val cleaned = cleanMarkdown(answer)
@@ -150,6 +159,7 @@ class GeneralSearchActivity : AppCompatActivity() {
                     btnSubmit.text = "متابعة البحث 🔍"
 
                     try {
+                        val user = FirebaseAuth.getInstance().currentUser
                         FirebaseFirestore.getInstance().collection("general_queries").add(
                             hashMapOf(
                                 "question" to question,
@@ -177,19 +187,21 @@ class GeneralSearchActivity : AppCompatActivity() {
     }
 
     private fun printText(q: String, a: String) {
-        if (a.isEmpty()) return
-        val wv = WebView(this)
-        val html = """
-            <html dir="rtl"><head><meta charset="utf-8"></head>
-            <body style="font-family:sans-serif;padding:20px;line-height:1.6;">
-            <h2>بحث قانوني عام</h2>
-            <pre style="white-space: pre-wrap; font-family: inherit;">$a</pre>
-            <hr>
-            <p style="color:#666;font-size:12px;">تطبيق المستشار القانوني الذكي</p>
-            </body></html>
-        """.trimIndent()
-        wv.loadDataWithBaseURL(null, html, "text/HTML", "UTF-8", null)
-        val pm = getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
-        pm.print("بحث_قانوني", wv.createPrintDocumentAdapter("بحث_قانوني"), null)
+        try {
+            if (a.isEmpty()) return
+            val wv = WebView(this)
+            val html = """
+                <html dir="rtl"><head><meta charset="utf-8"></head>
+                <body style="font-family:sans-serif;padding:20px;line-height:1.6;">
+                <h2>بحث قانوني عام</h2>
+                <pre style="white-space: pre-wrap; font-family: inherit;">$a</pre>
+                <hr>
+                <p style="color:#666;font-size:12px;">تطبيق المستشار القانوني الذكي</p>
+                </body></html>
+            """.trimIndent()
+            wv.loadDataWithBaseURL(null, html, "text/HTML", "UTF-8", null)
+            val pm = getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
+            pm.print("بحث_قانوني", wv.createPrintDocumentAdapter("بحث_قانوني"), null)
+        } catch (_: Exception) {}
     }
 }
