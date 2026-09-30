@@ -1,5 +1,6 @@
 package com.maen.almustashar
 
+import android.content.Context
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -32,7 +33,8 @@ object AIClient {
 3. 💡 التحليل القانوني وإبداء الرأي والحل أو العقوبة المقررة.
 4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية."""
 
-    suspend fun askLegalQuestion(prompt: String): String = withContext(Dispatchers.IO) {
+    // 1. الدالة الأولى الخاصة بالاستشارة القانونية (مع دعم استدعائها بـ Context وبدونه)
+    suspend fun askLegalQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
         val res1 = callGemini("gemini-2.5-flash", prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
@@ -49,9 +51,13 @@ object AIClient {
         }
     }
 
-    suspend fun askGeneralQuestion(prompt: String): String = withContext(Dispatchers.IO) {
+    // 2. الدالة الثانية الخاصة بالبحث العام
+    suspend fun askGeneralQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
         val res1 = callGemini("gemini-2.5-flash", prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
+
+        val res2 = callGemini("gemini-2.5-pro", prompt)
+        if (res2 is AIResult.Success) return@withContext res2.text
 
         val groqRes = callGroq("llama-3.1-8b-instant", prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
@@ -60,6 +66,19 @@ object AIClient {
             res1 is AIResult.Error -> "❌ خطأ: ${res1.message}"
             else -> "❌ تعذر الاتصال بمزود الخدمة."
         }
+    }
+
+    // 3. الدالة الثالثة الخاصة بجلب نصوص مواد القوانين للمستودع LawsRepository
+    suspend fun fetchLawArticleFromAI(rawQ: String): String = withContext(Dispatchers.IO) {
+        val searchPrompt = "استخرج النص الحرفي والكامل للمادة القانونية التالية من التشريعات السورية بدقة متناهية:\n$rawQ"
+        
+        val res1 = callGemini("gemini-2.5-flash", searchPrompt)
+        if (res1 is AIResult.Success) return@withContext res1.text
+
+        val groqRes = callGroq("llama-3.1-8b-instant", searchPrompt)
+        if (groqRes is AIResult.Success) return@withContext groqRes.text
+
+        return@withContext ""
     }
 
     private fun callGemini(model: String, prompt: String): AIResult {
