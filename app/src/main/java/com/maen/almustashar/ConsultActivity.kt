@@ -30,35 +30,35 @@ class ConsultActivity : AppCompatActivity() {
         val btnCopy = findViewById<Button>(R.id.btnCopy)
         val btnShare = findViewById<Button>(R.id.btnShare)
 
-        btnAsk?.setOnClickListener {
-            val q = etQuestion?.text?.toString()?.trim().orEmpty()
+        btnAsk.setOnClickListener {
+            val q = etQuestion.text.toString().trim()
             if (q.isNotEmpty()) {
-                progressBar?.visibility = View.VISIBLE
+                progressBar.visibility = View.VISIBLE
                 btnAsk.isEnabled = false
 
                 if (conversationHistory.isNotEmpty()) {
-                    conversationHistory.append("\n\nمتابعة واستيضاح:\n").append(q)
+                    conversationHistory.append("\n\nمتابعة:\n").append(q)
                 } else {
                     conversationHistory.append(q)
                 }
 
                 lifecycleScope.launch {
                     val result = AIClient.askLegalQuestion(conversationHistory.toString())
-                    progressBar?.visibility = View.GONE
+                    progressBar.visibility = View.GONE
                     btnAsk.isEnabled = true
 
-                    tvAnswer?.text = result
+                    tvAnswer.text = result
                     if (!result.startsWith("❌")) {
-                        conversationHistory.append("\n\nالرد:\n").append(result)
-                        etQuestion?.text?.clear()
-                        etQuestion?.hint = "تابع نفس الاستشارة بسؤال إضافي..."
+                        conversationHistory.append("\n\nالجواب:\n").append(result)
+                        etQuestion.text.clear()
+                        etQuestion.hint = "تابع نفس الاستشارة بسؤال إضافي..."
                     }
                 }
             }
         }
 
-        btnCopy?.setOnClickListener {
-            val txt = tvAnswer?.text?.toString().orEmpty()
+        btnCopy.setOnClickListener {
+            val txt = tvAnswer.text.toString()
             if (txt.isNotEmpty()) {
                 val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("Consultation", txt))
@@ -66,8 +66,8 @@ class ConsultActivity : AppCompatActivity() {
             }
         }
 
-        btnShare?.setOnClickListener {
-            val txt = tvAnswer?.text?.toString().orEmpty()
+        btnShare.setOnClickListener {
+            val txt = tvAnswer.text.toString()
             if (txt.isNotEmpty()) {
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "text/plain"
