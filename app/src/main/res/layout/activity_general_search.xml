@@ -1,190 +1,87 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#F8FAFC"
-    android:layoutDirection="rtl">
+    android:background="#0F172A"
+    android:padding="12dp">
 
-    <!-- شريط علوي -->
+    <!-- شريط البحث في الأعلى -->
     <LinearLayout
+        android:id="@+id/topSearchLayout"
         android:layout_width="match_parent"
-        android:layout_height="?attr/actionBarSize"
-        android:background="#00695C"
-        android:paddingHorizontal="16dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_marginBottom="8dp">
 
-        <TextView
+        <EditText
+            android:id="@+id/etSearchQuery"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="🌐 بحث قانوني عام"
+            android:minHeight="48dp"
+            android:background="@android:drawable/editbox_background"
+            android:hint="ابحث في القوانين أو تابع السؤال..."
             android:textColor="#FFFFFF"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/btnArchive"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:padding="8dp"
-            android:text="📚 الأرشيف"
-            android:textColor="#FFD54F"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:background="?android:attr/selectableItemBackground" />
-    </LinearLayout>
-
-    <!-- منطقة عرض النتائج التكيفية -->
-    <androidx.core.widget.NestedScrollView
-        android:id="@+id/scrollGeneralResults"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:fillViewport="true"
-        android:padding="12dp">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <androidx.cardview.widget.CardView
-                android:id="@+id/cardGeneralResult"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:visibility="gone"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="#FFFFFF"
-                android:layout_marginBottom="12dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:id="@+id/tvGeneralResult"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:textColor="#1E293B"
-                        android:textSize="15sp"
-                        android:lineSpacingExtra="6dp"
-                        android:textIsSelectable="true" />
-
-                    <!-- زر Google المباشر للمراجع السورية الموسعة -->
-                    <Button
-                        android:id="@+id/btnGoogleSearch"
-                        android:layout_width="match_parent"
-                        android:layout_height="46dp"
-                        android:layout_marginTop="14dp"
-                        android:text="🔍 بحث موسع عبر مراجع Google القانونية"
-                        android:textSize="13sp"
-                        android:textColor="#FFFFFF"
-                        android:backgroundTint="#0284C7" />
-
-                    <!-- أزرار النسخ والمشاركة والطباعة -->
-                    <LinearLayout
-                        android:id="@+id/resultActions"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:orientation="horizontal">
-
-                        <Button
-                            android:id="@+id/btnCopyResult"
-                            android:layout_width="0dp"
-                            android:layout_height="42dp"
-                            android:layout_weight="1"
-                            android:text="📋 نسخ"
-                            android:textSize="13sp"
-                            android:textColor="#FFFFFF"
-                            android:backgroundTint="#00695C" />
-
-                        <Button
-                            android:id="@+id/btnShareResult"
-                            android:layout_width="0dp"
-                            android:layout_height="42dp"
-                            android:layout_weight="1"
-                            android:layout_marginStart="6dp"
-                            android:text="📤 مشاركة"
-                            android:textSize="13sp"
-                            android:textColor="#FFFFFF"
-                            android:backgroundTint="#D97706" />
-
-                        <Button
-                            android:id="@+id/btnPrintResult"
-                            android:layout_width="0dp"
-                            android:layout_height="42dp"
-                            android:layout_weight="1"
-                            android:layout_marginStart="6dp"
-                            android:text="🖨️ طباعة"
-                            android:textSize="13sp"
-                            android:textColor="#FFFFFF"
-                            android:backgroundTint="#16A34A" />
-                    </LinearLayout>
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <ProgressBar
-                android:id="@+id/progressBar"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:layout_marginVertical="16dp"
-                android:visibility="gone" />
-
-            <!-- زر الطوارئ في حال تعذر الذكاء الاصطناعي -->
-            <Button
-                android:id="@+id/btnFallbackGoogle"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:visibility="gone"
-                android:text="🌐 فتح البحث مباشرة في Google (القانون السوري)"
-                android:textColor="#FFFFFF"
-                android:backgroundTint="#EA4335" />
-
-        </LinearLayout>
-    </androidx.core.widget.NestedScrollView>
-
-    <!-- منطقة الإدخال المستمر بالأسفل -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:background="#FFFFFF"
-        android:elevation="8dp"
-        android:padding="12dp">
-
-        <EditText
-            android:id="@+id/etGeneralQuestion"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="54dp"
-            android:maxHeight="120dp"
-            android:gravity="top|start"
-            android:hint="اكتب استفسارك القانوني العام هنا..."
-            android:inputType="textMultiLine"
-            android:background="@android:drawable/editbox_background_normal"
-            android:padding="12dp"
-            android:textColor="#0F2042"
             android:textColorHint="#94A3B8"
+            android:backgroundTint="#1E293B"
+            android:padding="12dp"
+            android:gravity="right|top"
+            android:textDirection="rtl"
             android:textSize="14sp" />
 
         <Button
-            android:id="@+id/btnGeneralSubmit"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:layout_marginTop="8dp"
-            android:text="بحث شامل 🔍"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:backgroundTint="#00695C"
+            android:id="@+id/btnSearch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="بحث"
+            android:backgroundTint="#059669"
             android:textColor="#FFFFFF" />
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/searchProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:visibility="gone"
+        android:layout_margin="8dp" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <TextView
+            android:id="@+id/tvSearchResult"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#E2E8F0"
+            android:textSize="15sp"
+            android:lineSpacingExtra="4dp"
+            android:textIsSelectable="true"
+            android:gravity="right"
+            android:textDirection="rtl" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="8dp">
+
+        <Button
+            android:id="@+id/btnFallbackGoogle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="بحث في مراجع Google القانونية"
+            android:backgroundTint="#1E293B"
+            android:textColor="#38BDF8"
+            android:visibility="gone" />
     </LinearLayout>
 
 </LinearLayout>
