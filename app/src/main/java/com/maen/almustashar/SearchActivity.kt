@@ -85,16 +85,21 @@ class SearchActivity : AppCompatActivity() {
         searchActions.visibility = View.GONE
 
         lifecycleScope.launch {
-            // نمرر this لقراءة القوانين من أصول التطبيق المدمجة
-            val result = LawsRepository.searchRelevantLaws(this@SearchActivity, query)
-            progressBar.visibility = View.GONE
+            try {
+                val result = LawsRepository.searchRelevantLaws(this@SearchActivity, query)
+                progressBar.visibility = View.GONE
 
-            if (result.isNotBlank() && !result.startsWith("⚠️")) {
-                tvSearchResult.text = result
-                scrollResults.visibility = View.VISIBLE
-                searchActions.visibility = View.VISIBLE
-            } else {
-                tvEmpty.text = "لم يتم العثور على مادة مطابقة لـ \"$query\" في القوانين المتوفرة."
+                if (result.isNotBlank() && !result.startsWith("لم يتم العثور")) {
+                    tvSearchResult.text = result
+                    scrollResults.visibility = View.VISIBLE
+                    searchActions.visibility = View.VISIBLE
+                } else {
+                    tvEmpty.text = result
+                    tvEmpty.visibility = View.VISIBLE
+                }
+            } catch (e: Exception) {
+                progressBar.visibility = View.GONE
+                tvEmpty.text = "حدث خطأ أثناء البحث: ${e.localizedMessage}"
                 tvEmpty.visibility = View.VISIBLE
             }
         }
