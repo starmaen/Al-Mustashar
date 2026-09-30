@@ -23,6 +23,9 @@ jobs:
       run: chmod +x gradlew
 
     - name: Build APK
+      env:
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY1 }}
+        GROQ_API_KEY: ${{ secrets.GROQ_API_KEY1 }}
       run: ./gradlew assembleDebug --no-daemon
 
     - name: Upload APK
