@@ -1,7 +1,6 @@
 package com.maen.almustashar
 
 import android.content.Context
-import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
@@ -11,69 +10,55 @@ object LawsRepository {
 
     suspend fun searchLaws(query: String): String {
         val q = query.trim()
-        if (q.isBlank()) return "يرجى كتابة نص أو رقم مادة للبحث."
+        if (q.isBlank()) return "يرجى إدخال نص للبحث أو رقم مادة."
 
         val numMatch = Regex("""\d+""").find(q)?.value
 
         return try {
-            val matchedDocs = mutableListOf<DocumentSnapshot>()
+            val querySnapshot = if (numMatch != null) {
+                val textQuery = firestore.collectionGroup("articles")
+                    .whereEqualTo("article_number", numMatch)
+                    .get().await()
 
-            if (numMatch != null) {
-                // البحث برقم المادة كنص داخل articles
-                val snap1 = firestore.collectionGroup("articles")
-                    .whereEqualTo("article_number", numMatch).get().await()
-                matchedDocs.addAll(snap1.documents)
-
-                // البحث بحقل number إن وجد
-                if (matchedDocs.isEmpty()) {
-                    val snap2 = firestore.collectionGroup("articles")
-                        .whereEqualTo("number", numMatch).get().await()
-                    matchedDocs.addAll(snap2.documents)
-                }
-
-                // البحث برقم المادة كقيمة عددية
-                val nVal = numMatch.toLongOrNull()
-                if (matchedDocs.isEmpty() && nVal != null) {
-                    val snap3 = firestore.collectionGroup("articles")
-                        .whereEqualTo("article_number", nVal).get().await()
-                    matchedDocs.addAll(snap3.documents)
+                if (!textQuery.isEmpty) {
+                    textQuery
+                } else {
+                    val numVal = numMatch.toLongOrNull()
+                    if (numVal != null) {
+                        firestore.collectionGroup("articles")
+                            .whereEqualTo("article_number", numVal)
+                            .get().await()
+                    } else {
+                        textQuery
+                    }
                 }
             } else {
-                // البحث الموضوعي بالكلمات المفتاحية
-                val snapKw = firestore.collectionGroup("articles")
-                    .whereArrayContains("keywords", q).limit(15).get().await()
-                matchedDocs.addAll(snapKw.documents)
+                firestore.collectionGroup("articles")
+                    .whereArrayContains("keywords", q)
+                    .limit(20)
+                    .get().await()
             }
 
-            if (matchedDocs.isNotEmpty()) {
+            if (querySnapshot.isEmpty) {
+                "⚠️ لم يتم العثور على أي مادة مطابقة في قاعدة البيانات."
+            } else {
                 val sb = StringBuilder()
-                for (doc in matchedDocs) {
+                for (doc in querySnapshot.documents) {
                     val lawTitle = doc.getString("law_title")
                         ?: doc.reference.parent.parent?.id
                         ?: "تشريع سوري"
-                    val art = doc.get("article_number")?.toString()
-                        ?: doc.get("number")?.toString()
-                        ?: (numMatch ?: "")
-                    val text = doc.getString("text")
-                        ?: doc.getString("content")
-                        ?: ""
+                    val art = doc.get("article_number")?.toString() ?: (numMatch ?: "")
+                    val text = doc.getString("text") ?: doc.getString("content") ?: ""
 
-                    sb.append("🏛️ [قاعدة البيانات — ").append(lawTitle).append("]\n")
-                    sb.append("📖 المادة (").append(art).append(")\n\n")
-                    sb.append("النص النافذ:\n").append(text).append("\n\n")
+                    sb.append("📖 [").append(lawTitle).append("] — المادة (").append(art).append(")\n\n")
+                    sb.append("النص النافذ:\n")
+                    sb.append(text).append("\n\n")
                     sb.append("───────────────────────\n\n")
                 }
                 sb.toString().trimEnd()
-            } else {
-                val prompt = "أنت مرجع قانوني سوري معتمد. استخرج النص الحرفي والتوثيق الرسمي بدقة للطلب: $q"
-                AIClient.generateResponse(prompt)
             }
         } catch (e: Exception) {
-            try {
-                AIClient.generateResponse("أنت مرجع قانوني سوري معتمد. استخرج النص الرسمي للطلب: $q")
-            } catch (_: Exception) {
-                "⚠️ تعذر جلب المادة حالياً: ${e.localizedMessage}"
-            }
+            "⚠️ تعذر جلب البيانات: ${e.localizedMessage}"
         }
     }
 
