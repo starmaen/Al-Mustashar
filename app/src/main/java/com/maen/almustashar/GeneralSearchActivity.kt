@@ -58,13 +58,8 @@ class GeneralSearchActivity : AppCompatActivity() {
 
         btnSubmit.setOnClickListener { onSearch() }
 
-        btnGoogleSearch.setOnClickListener {
-            openGoogleSearch(lastQuery)
-        }
-
-        btnFallbackGoogle.setOnClickListener {
-            openGoogleSearch(lastQuery)
-        }
+        btnGoogleSearch.setOnClickListener { openGoogleSearch(lastQuery) }
+        btnFallbackGoogle.setOnClickListener { openGoogleSearch(lastQuery) }
 
         findViewById<Button>(R.id.btnCopyResult).setOnClickListener {
             val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -117,64 +112,66 @@ class GeneralSearchActivity : AppCompatActivity() {
         lastQuery = question
         btnSubmit.isEnabled = false
         progressBar.visibility = View.VISIBLE
-        cardResult.visibility = View.GONE
         btnFallbackGoogle.visibility = View.GONE
 
         val user = FirebaseAuth.getInstance().currentUser
 
         lifecycleScope.launch {
-            val promptToSend = if (conversationHistory.isNotEmpty()) {
-                "سياق البحث السابق:\n$conversationHistory\nالاستفسار الجديد:\n$question"
-            } else {
-                question
-            }
-
-            val answer = AIClient.askGeneralQuestion(promptToSend)
-            val isReal = answer.isNotEmpty() &&
-                    !answer.startsWith("❌") &&
-                    !answer.contains("فشل جميع المزودين") &&
-                    !answer.contains("الخدمة تواجه ضغطاً") &&
-                    answer.length > 30
-
-            progressBar.visibility = View.GONE
-            btnSubmit.isEnabled = true
-
-            if (isReal) {
-                val cleaned = cleanMarkdown(answer)
-
-                if (conversationHistory.isNotEmpty()) {
-                    conversationHistory.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
-                        .append("سؤال: ").append(question).append("\n\n")
-                        .append("الإجابة:\n").append(cleaned).append("\n\n")
+            try {
+                val promptToSend = if (conversationHistory.isNotEmpty()) {
+                    "سياق البحث السابق:\n$conversationHistory\nالاستفسار الجديد:\n$question"
                 } else {
-                    conversationHistory.append("السؤال: ").append(question).append("\n\n")
-                        .append("الإجابة:\n").append(cleaned).append("\n\n")
+                    question
                 }
 
-                tvResult.text = conversationHistory.toString()
+                val answer = AIClient.askGeneralQuestion(promptToSend)
+
+                if (answer.isNotEmpty() && !answer.startsWith("❌")) {
+                    val cleaned = cleanMarkdown(answer)
+                    if (conversationHistory.isNotEmpty()) {
+                        conversationHistory.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+                            .append("سؤال: ").append(question).append("\n\n")
+                            .append("الإجابة:\n").append(cleaned).append("\n\n")
+                    } else {
+                        conversationHistory.append("السؤال: ").append(question).append("\n\n")
+                            .append("الإجابة:\n").append(cleaned).append("\n\n")
+                    }
+
+                    tvResult.text = conversationHistory.toString()
+                    cardResult.visibility = View.VISIBLE
+                    btnFallbackGoogle.visibility = View.GONE
+
+                    scrollResults.post {
+                        scrollResults.fullScroll(View.FOCUS_DOWN)
+                    }
+
+                    etQuestion.text.clear()
+                    etQuestion.hint = "اطرح استفساراً آخر في نفس الموضوع..."
+                    btnSubmit.text = "متابعة البحث 🔍"
+
+                    try {
+                        FirebaseFirestore.getInstance().collection("general_queries").add(
+                            hashMapOf(
+                                "question" to question,
+                                "answer" to cleaned,
+                                "userId" to (user?.uid ?: "anonymous"),
+                                "email" to (user?.email ?: ""),
+                                "timestamp" to System.currentTimeMillis()
+                            )
+                        )
+                    } catch (_: Exception) {}
+                } else {
+                    tvResult.text = answer.ifEmpty { "تعذر الحصول على رد حالياً." }
+                    cardResult.visibility = View.VISIBLE
+                    btnFallbackGoogle.visibility = View.VISIBLE
+                }
+            } catch (e: Exception) {
+                tvResult.text = "❌ حدث خطأ: ${e.localizedMessage}"
                 cardResult.visibility = View.VISIBLE
-                btnFallbackGoogle.visibility = View.GONE
-
-                scrollResults.post {
-                    scrollResults.fullScroll(View.FOCUS_DOWN)
-                }
-
-                etQuestion.text.clear()
-                etQuestion.hint = "اطرح استفساراً آخر في نفس الموضوع..."
-                btnSubmit.text = "متابعة البحث 🔍"
-
-                FirebaseFirestore.getInstance().collection("general_queries").add(
-                    hashMapOf(
-                        "question" to question,
-                        "answer" to cleaned,
-                        "userId" to (user?.uid ?: "anonymous"),
-                        "email" to (user?.email ?: ""),
-                        "timestamp" to System.currentTimeMillis()
-                    )
-                )
-            } else {
                 btnFallbackGoogle.visibility = View.VISIBLE
-                Toast.makeText(this@GeneralSearchActivity, "تعذر الحصول على استجابة كاملة من الذكاء الاصطناعي — يمكنك استخدام خيار Google المباشر", Toast.LENGTH_LONG).show()
+            } finally {
+                progressBar.visibility = View.GONE
+                btnSubmit.isEnabled = true
             }
         }
     }

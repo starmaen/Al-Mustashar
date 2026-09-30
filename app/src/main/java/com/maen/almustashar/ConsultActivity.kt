@@ -36,22 +36,27 @@ class ConsultActivity : AppCompatActivity() {
                 progressBar.visibility = View.VISIBLE
                 btnAsk.isEnabled = false
 
-                if (conversationHistory.isNotEmpty()) {
-                    conversationHistory.append("\n\nمتابعة:\n").append(q)
+                val fullPrompt = if (conversationHistory.isNotEmpty()) {
+                    "$conversationHistory\n\nسؤال إضافي:\n$q"
                 } else {
-                    conversationHistory.append(q)
+                    q
                 }
 
                 lifecycleScope.launch {
-                    val result = AIClient.askLegalQuestion(conversationHistory.toString())
-                    progressBar.visibility = View.GONE
-                    btnAsk.isEnabled = true
-
-                    tvAnswer.text = result
-                    if (!result.startsWith("❌")) {
-                        conversationHistory.append("\n\nالجواب:\n").append(result)
-                        etQuestion.text.clear()
-                        etQuestion.hint = "تابع نفس الاستشارة بسؤال إضافي..."
+                    try {
+                        val result = AIClient.askLegalQuestion(fullPrompt)
+                        tvAnswer.text = result
+                        if (!result.startsWith("❌")) {
+                            conversationHistory.append("\nالسؤال: ").append(q)
+                                .append("\nالجواب: ").append(result).append("\n")
+                            etQuestion.text.clear()
+                            etQuestion.hint = "تابع نفس الاستشارة بسؤال إضافي..."
+                        }
+                    } catch (e: Exception) {
+                        tvAnswer.text = "❌ حدث خطأ غير متوقع: ${e.localizedMessage}"
+                    } finally {
+                        progressBar.visibility = View.GONE
+                        btnAsk.isEnabled = true
                     }
                 }
             }
