@@ -17,30 +17,43 @@ import kotlinx.coroutines.launch
 
 class ConsultActivity : AppCompatActivity() {
 
-    private lateinit var etQuestion: EditText
-    private lateinit var btnAsk: Button
-    private lateinit var progressBar: ProgressBar
-    private lateinit var tvAnswer: TextView
-    private lateinit var btnCopy: Button
-    private lateinit var btnShare: Button
-
     private val conversationHistory = StringBuilder()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_consult)
 
-        etQuestion = findViewById(R.id.etQuestion)
-        btnAsk = findViewById(R.id.btnAsk)
-        progressBar = findViewById(R.id.progressBar)
-        tvAnswer = findViewById(R.id.tvAnswer)
-        btnCopy = findViewById(R.id.btnCopy)
-        btnShare = findViewById(R.id.btnShare)
+        val etQuestion = findViewById<EditText>(R.id.etQuestion)
+        val btnAsk = findViewById<Button>(R.id.btnAsk)
+        val progressBar = findViewById<ProgressBar>(R.id.progressBar)
+        val tvAnswer = findViewById<TextView>(R.id.tvAnswer)
+        val btnCopy = findViewById<Button>(R.id.btnCopy)
+        val btnShare = findViewById<Button>(R.id.btnShare)
 
         btnAsk.setOnClickListener {
             val q = etQuestion.text.toString().trim()
             if (q.isNotEmpty()) {
-                askConsultation(q)
+                progressBar.visibility = View.VISIBLE
+                btnAsk.isEnabled = false
+
+                if (conversationHistory.isNotEmpty()) {
+                    conversationHistory.append("\n\nمتابعة واستيضاح:\n").append(q)
+                } else {
+                    conversationHistory.append(q)
+                }
+
+                lifecycleScope.launch {
+                    val result = AIClient.askLegalQuestion(conversationHistory.toString())
+                    progressBar.visibility = View.GONE
+                    btnAsk.isEnabled = true
+
+                    tvAnswer.text = result
+                    if (!result.startsWith("❌")) {
+                        conversationHistory.append("\n\nالرد:\n").append(result)
+                        etQuestion.text.clear()
+                        etQuestion.hint = "تابع نفس الاستشارة بسؤال إضافي..."
+                    }
+                }
             }
         }
 
@@ -49,7 +62,7 @@ class ConsultActivity : AppCompatActivity() {
             if (txt.isNotEmpty()) {
                 val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("Consultation", txt))
-                Toast.makeText(this, "تم نسخ نص الاستشارة بنجاح", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "تم نسخ النص", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -61,34 +74,6 @@ class ConsultActivity : AppCompatActivity() {
                     putExtra(Intent.EXTRA_TEXT, txt)
                 }
                 startActivity(Intent.createChooser(intent, "مشاركة الاستشارة"))
-            }
-        }
-    }
-
-    private fun askConsultation(question: String) {
-        progressBar.visibility = View.VISIBLE
-        btnAsk.isEnabled = false
-
-        if (conversationHistory.isNotEmpty()) {
-            conversationHistory.append("\n\nسؤال استيضاحي ومتابعة:\n").append(question)
-        } else {
-            conversationHistory.append(question)
-        }
-
-        val promptToSend = conversationHistory.toString()
-
-        lifecycleScope.launch {
-            val result = AIClient.askLegalQuestion(promptToSend)
-            progressBar.visibility = View.GONE
-            btnAsk.isEnabled = true
-
-            if (result.isNotEmpty() && !result.startsWith("❌")) {
-                tvAnswer.text = result
-                conversationHistory.append("\n\nإجابة المستشار:\n").append(result)
-                etQuestion.text.clear()
-                etQuestion.hint = "اسأل سؤالاً تالياً لمتابعة نفس الاستشارة..."
-            } else {
-                tvAnswer.text = result
             }
         }
     }
