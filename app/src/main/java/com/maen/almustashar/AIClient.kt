@@ -34,44 +34,43 @@ object AIClient {
 4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية."""
 
     suspend fun askLegalQuestion(prompt: String): String = withContext(Dispatchers.IO) {
-        // 1. نماذج Gemini الأساسية
-        val g1 = callGemini("gemini-3.8-pro", prompt)
-        if (g1 is AIResult.Success) return@withContext g1.text
+        // 1. المحاولة الأولى: Gemini 3.8 Flash (الأحدث في حسابك)
+        val res1 = callGemini("gemini-3.8-flash", prompt)
+        if (res1 is AIResult.Success) return@withContext res1.text
 
-        val g2 = callGemini("gemini-3.8-flash", prompt)
-        if (g2 is AIResult.Success) return@withContext g2.text
+        // 2. المحاولة الثانية: Gemini 3.5 Flash-Lite (السريع)
+        val res2 = callGemini("gemini-3.5-flash-lite", prompt)
+        if (res2 is AIResult.Success) return@withContext res2.text
 
-        val g3 = callGemini("gemini-3.5-flash-lite", prompt)
-        if (g3 is AIResult.Success) return@withContext g3.text
+        // 3. المحاولة الثالثة: Gemini 2.5 Flash (المستقر)
+        val res3 = callGemini("gemini-2.5-flash", prompt)
+        if (res3 is AIResult.Success) return@withContext res3.text
 
-        // 2. نماذج Groq البديلة والمؤكدة
-        val q1 = callGroq("llama-3.1-8b-instant", prompt)
-        if (q1 is AIResult.Success) return@withContext q1.text
-
-        val q2 = callGroq("llama-3.3-70b-versatile", prompt)
-        if (q2 is AIResult.Success) return@withContext q2.text
+        // 4. الاحتياط الرابع: Groq Llama-3.1-8b-instant
+        val groqRes = callGroq("llama-3.1-8b-instant", prompt)
+        if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         return@withContext when {
-            g1 is AIResult.Error -> "❌ فشل الاتصال (Gemini Pro): ${g1.message}"
-            g2 is AIResult.Error -> "❌ فشل الاتصال (Gemini Flash): ${g2.message}"
-            q1 is AIResult.Error -> "❌ فشل الاتصال (Groq Instant): ${q1.message}"
-            q2 is AIResult.Error -> "❌ فشل الاتصال (Groq Versatile): ${q2.message}"
-            else -> "❌ تعذر إتمام الطلب من جميع المزودين، يرجى التحقق من اتصال الإنترنت."
+            res1 is AIResult.Error -> "❌ فشل الاتصال (Gemini 3.8): ${res1.message}"
+            res2 is AIResult.Error -> "❌ فشل الاتصال (Gemini 3.5): ${res2.message}"
+            res3 is AIResult.Error -> "❌ فشل الاتصال (Gemini 2.5): ${res3.message}"
+            groqRes is AIResult.Error -> "❌ فشل الاتصال (Groq): ${groqRes.message}"
+            else -> "❌ تعذر إتمام الطلب، يرجى التأكد من اتصال الإنترنت."
         }
     }
 
     suspend fun askGeneralQuestion(prompt: String): String = withContext(Dispatchers.IO) {
-        val g1 = callGemini("gemini-3.8-pro", prompt)
-        if (g1 is AIResult.Success) return@withContext g1.text
+        val res1 = callGemini("gemini-3.8-flash", prompt)
+        if (res1 is AIResult.Success) return@withContext res1.text
 
-        val g2 = callGemini("gemini-3.8-flash", prompt)
-        if (g2 is AIResult.Success) return@withContext g2.text
+        val res2 = callGemini("gemini-3.5-flash-lite", prompt)
+        if (res2 is AIResult.Success) return@withContext res2.text
 
-        val q1 = callGroq("llama-3.1-8b-instant", prompt)
-        if (q1 is AIResult.Success) return@withContext q1.text
+        val groqRes = callGroq("llama-3.1-8b-instant", prompt)
+        if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         return@withContext when {
-            g1 is AIResult.Error -> "❌ خطأ: ${g1.message}"
+            res1 is AIResult.Error -> "❌ خطأ: ${res1.message}"
             else -> "❌ تعذر الاتصال بمزود الخدمة."
         }
     }
