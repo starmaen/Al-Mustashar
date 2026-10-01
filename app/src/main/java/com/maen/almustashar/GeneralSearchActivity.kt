@@ -133,7 +133,7 @@ class GeneralSearchActivity : AppCompatActivity() {
                     question
                 }
 
-                val answer = AIClient.askGeneralQuestion(promptToSend, this@GeneralSearchActivity)
+                val answer = AIClient.askLegalQuestion(promptToSend)
 
                 if (answer.isNotEmpty() && !answer.startsWith("❌")) {
                     val cleaned = cleanMarkdown(answer)

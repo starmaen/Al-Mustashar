@@ -86,7 +86,7 @@ class SearchActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val result = LawsRepository.searchRelevantLaws(this@SearchActivity, query)
+                val result = LawsRepository.searchRelevantLaws(query)
                 progressBar.visibility = View.GONE
 
                 if (result.isNotBlank() && !result.startsWith("لم يتم العثور")) {

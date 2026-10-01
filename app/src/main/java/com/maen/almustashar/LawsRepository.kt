@@ -1,122 +1,141 @@
 package com.maen.almustashar
 
-import android.content.Context
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
+/**
+ * النسخة الموحّدة الوحيدة لمنطق البحث القانوني.
+ * تُستخدم من AIClient (الاستشارة السريعة) ومن SearchActivity (البحث في القوانين)
+ * بنفس التوقيع: suspend fun searchRelevantLaws(query: String): String
+ */
 object LawsRepository {
+    private var cached: List<Article>? = null
+    private var lastTime: Long = 0
+    private const val TTL = 300_000L
 
-    private val firestore by lazy { FirebaseFirestore.getInstance() }
+    data class Article(val law: String, val number: String, val text: String, val keywords: List<String> = emptyList())
 
-    // تحويل الأرقام المشرقية (١، ٢، ٣) إلى أرقام إنجليزية (1, 2, 3)
-    private fun normalizeDigits(input: String): String {
-        val easternDigits = charArrayOf('٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩')
-        var result = input
-        for (i in easternDigits.indices) {
-            result = result.replace(easternDigits[i], ('0' + i))
-        }
-        return result
+    private fun normalizeDigits(s: String): String {
+        val ar = "٠١٢٣٤٥٦٧٨٩"; val fa = "۰۱۲۳۴۵۶۷۸۹"; var r = s
+        for (i in 0..9) { r = r.replace(ar[i], ('0' + i)); r = r.replace(fa[i], ('0' + i)) }
+        return r
     }
 
-    suspend fun searchLaws(query: String): String {
-        val originalQuery = query.trim()
-        if (originalQuery.isBlank()) return "يرجى إدخال نص للبحث أو رقم مادة."
+    // يقبل "المادة" أو "الماده" (بالهاء) أو "مادة"/"ماده"، مع أو بدون كلمة "رقم"
+    private fun extractNumber(q: String): String? {
+        val n = normalizeDigits(q)
+        val patterns = listOf(
+            Regex("""(?:المادة|الماده)\s*رقم\s*[:\(]?\s*(\d+)"""),
+            Regex("""نص\s+(?:المادة|الماده)\s*[:\(]?\s*(\d+)"""),
+            Regex("""(?:المادة|الماده)\s*[:\(]?\s*(\d+)\s*\)?"""),
+            Regex("""\b(?:مادة|ماده)\s*[:\(]?\s*(\d+)"""),
+            Regex("""article\s*[:\(]?\s*(\d+)""", RegexOption.IGNORE_CASE)
+        )
+        for (p in patterns) { p.find(n)?.let { return it.groupValues[1] } }
+        // إذا كان السؤال رقمًا صريحًا فقط (بدون كلمة "مادة")، اعتبره رقم مادة أيضًا
+        val bare = n.trim()
+        if (bare.matches(Regex("""\d+"""))) return bare
+        return null
+    }
 
-        val normalized = normalizeDigits(originalQuery)
-        val numMatch = Regex("""\d+""").find(normalized)?.value
+    /**
+     * الدالة الوحيدة المعتمدة للبحث. تُستدعى من داخل coroutine (lifecycleScope.launch
+     * أو withContext(Dispatchers.IO)) في كل الشاشات.
+     */
+    suspend fun searchRelevantLaws(question: String, limit: Int = 6): String {
+        val num = extractNumber(question)
+        if (num != null) {
+            val d = fetchByNumber(num)
+            if (d != null) return d
+            return "⚠️ المادة $num غير موجودة في قاعدة البيانات الحالية."
+        }
 
+        val all = loadAll()
+        if (all.isEmpty()) return "⚠️ لم يتم العثور على نتائج (قاعدة البيانات فارغة أو تعذر الاتصال)."
+
+        val kws = normalizeDigits(question)
+            .split(" ", "،", "؟", "?", ".", ",", "\n", "\t", ":", ";", "\"", "'")
+            .map { it.trim() }
+            .filter { it.length >= 2 && !isStop(it) }
+            .distinct()
+
+        if (kws.isEmpty()) return "⚠️ لم يتم التعرف على كلمات بحث واضحة بالسؤال."
+
+        val scored = all.map { a ->
+            var s = 0
+            for (k in kws) {
+                if (a.text.contains(k, true)) s += 5
+                if (a.keywords.any { it.contains(k, true) }) s += 3
+                if (a.law.contains(k, true)) s += 2
+            }
+            a to s
+        }.filter { it.second > 0 }.sortedByDescending { it.second }.take(limit)
+
+        if (scored.isEmpty()) {
+            return "⚠️ لم يتم العثور على نص مطابق لهذا السؤال ضمن القوانين المتاحة حاليًا."
+        }
+        return scored.joinToString("\n\n") { (a, _) -> "📖 ${a.law} - المادة ${a.number}:\n${a.text}" }
+    }
+
+    // يبحث عن رقم المادة داخل كل قانون مرفوع (وليس قانونًا واحدًا بعينه)
+    private suspend fun fetchByNumber(n: String): String? {
         return try {
-            val results = mutableListOf<String>()
-
-            // 1. إذا كان البحث يحتوي على رقم، نبحث عن الرقم بكل الطرق الممكنة
-            if (numMatch != null) {
-                val numLong = numMatch.toLongOrNull()
-
-                // بحث كرقم كنص
-                val q1 = firestore.collectionGroup("articles")
-                    .whereEqualTo("article_number", numMatch)
-                    .limit(10).get().await()
-
-                // بحث كرقم كـ Long/Number
-                val q2 = if (numLong != null) {
-                    firestore.collectionGroup("articles")
-                        .whereEqualTo("article_number", numLong)
-                        .limit(10).get().await()
-                } else null
-
-                // بحث بحقل number بديل في حال كانت التسمية مختلفة
-                val q3 = firestore.collectionGroup("articles")
-                    .whereEqualTo("number", numMatch)
-                    .limit(10).get().await()
-
-                val docs = (q1.documents + (q2?.documents ?: emptyList()) + q3.documents).distinctBy { it.id }
-
-                for (doc in docs) {
-                    results.add(formatDoc(doc, numMatch))
+            val db = FirebaseFirestore.getInstance()
+            val cols = listOf("articles", "مقالات", "المواد")
+            val hits = mutableListOf<String>()
+            for (lawDoc in db.collection("laws").get().await()) {
+                val lawName = lawDoc.getString("name") ?: lawDoc.id
+                for (c in cols) {
+                    try {
+                        val doc = lawDoc.reference.collection(c).document(n).get().await()
+                        if (doc.exists()) {
+                            val t = doc.getString("text") ?: doc.getString("content")
+                            val nn = doc.getLong("number")?.toString() ?: doc.getString("number") ?: n
+                            if (!t.isNullOrEmpty()) {
+                                hits.add("📖 $lawName - المادة $nn:\n\n$t")
+                                break
+                            }
+                        }
+                    } catch (_: Exception) {}
                 }
             }
+            if (hits.isEmpty()) null else hits.joinToString("\n\n───────────────────────\n\n")
+        } catch (_: Exception) { null }
+    }
 
-            // 2. إذا لم تكن هناك أرقام أو لم تظهر نتائج بالرقم، نجرب البحث العام بالكلمات المفتاحية
-            if (results.isEmpty()) {
-                val cleanWord = originalQuery
-                    .replace("المادة", "")
-                    .replace("الماده", "")
-                    .replace("من", "")
-                    .replace("القانون", "")
-                    .trim()
-
-                if (cleanWord.isNotBlank()) {
-                    val kwQuery = firestore.collectionGroup("articles")
-                        .whereArrayContains("keywords", cleanWord)
-                        .limit(10).get().await()
-
-                    for (doc in kwQuery.documents) {
-                        results.add(formatDoc(doc, null))
-                    }
+    private suspend fun loadAll(): List<Article> {
+        val now = System.currentTimeMillis()
+        cached?.let { if (now - lastTime < TTL) return it }
+        val res = mutableListOf<Article>()
+        try {
+            val db = FirebaseFirestore.getInstance()
+            for (lawDoc in db.collection("laws").get().await()) {
+                val lawName = lawDoc.getString("name") ?: lawDoc.id
+                for (c in listOf("articles", "مقالات", "المواد")) {
+                    try {
+                        val snap = lawDoc.reference.collection(c).get().await()
+                        if (snap.isEmpty) continue
+                        for (d in snap.documents) {
+                            val num = d.getLong("number")?.toString() ?: d.getString("number") ?: d.id
+                            val txt = d.getString("text") ?: d.getString("content") ?: ""
+                            val kws = (d.get("keywords") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                            if (txt.isNotEmpty()) res.add(Article(lawName, num, txt, kws))
+                        }
+                        if (snap.size() > 0) break
+                    } catch (_: Exception) {}
                 }
             }
-
-            if (results.isEmpty()) {
-                "⚠️ لم يتم العثور على أي مادة مطابقة.\nجرّب البحث برقم المادة فقط (مثل: 4) أو بمصطلح قانوني رئيسي."
-            } else {
-                results.joinToString("\n\n")
-            }
-        } catch (e: Exception) {
-            "⚠️ تعذر جلب البيانات: ${e.localizedMessage}"
-        }
+            cached = res; lastTime = now
+        } catch (_: Exception) {}
+        return res
     }
 
-    private fun formatDoc(doc: com.google.firebase.firestore.DocumentSnapshot, fallbackNum: String?): String {
-        val lawTitle = doc.getString("law_title")
-            ?: doc.getString("law")
-            ?: doc.reference.parent.parent?.id
-            ?: "تشريع سوري"
+    private fun isStop(w: String) = setOf(
+        "من", "في", "على", "عن", "إلى", "التي", "الذي", "هذا", "هذه", "ذلك", "تلك",
+        "أريد", "أحتاج", "أطلب", "نص", "رقم", "هو", "هي", "ما", "لا", "مع", "بين",
+        "عند", "حتى", "قد", "كان", "لكن", "أو", "ثم", "كل", "بعض", "مادة", "المادة",
+        "ماده", "الماده", "القانون", "قانون"
+    ).contains(w)
 
-        val artNum = doc.get("article_number")?.toString()
-            ?: doc.get("number")?.toString()
-            ?: fallbackNum
-            ?: ""
-
-        val content = doc.getString("text")
-            ?: doc.getString("content")
-            ?: doc.getString("body")
-            ?: doc.getString("article_text")
-            ?: "لا يوجد نص متاح."
-
-        return """
-📖 [$lawTitle] — المادة ($artNum)
-
-النص النافذ:
-$content
-
-───────────────────────
-        """.trimIndent()
-    }
-
-    fun searchRelevantLaws(context: Context?, query: String): String {
-        return kotlinx.coroutines.runBlocking { searchLaws(query) }
-    }
-
-    fun searchRelevantLaws(query: String): String = searchRelevantLaws(null, query)
-    fun searchLaw(context: Context?, query: String): String = searchRelevantLaws(context, query)
+    fun clearCache() { cached = null; lastTime = 0 }
 }
