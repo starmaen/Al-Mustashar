@@ -105,26 +105,28 @@ object LawsRepository {
             val db = FirebaseFirestore.getInstance()
             val hits = mutableListOf<String>()
 
+            // في حال تم تحديد القانون مباشرة
             if (targetLawId != null) {
                 val lawDoc = db.collection("laws").doc(targetLawId).get().await()
                 val lawName = lawDoc.getString("name") ?: targetLawId
-                val doc = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
-                if (doc.exists()) {
-                    val t = doc.getString("text") ?: doc.getString("content")
-                    val nn = doc.getLong("number")?.toString() ?: doc.getString("number") ?: n
+                val articleDoc = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
+                if (articleDoc.exists()) {
+                    val t = articleDoc.getString("text") ?: articleDoc.getString("content")
+                    val nn = articleDoc.getLong("number")?.toString() ?: articleDoc.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
                         return "📖 $lawName - المادة $nn:\n\n$t"
                     }
                 }
             }
 
+            // في حال البحث في جميع القوانين
             val lawsSnap = db.collection("laws").get().await()
             for (lawDoc in lawsSnap.documents) {
                 val lawName = lawDoc.getString("name") ?: lawDoc.id
-                val doc = lawDoc.reference.collection("articles").document(n).get().await()
-                if (doc.exists()) {
-                    val t = doc.getString("text") ?: doc.getString("content")
-                    val nn = doc.getLong("number")?.toString() ?: doc.getString("number") ?: n
+                val articleDoc = lawDoc.reference.collection("articles").document(n).get().await()
+                if (articleDoc.exists()) {
+                    val t = articleDoc.getString("text") ?: articleDoc.getString("content")
+                    val nn = articleDoc.getLong("number")?.toString() ?: articleDoc.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
                         hits.add("📖 $lawName - المادة $nn:\n\n$t")
                     }
