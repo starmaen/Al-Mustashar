@@ -44,7 +44,6 @@ object LawsRepository {
         return null
     }
 
-    // استخراج معرّف القانون بدقة عند ذكره في السؤال
     private fun detectLawId(q: String): String? {
         val normalized = q.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه")
         return when {
@@ -81,7 +80,7 @@ object LawsRepository {
             .filter { it.length >= 2 && !isStop(it) }
             .distinct()
 
-        if (kws.isEmpty()) return "⚠️️ لم يتم التعرف على كلمات بحث واضحة بالسؤال."
+        if (kws.isEmpty()) return "⚠️ لم يتم التعرف على كلمات بحث واضحة بالسؤال."
 
         val scored = all.mapNotNull { a ->
             if (lawId != null && a.lawId != lawId) return@mapNotNull null
@@ -95,7 +94,7 @@ object LawsRepository {
         }.sortedByDescending { it.second }.take(limit)
 
         if (scored.isEmpty()) {
-            return "⚠️ لم يتم العثور على نص مطابق لهذا السؤال ضمن القوانين المتاحة حاليًا."
+            return "⚠️️ لم يتم العثور على نص مطابق لهذا السؤال ضمن القوانين المتاحة حاليًا."
         }
 
         return scored.joinToString("\n\n") { (a, _) -> "📖 ${a.law} - المادة ${a.number}:\n${a.text}" }
