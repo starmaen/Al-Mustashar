@@ -60,14 +60,12 @@ object LawsRepository {
         val num = extractNumber(question)
         val targetLawId = detectLawId(question)
 
-        // 1. بحث برقم المادة
         if (num != null) {
             val res = fetchByNumber(num, targetLawId)
             if (res != null) return res
             return "⚠️ المادة $num غير موجودة في قاعدة البيانات الحالية."
         }
 
-        // 2. بحث موضوعي ودلالي
         val all = loadAll()
         if (all.isEmpty()) return "⚠️ لم يتم العثور على نتائج (قاعدة البيانات فارغة أو تعذر الاتصال)."
 
