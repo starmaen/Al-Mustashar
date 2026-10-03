@@ -21,8 +21,8 @@ object LawsRepository {
         return r
     }
 
-    // يقبل "المادة" أو "الماده" (بالهاء) أو "مادة"/"ماده"، مع أو بدون كلمة "رقم"
-    private fun extractNumber(q: String): String? {
+    // يحلل الاستعلام لاستخراج رقم المادة واسم القانون (إن وجد)
+    private fun parseQuery(q: String): Pair<String?, String?> {
         val n = normalizeDigits(q)
         val patterns = listOf(
             Regex("""(?:المادة|الماده)\s*رقم\s*[:\(]?\s*(\d+)"""),
@@ -31,11 +31,38 @@ object LawsRepository {
             Regex("""\b(?:مادة|ماده)\s*[:\(]?\s*(\d+)"""),
             Regex("""article\s*[:\(]?\s*(\d+)""", RegexOption.IGNORE_CASE)
         )
-        for (p in patterns) { p.find(n)?.let { return it.groupValues[1] } }
-        // إذا كان السؤال رقمًا صريحًا فقط (بدون كلمة "مادة")، اعتبره رقم مادة أيضًا
-        val bare = n.trim()
-        if (bare.matches(Regex("""\d+"""))) return bare
-        return null
+
+        var foundNumber: String? = null
+        var matchedText: String? = null
+
+        for (p in patterns) {
+            val match = p.find(n)
+            if (match != null) {
+                foundNumber = match.groupValues[1]
+                matchedText = match.value
+                break
+            }
+        }
+
+        if (foundNumber == null) {
+            val bare = n.trim()
+            if (bare.matches(Regex("""\d+"""))) {
+                foundNumber = bare
+                matchedText = bare
+            }
+        }
+
+        if (foundNumber != null && matchedText != null) {
+            val remaining = n.replace(matchedText, "").trim()
+            val words = remaining.split(" ", "،", "؟", "?", ".", ",", "\n", "\t", ":", ";", "\"", "'")
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !isStop(it) }
+
+            val lawNameQuery = if (words.isNotEmpty()) words.joinToString(" ") else null
+            return Pair(foundNumber, lawNameQuery)
+        }
+
+        return Pair(null, null)
     }
 
     /**
@@ -43,11 +70,12 @@ object LawsRepository {
      * أو withContext(Dispatchers.IO)) في كل الشاشات.
      */
     suspend fun searchRelevantLaws(question: String, limit: Int = 6): String {
-        val num = extractNumber(question)
+        val (num, lawNameQuery) = parseQuery(question)
         if (num != null) {
-            val d = fetchByNumber(num)
+            val d = fetchByNumber(num, lawNameQuery)
             if (d != null) return d
-            return "⚠️ المادة $num غير موجودة في قاعدة البيانات الحالية."
+            val targetLawInfo = if (lawNameQuery != null) " في قانون $lawNameQuery" else ""
+            return "⚠️ المادة $num غير موجودة في قاعدة البيانات الحالية$targetLawInfo."
         }
 
         val all = loadAll()
@@ -77,14 +105,23 @@ object LawsRepository {
         return scored.joinToString("\n\n") { (a, _) -> "📖 ${a.law} - المادة ${a.number}:\n${a.text}" }
     }
 
-    // يبحث عن رقم المادة داخل كل قانون مرفوع (وليس قانونًا واحدًا بعينه)
-    private suspend fun fetchByNumber(n: String): String? {
+    // يبحث عن رقم المادة داخل القوانين، مع إمكانية تحديد قانون معين للاستعلام
+    private suspend fun fetchByNumber(n: String, lawNameQuery: String? = null): String? {
         return try {
             val db = FirebaseFirestore.getInstance()
             val cols = listOf("articles", "مقالات", "المواد")
             val hits = mutableListOf<String>()
             for (lawDoc in db.collection("laws").get().await()) {
                 val lawName = lawDoc.getString("name") ?: lawDoc.id
+
+                if (lawNameQuery != null) {
+                    val normalizedLawName = normalizeDigits(lawName).lowercase()
+                    val normalizedQuery = normalizeDigits(lawNameQuery).lowercase()
+                    val queryWords = normalizedQuery.split("\\s+".toRegex()).filter { it.length > 1 }
+                    val matches = queryWords.isNotEmpty() && queryWords.all { normalizedLawName.contains(it) }
+                    if (!matches) continue
+                }
+
                 for (c in cols) {
                     try {
                         val doc = lawDoc.reference.collection(c).document(n).get().await()
