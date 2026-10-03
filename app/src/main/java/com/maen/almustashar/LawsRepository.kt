@@ -94,7 +94,7 @@ object LawsRepository {
         }.sortedByDescending { it.second }.take(limit)
 
         if (scored.isEmpty()) {
-            return "⚠️️ لم يتم العثور على نص مطابق لهذا السؤال ضمن القوانين المتاحة حاليًا."
+            return "⚠️ لم يتم العثور على نص مطابق لهذا السؤال ضمن القوانين المتاحة حاليًا."
         }
 
         return scored.joinToString("\n\n") { (a, _) -> "📖 ${a.law} - المادة ${a.number}:\n${a.text}" }
@@ -106,10 +106,10 @@ object LawsRepository {
             val hits = mutableListOf<String>()
 
             if (targetLawId != null) {
+                val lawDoc = db.collection("laws").doc(targetLawId).get().await()
+                val lawName = lawDoc.getString("name") ?: targetLawId
                 val doc = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
                 if (doc.exists()) {
-                    val lawDoc = db.collection("laws").doc(targetLawId).get().await()
-                    val lawName = lawDoc.getString("name") ?: targetLawId
                     val t = doc.getString("text") ?: doc.getString("content")
                     val nn = doc.getLong("number")?.toString() ?: doc.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
@@ -118,7 +118,8 @@ object LawsRepository {
                 }
             }
 
-            for (lawDoc in db.collection("laws").get().await()) {
+            val lawsSnap = db.collection("laws").get().await()
+            for (lawDoc in lawsSnap.documents) {
                 val lawName = lawDoc.getString("name") ?: lawDoc.id
                 val doc = lawDoc.reference.collection("articles").document(n).get().await()
                 if (doc.exists()) {
@@ -142,7 +143,8 @@ object LawsRepository {
         val res = mutableListOf<Article>()
         try {
             val db = FirebaseFirestore.getInstance()
-            for (lawDoc in db.collection("laws").get().await()) {
+            val lawsSnap = db.collection("laws").get().await()
+            for (lawDoc in lawsSnap.documents) {
                 val lawName = lawDoc.getString("name") ?: lawDoc.id
                 val snap = lawDoc.reference.collection("articles").get().await()
                 if (snap.isEmpty) continue
