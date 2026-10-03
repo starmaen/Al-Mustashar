@@ -60,12 +60,14 @@ object LawsRepository {
         val num = extractNumber(question)
         val targetLawId = detectLawId(question)
 
+        // 1. بحث برقم المادة
         if (num != null) {
             val res = fetchByNumber(num, targetLawId)
             if (res != null) return res
             return "⚠️ المادة $num غير موجودة في قاعدة البيانات الحالية."
         }
 
+        // 2. بحث موضوعي ودلالي
         val all = loadAll()
         if (all.isEmpty()) return "⚠️ لم يتم العثور على نتائج (قاعدة البيانات فارغة أو تعذر الاتصال)."
 
@@ -101,12 +103,12 @@ object LawsRepository {
             val hits = mutableListOf<String>()
 
             if (targetLawId != null) {
-                val lawDoc = db.collection("laws").doc(targetLawId).get().await()
-                val lawName = lawDoc.getString("name") ?: targetLawId
-                val doc = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
-                if (doc.exists()) {
-                    val t = doc.getString("text") ?: doc.getString("content")
-                    val nn = doc.getLong("number")?.toString() ?: doc.getString("number") ?: n
+                val lawSnapshot = db.collection("laws").doc(targetLawId).get().await()
+                val lawName = lawSnapshot.getString("name") ?: targetLawId
+                val singleArticle = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
+                if (singleArticle.exists()) {
+                    val t = singleArticle.getString("text") ?: singleArticle.getString("content")
+                    val nn = singleArticle.getLong("number")?.toString() ?: singleArticle.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
                         return "📖 $lawName - المادة $nn:\n\n$t"
                     }
@@ -114,12 +116,12 @@ object LawsRepository {
             }
 
             val lawsSnap = db.collection("laws").get().await()
-            for (lawDoc in lawsSnap.documents) {
-                val lawName = lawDoc.getString("name") ?: lawDoc.id
-                val doc = lawDoc.reference.collection("articles").document(n).get().await()
-                if (doc.exists()) {
-                    val t = doc.getString("text") ?: doc.getString("content")
-                    val nn = doc.getLong("number")?.toString() ?: doc.getString("number") ?: n
+            for (lawSnapshot in lawsSnap.documents) {
+                val lawName = lawSnapshot.getString("name") ?: lawSnapshot.id
+                val loopArticle = lawSnapshot.reference.collection("articles").document(n).get().await()
+                if (loopArticle.exists()) {
+                    val t = loopArticle.getString("text") ?: loopArticle.getString("content")
+                    val nn = loopArticle.getLong("number")?.toString() ?: loopArticle.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
                         hits.add("📖 $lawName - المادة $nn:\n\n$t")
                     }
@@ -139,15 +141,15 @@ object LawsRepository {
         try {
             val db = FirebaseFirestore.getInstance()
             val lawsSnap = db.collection("laws").get().await()
-            for (lawDoc in lawsSnap.documents) {
-                val lawName = lawDoc.getString("name") ?: lawDoc.id
-                val snap = lawDoc.reference.collection("articles").get().await()
+            for (lawSnapshot in lawsSnap.documents) {
+                val lawName = lawSnapshot.getString("name") ?: lawSnapshot.id
+                val snap = lawSnapshot.reference.collection("articles").get().await()
                 if (snap.isEmpty) continue
-                for (doc in snap.documents) {
-                    val num = doc.getLong("number")?.toString() ?: doc.getString("number") ?: doc.id
-                    val txt = doc.getString("text") ?: doc.getString("content") ?: ""
-                    val kws = (doc.get("keywords") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-                    if (txt.isNotEmpty()) res.add(Article(lawName, lawDoc.id, num, txt, kws))
+                for (articleSnapshot in snap.documents) {
+                    val num = articleSnapshot.getLong("number")?.toString() ?: articleSnapshot.getString("number") ?: articleSnapshot.id
+                    val txt = articleSnapshot.getString("text") ?: articleSnapshot.getString("content") ?: ""
+                    val kws = (articleSnapshot.get("keywords") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                    if (txt.isNotEmpty()) res.add(Article(lawName, lawSnapshot.id, num, txt, kws))
                 }
             }
             cached = res
