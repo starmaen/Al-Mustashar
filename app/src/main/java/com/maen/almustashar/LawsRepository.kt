@@ -3,12 +3,6 @@ package com.maen.almustashar
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
-/**
- * المحرك القانوني الشامل لتطبيق المستشار:
- * 1. بحث بالمادة واسم القانون.
- * 2. بحث برقم المادة العام.
- * 3. بحث بالدلالة اللفظية والموضوعية.
- */
 object LawsRepository {
     private var cached: List<Article>? = null
     private var lastTime: Long = 0
@@ -47,7 +41,6 @@ object LawsRepository {
         return null
     }
 
-    // 1. استخراج القانون بدقة لمنع الخلط وتخصيص البحث
     private fun detectLawId(q: String): String? {
         val s = q.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه")
         return when {
@@ -67,14 +60,14 @@ object LawsRepository {
         val num = extractNumber(question)
         val targetLawId = detectLawId(question)
 
-        // الحالة الأولى والثانية: البحث برقم المادة (سواء محددة بقانون أو عامة)
+        // 1. مادة برقم (مخصصة لقانون أو عامة)
         if (num != null) {
             val res = fetchByNumber(num, targetLawId)
             if (res != null) return res
             return "⚠️ المادة $num غير موجودة في قاعدة البيانات الحالية."
         }
 
-        // الحالة الثالثة: البحث بالدلالة اللفظية والموضوعية
+        // 2. بحث بالدلالة اللفظية
         val all = loadAll()
         if (all.isEmpty()) return "⚠️ لم يتم العثور على نتائج (قاعدة البيانات فارغة أو تعذر الاتصال)."
 
@@ -84,7 +77,7 @@ object LawsRepository {
             .filter { it.length >= 2 && !isStop(it) }
             .distinct()
 
-        if (kws.isEmpty()) return "⚠️ لم يتم التعرف على كلمات بحث واضحة بالسؤال."
+        if (kws.isEmpty()) return "⚠️️ لم يتم التعرف على كلمات بحث واضحة بالسؤال."
 
         val scored = all.mapNotNull { a ->
             if (targetLawId != null && a.lawId != targetLawId) return@mapNotNull null
@@ -109,28 +102,26 @@ object LawsRepository {
             val db = FirebaseFirestore.getInstance()
             val hits = mutableListOf<String>()
 
-            // الحالة الأولى: مادة محددة بقانون معين
             if (targetLawId != null) {
                 val lawDoc = db.collection("laws").doc(targetLawId).get().await()
                 val lawName = lawDoc.getString("name") ?: targetLawId
-                val articleDoc = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
-                if (articleDoc.exists()) {
-                    val t = articleDoc.getString("text") ?: articleDoc.getString("content")
-                    val nn = articleDoc.getLong("number")?.toString() ?: articleDoc.getString("number") ?: n
+                val targetDoc = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
+                if (targetDoc.exists()) {
+                    val t = targetDoc.getString("text") ?: targetDoc.getString("content")
+                    val nn = targetDoc.getLong("number")?.toString() ?: targetDoc.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
                         return "📖 $lawName - المادة $nn:\n\n$t"
                     }
                 }
             }
 
-            // الحالة الثانية: مادة عامة بدون تحديد اسم القانون (جلبها من كل القوانين)
             val lawsSnap = db.collection("laws").get().await()
             for (lawDoc in lawsSnap.documents) {
                 val lawName = lawDoc.getString("name") ?: lawDoc.id
-                val articleDoc = lawDoc.reference.collection("articles").document(n).get().await()
-                if (articleDoc.exists()) {
-                    val t = articleDoc.getString("text") ?: articleDoc.getString("content")
-                    val nn = articleDoc.getLong("number")?.toString() ?: articleDoc.getString("number") ?: n
+                val generalDoc = lawDoc.reference.collection("articles").document(n).get().await()
+                if (generalDoc.exists()) {
+                    val t = generalDoc.getString("text") ?: generalDoc.getString("content")
+                    val nn = generalDoc.getLong("number")?.toString() ?: generalDoc.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
                         hits.add("📖 $lawName - المادة $nn:\n\n$t")
                     }
