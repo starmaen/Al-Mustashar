@@ -60,14 +60,12 @@ object LawsRepository {
         val num = extractNumber(question)
         val targetLawId = detectLawId(question)
 
-        // 1. مادة برقم (مخصصة لقانون أو عامة)
         if (num != null) {
             val res = fetchByNumber(num, targetLawId)
             if (res != null) return res
             return "⚠️ المادة $num غير موجودة في قاعدة البيانات الحالية."
         }
 
-        // 2. بحث بالدلالة اللفظية
         val all = loadAll()
         if (all.isEmpty()) return "⚠️ لم يتم العثور على نتائج (قاعدة البيانات فارغة أو تعذر الاتصال)."
 
@@ -77,7 +75,7 @@ object LawsRepository {
             .filter { it.length >= 2 && !isStop(it) }
             .distinct()
 
-        if (kws.isEmpty()) return "⚠️️ لم يتم التعرف على كلمات بحث واضحة بالسؤال."
+        if (kws.isEmpty()) return "⚠️ لم يتم التعرف على كلمات بحث واضحة بالسؤال."
 
         val scored = all.mapNotNull { a ->
             if (targetLawId != null && a.lawId != targetLawId) return@mapNotNull null
@@ -105,10 +103,10 @@ object LawsRepository {
             if (targetLawId != null) {
                 val lawDoc = db.collection("laws").doc(targetLawId).get().await()
                 val lawName = lawDoc.getString("name") ?: targetLawId
-                val targetDoc = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
-                if (targetDoc.exists()) {
-                    val t = targetDoc.getString("text") ?: targetDoc.getString("content")
-                    val nn = targetDoc.getLong("number")?.toString() ?: targetDoc.getString("number") ?: n
+                val doc = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
+                if (doc.exists()) {
+                    val t = doc.getString("text") ?: doc.getString("content")
+                    val nn = doc.getLong("number")?.toString() ?: doc.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
                         return "📖 $lawName - المادة $nn:\n\n$t"
                     }
@@ -118,10 +116,10 @@ object LawsRepository {
             val lawsSnap = db.collection("laws").get().await()
             for (lawDoc in lawsSnap.documents) {
                 val lawName = lawDoc.getString("name") ?: lawDoc.id
-                val generalDoc = lawDoc.reference.collection("articles").document(n).get().await()
-                if (generalDoc.exists()) {
-                    val t = generalDoc.getString("text") ?: generalDoc.getString("content")
-                    val nn = generalDoc.getLong("number")?.toString() ?: generalDoc.getString("number") ?: n
+                val doc = lawDoc.reference.collection("articles").document(n).get().await()
+                if (doc.exists()) {
+                    val t = doc.getString("text") ?: doc.getString("content")
+                    val nn = doc.getLong("number")?.toString() ?: doc.getString("number") ?: n
                     if (!t.isNullOrEmpty()) {
                         hits.add("📖 $lawName - المادة $nn:\n\n$t")
                     }
@@ -145,10 +143,10 @@ object LawsRepository {
                 val lawName = lawDoc.getString("name") ?: lawDoc.id
                 val snap = lawDoc.reference.collection("articles").get().await()
                 if (snap.isEmpty) continue
-                for (d in snap.documents) {
-                    val num = d.getLong("number")?.toString() ?: d.getString("number") ?: d.id
-                    val txt = d.getString("text") ?: d.getString("content") ?: ""
-                    val kws = (d.get("keywords") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
+                for (doc in snap.documents) {
+                    val num = doc.getLong("number")?.toString() ?: doc.getString("number") ?: doc.id
+                    val txt = doc.getString("text") ?: doc.getString("content") ?: ""
+                    val kws = (doc.get("keywords") as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
                     if (txt.isNotEmpty()) res.add(Article(lawName, lawDoc.id, num, txt, kws))
                 }
             }
