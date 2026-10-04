@@ -110,9 +110,9 @@ object LawsRepository {
             val hits = mutableListOf<String>()
 
             if (targetLawId != null) {
-                val lawSnapshot = db.collection("laws").doc(targetLawId).get().await()
+                val lawSnapshot = db.collection("laws").document(targetLawId).get().await()
                 val lawName = lawSnapshot.getString("name") ?: targetLawId
-                val singleArticle = db.collection("laws").doc(targetLawId).collection("articles").document(n).get().await()
+                val singleArticle = db.collection("laws").document(targetLawId).collection("articles").document(n).get().await()
                 if (singleArticle.exists()) {
                     val t = singleArticle.getString("text") ?: singleArticle.getString("content")
                     val nn = singleArticle.getLong("number")?.toString() ?: singleArticle.getString("number") ?: n
