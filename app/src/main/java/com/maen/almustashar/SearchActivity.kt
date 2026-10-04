@@ -7,6 +7,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -24,18 +25,17 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var etSearch: EditText
     private lateinit var spinnerLaw: Spinner
     private lateinit var btnDoSearch: Button
-
-    private data class LawChoice(
-        val id: String?,
-        val title: String
-    ) {
-        override fun toString(): String = title
-    }
     private lateinit var progressBar: ProgressBar
     private lateinit var tvEmpty: TextView
     private lateinit var scrollResults: NestedScrollView
     private lateinit var tvSearchResult: TextView
     private lateinit var searchActions: LinearLayout
+
+    private data class LawChoice(val id: String?, val title: String) {
+        override fun toString(): String = title
+    }
+
+    private var lawChoices: List<LawChoice> = listOf(LawChoice(null, "كل القوانين"))
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,28 +44,38 @@ class SearchActivity : AppCompatActivity() {
         etSearch = findViewById(R.id.etSearch)
         spinnerLaw = findViewById(R.id.spinnerLaw)
         btnDoSearch = findViewById(R.id.btnDoSearch)
+        progressBar = findViewById(R.id.searchProgressBar)
+        tvEmpty = findViewById(R.id.tvEmpty)
+        scrollResults = findViewById(R.id.scrollResults)
+        tvSearchResult = findViewById(R.id.tvSearchResult)
+        searchActions = findViewById(R.id.searchActions)
 
-        val lawChoices = listOf(
-            LawChoice(null, "كل القوانين المرفوعة"),
-            LawChoice("criminal_procedure", "قانون أصول المحاكمات الجزائية"),
-            LawChoice("civil_procedure", "قانون أصول المحاكمات المدنية"),
-            LawChoice("evidence_law", "قانون البينات"),
-            LawChoice("evidence_law_2014", "تعديلات قانون البينات 2014"),
-            LawChoice("lawyers_law", "قانون تنظيم مهنة المحاماة")
-        )
-
-        spinnerLaw.adapter = android.widget.ArrayAdapter(
+        spinnerLaw.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_item,
             lawChoices
         ).apply {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
-        progressBar = findViewById(R.id.searchProgressBar)
-        tvEmpty = findViewById(R.id.tvEmpty)
-        scrollResults = findViewById(R.id.scrollResults)
-        tvSearchResult = findViewById(R.id.tvSearchResult)
-        searchActions = findViewById(R.id.searchActions)
+
+        // جلب قائمة القوانين الفعلية من قاعدة البيانات ديناميكياً
+        lifecycleScope.launch {
+            try {
+                val laws = LawsRepository.loadLawsList()
+                val choices = mutableListOf(LawChoice(null, "كل القوانين"))
+                choices.addAll(laws.map { LawChoice(it.id, it.name) })
+                lawChoices = choices
+                spinnerLaw.adapter = ArrayAdapter(
+                    this@SearchActivity,
+                    android.R.layout.simple_spinner_item,
+                    lawChoices
+                ).apply {
+                    setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+                }
+            } catch (_: Exception) {
+                // يبقى الخيار الافتراضي "كل القوانين" عند فشل الجلب
+            }
+        }
 
         btnDoSearch.setOnClickListener { performSearch() }
 
@@ -113,16 +123,11 @@ class SearchActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val selectedLawId =
-                    (spinnerLaw.selectedItem as? LawChoice)?.id
-
-                val result = LawsRepository.searchRelevantLaws(
-                    query,
-                    selectedLawId
-                )
+                val selectedLawId = (spinnerLaw.selectedItem as? LawChoice)?.id
+                val result = LawsRepository.searchRelevantLaws(query, selectedLawId)
                 progressBar.visibility = View.GONE
 
-                if (result.isNotBlank() && !result.startsWith("لم يتم العثور")) {
+                if (result.isNotBlank() && !result.startsWith("⚠️")) {
                     tvSearchResult.text = result
                     scrollResults.visibility = View.VISIBLE
                     searchActions.visibility = View.VISIBLE
