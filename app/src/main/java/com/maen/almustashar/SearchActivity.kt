@@ -11,6 +11,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ProgressBar
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -21,7 +22,15 @@ import kotlinx.coroutines.launch
 class SearchActivity : AppCompatActivity() {
 
     private lateinit var etSearch: EditText
+    private lateinit var spinnerLaw: Spinner
     private lateinit var btnDoSearch: Button
+
+    private data class LawChoice(
+        val id: String?,
+        val title: String
+    ) {
+        override fun toString(): String = title
+    }
     private lateinit var progressBar: ProgressBar
     private lateinit var tvEmpty: TextView
     private lateinit var scrollResults: NestedScrollView
@@ -33,7 +42,25 @@ class SearchActivity : AppCompatActivity() {
         setContentView(R.layout.activity_search)
 
         etSearch = findViewById(R.id.etSearch)
+        spinnerLaw = findViewById(R.id.spinnerLaw)
         btnDoSearch = findViewById(R.id.btnDoSearch)
+
+        val lawChoices = listOf(
+            LawChoice(null, "كل القوانين المرفوعة"),
+            LawChoice("criminal_procedure", "قانون أصول المحاكمات الجزائية"),
+            LawChoice("civil_procedure", "قانون أصول المحاكمات المدنية"),
+            LawChoice("evidence_law", "قانون البينات"),
+            LawChoice("evidence_law_2014", "تعديلات قانون البينات 2014"),
+            LawChoice("lawyers_law", "قانون تنظيم مهنة المحاماة")
+        )
+
+        spinnerLaw.adapter = android.widget.ArrayAdapter(
+            this,
+            android.R.layout.simple_spinner_item,
+            lawChoices
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
         progressBar = findViewById(R.id.searchProgressBar)
         tvEmpty = findViewById(R.id.tvEmpty)
         scrollResults = findViewById(R.id.scrollResults)
@@ -86,7 +113,13 @@ class SearchActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val result = LawsRepository.searchRelevantLaws(query)
+                val selectedLawId =
+                    (spinnerLaw.selectedItem as? LawChoice)?.id
+
+                val result = LawsRepository.searchRelevantLaws(
+                    query,
+                    selectedLawId
+                )
                 progressBar.visibility = View.GONE
 
                 if (result.isNotBlank() && !result.startsWith("لم يتم العثور")) {

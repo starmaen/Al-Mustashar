@@ -44,7 +44,7 @@ object LawsRepository {
     private fun detectLawId(q: String): String? {
         val s = q.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا").replace("ة", "ه")
         return when {
-            s.contains("جزاي") || s.contains("اصول الجزاي") -> "criminal_procedures_law_112"
+            s.contains("جزاي") || s.contains("اصول الجزاي") -> "criminal_procedure"
             s.contains("اصول مدني") || s.contains("محاكمات مدني") -> "civil_procedure"
             s.contains("مدني") -> "civil_code"
             s.contains("محاماه") || s.contains("محامي") -> "lawyers_law"
@@ -56,9 +56,18 @@ object LawsRepository {
         }
     }
 
-    suspend fun searchRelevantLaws(question: String, limit: Int = 6): String {
+    // التوافق مع أي استدعاء قديم للدالة
+    suspend fun searchRelevantLaws(question: String, limit: Int = 6): String =
+        searchRelevantLaws(question, null, limit)
+
+    // البحث القانوني المباشر من Firestore فقط
+    suspend fun searchRelevantLaws(
+        question: String,
+        selectedLawId: String?,
+        limit: Int = 6
+    ): String {
         val num = extractNumber(question)
-        val targetLawId = detectLawId(question)
+        val targetLawId = selectedLawId ?: detectLawId(question)
 
         if (num != null) {
             val res = fetchByNumber(num, targetLawId)
@@ -112,6 +121,9 @@ object LawsRepository {
                     }
                 }
             }
+
+            // عند اختيار قانون محدد، لا نبحث في قوانين أخرى
+            if (targetLawId != null) return null
 
             val lawsSnap = db.collection("laws").get().await()
             for (lawSnapshot in lawsSnap.documents) {
