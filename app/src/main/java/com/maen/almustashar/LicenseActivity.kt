@@ -42,32 +42,44 @@ class LicenseActivity : AppCompatActivity() {
     }
 
     private fun showOwnerBypassDialog() {
-        val emailInput = EditText(this)
-        emailInput.hint = "البريد الإلكتروني"
-        val passInput = EditText(this)
-        passInput.hint = "الرقم السري"
-        passInput.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         val layout = android.widget.LinearLayout(this)
         layout.orientation = android.widget.LinearLayout.VERTICAL
-        layout.setPadding(40, 20, 40, 20)
+        layout.setPadding(50, 40, 50, 10)
+        val emailInput = android.widget.EditText(this)
+        emailInput.hint = "البريد الإلكتروني"
         layout.addView(emailInput)
+        val passInput = android.widget.EditText(this)
+        passInput.hint = "الرقم السري"
+        passInput.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         layout.addView(passInput)
-        androidx.appcompat.app.AlertDialog.Builder(this)
+        android.app.AlertDialog.Builder(this)
             .setTitle("دخول المالك")
             .setView(layout)
             .setPositiveButton("دخول") { _, _ ->
                 val email = emailInput.text.toString().trim()
                 val pass = passInput.text.toString().trim()
-                LicenseManager.verifyOwnerPassword(email, pass) { ok ->
-                    if (ok) {
-                        getSharedPreferences("owner_prefs", MODE_PRIVATE).edit().putBoolean("ownerVerified", true).apply()
-                        val i = android.content.Intent(this, MainActivity::class.java)
-                        i.putExtra("ownerBypass", true)
-                        i.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
-                        startActivity(i)
-                        finish()
-                    } else {
-                        Toast.makeText(this, "بيانات غير صحيحة", Toast.LENGTH_SHORT).show()
+                LicenseManager.verifyOwnerPassword(email, pass) { success ->
+                    runOnUiThread {
+                        if (success) {
+                            android.app.AlertDialog.Builder(this)
+                                .setTitle("اختر الإجراء")
+                                .setItems(arrayOf("دخول كمستخدم عادي", "حجرة المالك (توليد الأكواد)")) { _, which ->
+                                    if (which == 0) {
+                                        getSharedPreferences("owner_prefs", MODE_PRIVATE).edit().putBoolean("ownerVerified", true).apply()
+                                        val intent = android.content.Intent(this, MainActivity::class.java)
+                                        intent.putExtra("ownerBypass", true)
+                                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                                        startActivity(intent)
+                                        finish()
+                                    } else {
+                                        startActivity(android.content.Intent(this, OwnerPanelActivity::class.java))
+                                    }
+                                }
+                                .setCancelable(false)
+                                .show()
+                        } else {
+                            android.widget.Toast.makeText(this, "بيانات غير صحيحة", android.widget.Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
             }
