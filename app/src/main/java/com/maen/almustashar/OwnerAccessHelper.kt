@@ -64,3 +64,39 @@ object OwnerAccessHelper {
             .show()
     }
 }
+
+
+    fun showOwnerLoginForBypass(context: android.content.Context) {
+        val emailInput = android.widget.EditText(context)
+        emailInput.hint = "البريد الإلكتروني"
+        val passInput = android.widget.EditText(context)
+        passInput.hint = "الرقم السري"
+        passInput.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        val layout = android.widget.LinearLayout(context)
+        layout.orientation = android.widget.LinearLayout.VERTICAL
+        layout.setPadding(40,20,40,20)
+        layout.addView(emailInput)
+        layout.addView(passInput)
+        androidx.appcompat.app.AlertDialog.Builder(context)
+            .setTitle("دخول المالك")
+            .setView(layout)
+            .setPositiveButton("دخول") { _, _ ->
+                val email = emailInput.text.toString().trim()
+                val pass = passInput.text.toString().trim()
+                LicenseManager.verifyOwnerPassword(email, pass) { ok ->
+                    if (ok) {
+                        context.getSharedPreferences("owner_prefs", android.content.Context.MODE_PRIVATE)
+                            .edit().putBoolean("ownerVerified", true).apply()
+                        val i = android.content.Intent(context, MainActivity::class.java)
+                        i.putExtra("ownerBypass", true)
+                        i.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
+                        context.startActivity(i)
+                        if (context is android.app.Activity) context.finish()
+                    } else {
+                        android.widget.Toast.makeText(context, "بيانات غير صحيحة", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
