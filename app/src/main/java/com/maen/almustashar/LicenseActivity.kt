@@ -64,7 +64,6 @@ class LicenseActivity : AppCompatActivity() {
             }
         }
     }
-}
 
 
     private var ownerTapsGate = 0
@@ -81,3 +80,4 @@ class LicenseActivity : AppCompatActivity() {
             }
         }
     }
+}
