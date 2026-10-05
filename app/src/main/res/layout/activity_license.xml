@@ -6,6 +6,13 @@
     android:gravity="center"
     android:padding="24dp">
 
+        <ImageView
+        android:id="@+id/ivLicenseLogo"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:src="@mipmap/ic_launcher"
+        android:layout_marginBottom="12dp" />
+
     <TextView
         android:id="@+id/tvLicenseTitle"
         android:layout_width="wrap_content"
