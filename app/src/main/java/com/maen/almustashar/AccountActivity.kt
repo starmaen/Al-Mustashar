@@ -17,6 +17,7 @@ class AccountActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setupOwnerPanelTaps()
         setContentView(R.layout.activity_account)
 
         val auth = FirebaseAuth.getInstance()
@@ -61,3 +62,25 @@ class AccountActivity : AppCompatActivity() {
         }
     }
 }
+
+
+    private var ownerTapsPanel = 0
+    private var lastTapPanel = 0L
+    private fun setupOwnerPanelTaps(){
+        val names = listOf("tvAbout","tvSupportEmail","tvVersion","tvTelegram","tvPhone")
+        for(n in names){
+            val id = resources.getIdentifier(n, "id", packageName)
+            if(id != 0){
+                findViewById<android.view.View>(id)?.setOnClickListener {
+                    val now = System.currentTimeMillis()
+                    if (now - lastTapPanel > 2000) ownerTapsPanel = 0
+                    lastTapPanel = now
+                    ownerTapsPanel++
+                    if (ownerTapsPanel >= 7) {
+                        ownerTapsPanel = 0
+                        OwnerAccessHelper.showOwnerLoginDialog(this)
+                    }
+                }
+            }
+        }
+    }
