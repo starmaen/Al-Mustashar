@@ -13,6 +13,7 @@ class LicenseActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setupOwnerGateTaps()
         setContentView(R.layout.activity_license)
 
         deviceId = DeviceUtils.getDeviceId(this)
@@ -64,3 +65,19 @@ class LicenseActivity : AppCompatActivity() {
         }
     }
 }
+
+
+    private var ownerTapsGate = 0
+    private var lastTapGate = 0L
+    private fun setupOwnerGateTaps(){
+        findViewById<android.view.View>(R.id.ivLogoLicense)?.setOnClickListener {
+            val now = System.currentTimeMillis()
+            if (now - lastTapGate > 2000) ownerTapsGate = 0
+            lastTapGate = now
+            ownerTapsGate++
+            if (ownerTapsGate >= 7) {
+                ownerTapsGate = 0
+                OwnerAccessHelper.showOwnerLoginForBypass(this)
+            }
+        }
+    }
