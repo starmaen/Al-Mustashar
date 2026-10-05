@@ -22,4 +22,16 @@ object LicenseManager {
             }
             .addOnFailureListener { onResult(false) }
     }
+
+    fun verifyOwnerPassword(email: String, password: String, onResult: (Boolean) -> Unit) {
+        db.collection("config").document("ownerAuth").get()
+            .addOnSuccessListener { doc ->
+                val storedEmail = doc.getString("email") ?: ""
+                val storedHash = doc.getString("passwordHash") ?: ""
+                val inputHash = sha256(password)
+                onResult(email.trim().equals(storedEmail.trim(), ignoreCase = true) && inputHash == storedHash)
+            }
+            .addOnFailureListener { onResult(false) }
+    }
+
 }
