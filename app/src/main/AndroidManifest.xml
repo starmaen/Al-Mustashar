@@ -32,6 +32,7 @@
         <activity android:name=".DecisionsActivity" android:exported="false" />
         <activity android:name=".DecisionEditActivity" android:exported="false" />
 
-    </application>
+        <activity android:name=".LicenseActivity" android:exported="false" />
+</application>
 
 </manifest>
