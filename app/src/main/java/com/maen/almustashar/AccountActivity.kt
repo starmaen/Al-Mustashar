@@ -17,6 +17,8 @@ class AccountActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setupOwnerPanelTap()
+
         setContentView(R.layout.activity_account)
 
         val auth = FirebaseAuth.getInstance()
@@ -60,4 +62,51 @@ class AccountActivity : AppCompatActivity() {
             finish()
         }
     }
+
+    private var ownerTapsPanel = 0
+    private var lastTapPanel = 0L
+    private fun setupOwnerPanelTap() {
+        findViewById<android.view.View>(R.id.ivAccountLogo)?.setOnClickListener {
+            val now = System.currentTimeMillis()
+            if (now - lastTapPanel > 2000) ownerTapsPanel = 0
+            lastTapPanel = now
+            ownerTapsPanel++
+            if (ownerTapsPanel >= 7) {
+                ownerTapsPanel = 0
+                showOwnerPanelDialog()
+            }
+        }
+    }
+
+    private fun showOwnerPanelDialog() {
+        val emailInput = android.widget.EditText(this)
+        emailInput.hint = "البريد الإلكتروني"
+        val passInput = android.widget.EditText(this)
+        passInput.hint = "الرقم السري"
+        passInput.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+        val layout = android.widget.LinearLayout(this)
+        layout.orientation = android.widget.LinearLayout.VERTICAL
+        layout.setPadding(40, 20, 40, 20)
+        layout.addView(emailInput)
+        layout.addView(passInput)
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("دخول المالك - حجرة التفعيل")
+            .setView(layout)
+            .setPositiveButton("دخول") { _, _ ->
+                val email = emailInput.text.toString().trim()
+                val pass = passInput.text.toString().trim()
+                LicenseManager.verifyOwnerPassword(email, pass) { ok ->
+                    runOnUiThread {
+                        if (ok) {
+                            startActivity(android.content.Intent(this, OwnerPanelActivity::class.java))
+                        } else {
+                            android.widget.Toast.makeText(this, "بيانات غير صحيحة", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
 }
