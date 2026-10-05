@@ -28,7 +28,7 @@ class AccountActivity : AppCompatActivity() {
         // 📧 نسخ البريد
         findViewById<LinearLayout>(R.id.rowEmail).setOnClickListener {
             val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cb.setPrimaryClip(ClipData.newPlainText("email", "starsyia2500@gmail.com"))
+            cb.setPrimaryClip(ClipData.newPlainText("email", "starsyria2500@gmail.com"))
             Toast.makeText(this, "تم نسخ البريد", Toast.LENGTH_SHORT).show()
         }
 
