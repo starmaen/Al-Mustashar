@@ -40,6 +40,15 @@ class OwnerPanelActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        window.decorView.post {
+            val root = findViewById<android.view.ViewGroup>(android.R.id.content).getChildAt(0) as? android.view.ViewGroup
+            val exitBtn = android.widget.Button(this)
+            exitBtn.id = android.view.View.generateViewId()
+            exitBtn.tag = "btnOwnerExitAuto"
+            exitBtn.text = "خروج"
+            exitBtn.setOnClickListener { finish() }
+            root?.addView(exitBtn)
+        }
         setContentView(R.layout.activity_owner_panel)
 
         auth = FirebaseAuth.getInstance()
