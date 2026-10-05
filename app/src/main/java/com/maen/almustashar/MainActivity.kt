@@ -22,7 +22,7 @@ class MainActivity : AppCompatActivity() {
 
         if (!intent.getBooleanExtra("ownerBypass", false) && !getSharedPreferences("owner_prefs", MODE_PRIVATE).getBoolean("ownerVerified", false)) {
             val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
-            LicenseManager.checkRemoteLicense(deviceId) { valid ->
+            LicenseManager.checkRemoteLicense(this, deviceId) { valid ->
                 if (!valid) {
                     startActivity(Intent(this, LicenseActivity::class.java))
                     finish()
