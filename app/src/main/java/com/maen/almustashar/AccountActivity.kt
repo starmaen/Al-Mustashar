@@ -61,7 +61,6 @@ class AccountActivity : AppCompatActivity() {
             finish()
         }
     }
-}
 
 
     private var ownerTapsPanel = 0
@@ -78,9 +77,10 @@ class AccountActivity : AppCompatActivity() {
                     ownerTapsPanel++
                     if (ownerTapsPanel >= 7) {
                         ownerTapsPanel = 0
-                        OwnerAccessHelper.showOwnerLoginDialog(this)
+                        OwnerAccessHelper.showOwnerDialog(this)
                     }
                 }
             }
         }
     }
+}
