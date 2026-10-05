@@ -1,47 +1,61 @@
 package com.maen.almustashar
 
 import android.os.Bundle
+import android.view.View
 import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.LinearLayout
+import android.widget.Spinner
+import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInOptions
+import com.google.android.gms.common.api.ApiException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 
 class OwnerPanelActivity : AppCompatActivity() {
+
+    private lateinit var auth: FirebaseAuth
+    private lateinit var db: FirebaseFirestore
+
+    private val signInLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val task = GoogleSignIn.getSignedInAccountFromIntent(result.data)
+        try {
+            val account = task.getResult(ApiException::class.java)
+            val credential = GoogleAuthProvider.getCredential(account.idToken, null)
+            auth.signInWithCredential(credential)
+                .addOnSuccessListener { checkAdminAndShowPanel() }
+                .addOnFailureListener {
+                    Toast.makeText(this, "فشل تسجيل الدخول: " + it.message, Toast.LENGTH_LONG).show()
+                }
+        } catch (e: ApiException) {
+            Toast.makeText(this, "فشل تسجيل الدخول بجوجل", Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_owner_panel)
 
-        val auth = FirebaseAuth.getInstance()
-        val db = FirebaseFirestore.getInstance()
+        auth = FirebaseAuth.getInstance()
+        db = FirebaseFirestore.getInstance()
 
-        val spinner = findViewById<android.widget.Spinner>(R.id.spinnerDuration)
+        val spinner = findViewById<Spinner>(R.id.spinnerDuration)
         val options = listOf("شهر", "سنة", "دائم")
         spinner.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, options)
 
-        val etDeviceId = findViewById<android.widget.EditText>(R.id.etTargetDeviceId)
-        val tvResultCode = findViewById<android.widget.TextView>(R.id.tvResultCode)
-
-        val user = auth.currentUser
-        if (user == null) {
-            Toast.makeText(this, "الرجاء تسجيل الدخول أولاً", Toast.LENGTH_LONG).show()
-            finish()
-        } else {
-            db.collection("admins").document(user.uid).get()
-                .addOnSuccessListener { doc ->
-                    if (!doc.exists()) {
-                        Toast.makeText(this, "هذا الحساب غير مخوَّل", Toast.LENGTH_LONG).show()
-                        finish()
-                    }
-                }
-                .addOnFailureListener {
-                    Toast.makeText(this, "تعذر التحقق من الصلاحية", Toast.LENGTH_LONG).show()
-                    finish()
-                }
+        findViewById<Button>(R.id.btnGoogleSignIn).setOnClickListener {
+            startGoogleSignIn()
         }
 
-        findViewById<android.widget.Button>(R.id.btnGenerateCode).setOnClickListener {
+        findViewById<Button>(R.id.btnGenerateCode).setOnClickListener {
+            val etDeviceId = findViewById<EditText>(R.id.etTargetDeviceId)
+            val tvResultCode = findViewById<TextView>(R.id.tvResultCode)
             val deviceId = etDeviceId.text.toString().trim()
             if (deviceId.isEmpty()) {
                 Toast.makeText(this, "أدخل معرّف الجهاز المستهدف", Toast.LENGTH_SHORT).show()
@@ -61,5 +75,48 @@ class OwnerPanelActivity : AppCompatActivity() {
                 }
             }
         }
+
+        checkAdminAndShowPanel()
+    }
+
+    private fun startGoogleSignIn() {
+        val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+            .requestIdToken(getString(R.string.default_web_client_id))
+            .requestEmail()
+            .build()
+        val client = GoogleSignIn.getClient(this, gso)
+        client.signOut().addOnCompleteListener {
+            signInLauncher.launch(client.signInIntent)
+        }
+    }
+
+    private fun checkAdminAndShowPanel() {
+        val llSignIn = findViewById<LinearLayout>(R.id.llSignInSection)
+        val llPanel = findViewById<LinearLayout>(R.id.llPanelContent)
+        val tvSignInMessage = findViewById<TextView>(R.id.tvSignInMessage)
+
+        val user = auth.currentUser
+        if (user == null) {
+            llSignIn.visibility = View.VISIBLE
+            llPanel.visibility = View.GONE
+            return
+        }
+
+        db.collection("admins").document(user.uid).get()
+            .addOnSuccessListener { doc ->
+                if (doc.exists()) {
+                    llSignIn.visibility = View.GONE
+                    llPanel.visibility = View.VISIBLE
+                } else {
+                    llSignIn.visibility = View.VISIBLE
+                    llPanel.visibility = View.GONE
+                    tvSignInMessage.text = "هذا الحساب (" + user.email + ") غير مخوَّل. سجّل بحساب المالك."
+                }
+            }
+            .addOnFailureListener {
+                llSignIn.visibility = View.VISIBLE
+                llPanel.visibility = View.GONE
+                tvSignInMessage.text = "تعذر التحقق من الصلاحية، أعد المحاولة"
+            }
     }
 }
