@@ -9,18 +9,15 @@ import com.google.firebase.firestore.FirebaseFirestore
 
 class App : Application() {
 
-    private var checked = false
+    companion object {
+        @Volatile var adminConfirmed = false
+    }
 
     override fun onCreate() {
         super.onCreate()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {
-                if (checked) return
-                if (activity is LicenseActivity || activity is OwnerPanelActivity) {
-                    checked = true
-                    return
-                }
-                checked = true
+                if (activity is LicenseActivity || activity is OwnerPanelActivity) return
                 verifyAccess(activity)
             }
             override fun onActivityStarted(activity: Activity) {}
@@ -33,12 +30,16 @@ class App : Application() {
     }
 
     private fun verifyAccess(activity: Activity) {
+        if (adminConfirmed) return
         val user = FirebaseAuth.getInstance().currentUser
         if (user != null) {
             FirebaseFirestore.getInstance().collection("admins").document(user.uid).get()
                 .addOnSuccessListener { doc ->
-                    if (doc.exists()) return@addOnSuccessListener
-                    checkDeviceLicense(activity)
+                    if (doc.exists()) {
+                        adminConfirmed = true
+                    } else {
+                        checkDeviceLicense(activity)
+                    }
                 }
                 .addOnFailureListener {
                     checkDeviceLicense(activity)
