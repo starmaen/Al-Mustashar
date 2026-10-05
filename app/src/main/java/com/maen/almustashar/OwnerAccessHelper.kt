@@ -63,7 +63,6 @@ object OwnerAccessHelper {
             .setNegativeButton("إلغاء", null)
             .show()
     }
-}
 
 
     fun showOwnerLoginForBypass(context: android.content.Context) {
@@ -100,3 +99,4 @@ object OwnerAccessHelper {
             .setNegativeButton("إلغاء", null)
             .show()
     }
+}
