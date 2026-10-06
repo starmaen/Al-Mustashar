@@ -21,18 +21,24 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         if (!intent.getBooleanExtra("ownerBypass", false) &&
-            !getSharedPreferences("owner_prefs", MODE_PRIVATE).getBoolean("ownerVerified", false)) {
-            val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
-            LicenseManager.checkRemoteLicense(deviceId) { valid ->
-                if (!valid) {
-                    runOnUiThread {
-                        startActivity(android.content.Intent(this@MainActivity, LicenseActivity::class.java))
-                        finish()
-                    }
-                }
+    !getSharedPreferences("owner_prefs", MODE_PRIVATE).getBoolean("ownerVerified", false)) {
+    val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+    LicenseManager.checkRemoteLicense(deviceId) { valid ->
+        runOnUiThread {
+            if (!valid) {
+                startActivity(android.content.Intent(this@MainActivity, LicenseActivity::class.java))
+                finish()
+            } else {
+                proceedAfterLicenseCheck()
             }
         }
+    }
+} else {
+    proceedAfterLicenseCheck()
+}
+    }
 
+    private fun proceedAfterLicenseCheck() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
