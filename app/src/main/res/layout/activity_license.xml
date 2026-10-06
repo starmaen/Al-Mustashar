@@ -22,13 +22,30 @@
         android:textStyle="bold"
         android:layout_marginBottom="16dp" />
 
-    <TextView
-        android:id="@+id/tvDeviceId"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text=""
-        android:textSize="14sp"
-        android:layout_marginBottom="16dp" />
+        android:orientation="horizontal"
+        android:background="#E8EAF6"
+        android:padding="14dp"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="12dp">
+
+        <TextView
+            android:id="@+id/tvDeviceId"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textColor="#000000"
+            android:textSize="16sp"
+            android:textIsSelectable="true" />
+
+        <Button
+            android:id="@+id/btnCopyDeviceId"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="نسخ" />
+    </LinearLayout>
 
     <EditText
         android:id="@+id/etActivationCode"
