@@ -13,6 +13,14 @@ class LicenseActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_license)
+        val tvId = findViewById<android.widget.TextView>(R.id.tvDeviceId)
+        findViewById<android.widget.Button>(R.id.btnCopyDeviceId).setOnClickListener {
+            val fullText = tvId.text.toString()
+            val idOnly = if (fullText.contains(":")) fullText.substringAfterLast(":").trim() else fullText.trim()
+            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("device_id", idOnly))
+            android.widget.Toast.makeText(this, "تم نسخ معرف الجهاز", android.widget.Toast.LENGTH_SHORT).show()
+        }
 
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         findViewById<TextView>(R.id.tvDeviceId).text = "معرّف جهازك: " + deviceId
