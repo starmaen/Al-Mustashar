@@ -77,7 +77,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        updateUI()
+        if (::binding.isInitialized) {
+            updateUI()
+        }
     }
 
     private fun updateUI() {
