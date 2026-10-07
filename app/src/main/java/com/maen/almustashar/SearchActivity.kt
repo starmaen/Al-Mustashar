@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.text.method.LinkMovementMethod
 import android.text.util.Linkify
@@ -109,6 +110,22 @@ class SearchActivity : AppCompatActivity() {
                     putExtra(Intent.EXTRA_TEXT, text)
                 }
                 startActivity(Intent.createChooser(intent, "مشاركة المادة"))
+            }
+        }
+
+        findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
+            val text = tvSearchResult.text.toString()
+            val urlMatcher = Regex("https://drive\.google\.com/[^\s]+").find(text)
+            val pdfUrl = urlMatcher?.value
+            if (!pdfUrl.isNullOrBlank()) {
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(pdfUrl))
+                    startActivity(browserIntent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "تعذر فتح الرابط: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "ملف الـ PDF غير متوفر لهذه المادة حالياً", Toast.LENGTH_SHORT).show()
             }
         }
     }

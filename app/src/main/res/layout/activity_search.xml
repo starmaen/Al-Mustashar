@@ -146,6 +146,15 @@
             android:backgroundTint="#D97706"
             android:text="📤 مشاركة"
             android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/btnOpenPdf"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_weight="1"
+            android:backgroundTint="#0284C7"
+            android:text="📄 الأصل PDF"
+            android:textColor="#FFFFFF" />
     </LinearLayout>
 
 </LinearLayout>
