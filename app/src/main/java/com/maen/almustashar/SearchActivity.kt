@@ -115,9 +115,14 @@ class SearchActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
             val text = tvSearchResult.text.toString()
-            val urlMatcher = Regex("https://drive\.google\.com/[^\s]+").find(text)
-            val pdfUrl = urlMatcher?.value
-            if (!pdfUrl.isNullOrBlank()) {
+            val marker = "https://drive.google.com/"
+            val startIndex = text.indexOf(marker)
+            val pdfUrl = if (startIndex != -1) {
+                val sub = text.substring(startIndex)
+                val endIndex = sub.indexOfFirst { it.isWhitespace() }
+                if (endIndex != -1) sub.substring(0, endIndex) else sub
+            } else null
+
                 try {
                     val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(pdfUrl))
                     startActivity(browserIntent)
@@ -125,6 +130,9 @@ class SearchActivity : AppCompatActivity() {
                     Toast.makeText(this, "تعذر فتح الرابط: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             } else {
+                Toast.makeText(this, "ملف الـ PDF غير متوفر لهذه المادة حالياً", Toast.LENGTH_SHORT).show()
+            }
+        } else {
                 Toast.makeText(this, "ملف الـ PDF غير متوفر لهذه المادة حالياً", Toast.LENGTH_SHORT).show()
             }
         }
