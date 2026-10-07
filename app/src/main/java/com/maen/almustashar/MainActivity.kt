@@ -19,23 +19,17 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        if (!intent.getBooleanExtra("ownerBypass", false) &&
-    !getSharedPreferences("owner_prefs", MODE_PRIVATE).getBoolean("ownerVerified", false)) {
-    val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
-    LicenseManager.checkRemoteLicense(deviceId) { valid ->
-        runOnUiThread {
-            if (!valid) {
-                startActivity(android.content.Intent(this@MainActivity, LicenseActivity::class.java))
-                finish()
-            } else {
-                proceedAfterLicenseCheck()
+        val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+        LicenseManager.checkRemoteLicense(deviceId) { valid ->
+            runOnUiThread {
+                if (!valid) {
+                    startActivity(Intent(this@MainActivity, LicenseActivity::class.java))
+                    finish()
+                } else {
+                    proceedAfterLicenseCheck()
+                }
             }
         }
-    }
-} else {
-    proceedAfterLicenseCheck()
-}
     }
 
     private fun proceedAfterLicenseCheck() {
@@ -45,7 +39,6 @@ class MainActivity : AppCompatActivity() {
         drawer = findViewById(R.id.drawerLayout)
         auth = FirebaseAuth.getInstance()
 
-        // زر القائمة
         findViewById<ImageView>(R.id.ivMenu).setOnClickListener {
             drawer.openDrawer(GravityCompat.END)
         }
@@ -53,10 +46,8 @@ class MainActivity : AppCompatActivity() {
             drawer.openDrawer(GravityCompat.END)
         }
 
-        // حول التطبيق
         binding.btnAbout.setOnClickListener { showAboutDialog() }
 
-        // أزرار الدرج
         findViewById<View>(R.id.navCases).setOnClickListener {
             drawer.closeDrawer(GravityCompat.END)
             requireLogin { startActivity(Intent(this, CasesActivity::class.java)) }
@@ -86,8 +77,7 @@ class MainActivity : AppCompatActivity() {
         val user = auth.currentUser
 
         if (user != null) {
-            // مسجل دخول: أظهر كل الأزرار
-            binding.tvWelcome.text = "مرحباً، ${user.email}"
+            binding.tvWelcome.text = "مرحباً، \${user.email}"
             binding.btnLogin.text = "حسابي"
             binding.btnConsult.visibility = View.VISIBLE
             binding.btnSearch.visibility = View.VISIBLE
@@ -96,16 +86,15 @@ class MainActivity : AppCompatActivity() {
                 startActivity(Intent(this, ConsultActivity::class.java))
             }
             binding.btnGeneralSearch?.setOnClickListener {
-            startActivity(Intent(this, GeneralSearchActivity::class.java))
-        }
-        binding.btnSearch.setOnClickListener {
+                startActivity(Intent(this, GeneralSearchActivity::class.java))
+            }
+            binding.btnSearch.setOnClickListener {
                 startActivity(Intent(this, SearchActivity::class.java))
             }
             binding.btnLogin.setOnClickListener {
                 startActivity(Intent(this, AccountActivity::class.java))
             }
         } else {
-            // غير مسجل: أخفِ الأزرار
             binding.tvWelcome.text = "مرحباً بك في المستشار القانوني\nسجّل الدخول للاستفادة من الخدمات"
             binding.btnLogin.text = "تسجيل الدخول"
             binding.btnConsult.visibility = View.GONE
@@ -147,7 +136,7 @@ class MainActivity : AppCompatActivity() {
             الإصدار: 1.0.0
 
             للتواصل:
-            starsyia2500@gmail.com
+            starsyria2500@gmail.com
             +963 938 466 549
             @maenstar
         """.trimIndent()
