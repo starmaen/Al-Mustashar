@@ -19,20 +19,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val deviceId = android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.ANDROID_ID)
-        LicenseManager.checkRemoteLicense(deviceId) { valid ->
-            runOnUiThread {
-                if (!valid) {
-                    startActivity(Intent(this@MainActivity, LicenseActivity::class.java))
-                    finish()
-                } else {
-                    proceedAfterLicenseCheck()
-                }
-            }
-        }
-    }
-
-    private fun proceedAfterLicenseCheck() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -68,9 +54,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (::binding.isInitialized) {
-            updateUI()
-        }
+        updateUI()
     }
 
     private fun updateUI() {
