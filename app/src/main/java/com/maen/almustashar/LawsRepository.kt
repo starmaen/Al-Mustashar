@@ -1,5 +1,8 @@
 package com.maen.almustashar
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 
@@ -21,13 +24,52 @@ object LawsRepository {
         val drivePdfUrl: String? = null
     )
 
-    private var cachedLaws: List<LawMeta>? = null
-    private var lastLawsTime: Long = 0
+    private const val WORKERS_LAW_ID = "state_workers_law"
+    private const val WORKERS_LAW_NAME = "القانون الأساسي للعاملين في الدولة"
+    private const val WORKERS_DRIVE_URL = "https://drive.google.com/file/d/1Uwrq2rfykYbDoa88Rp2wxNZaM-rQhFkt/view?usp=drivesdk"
 
-    private var cachedArticles: List<Article>? = null
-    private var lastArticlesTime: Long = 0
-
-    private const val TTL = 600_000L
+    // قاعدة بيانات مدمجة لقانون العاملين لضمان عملها فوراً عند جميع المستخدمين بدون انتظار أي سكربت خارجي
+    private val defaultWorkersArticles = listOf(
+        Article(
+            WORKERS_LAW_ID,
+            WORKERS_LAW_NAME,
+            "1",
+            "يقصد بالتعابير الآتية في معرض تطبيق أحكام هذا القانون المعاني المبينة إلى جانب كل منها:\n" +
+            "العامل: كل من يعين في إحدى الجهات العامة في وظيفة ملازمة لها.\n" +
+            "الجهة العامة: الوزارات والإدارات والهيئات العامة والمؤسسات والشركات والمنشآت العامة والبلديات والوحدات الإدارية المحلية.",
+            listOf("تعريف", "العامل", "الجهة العامة", "وظيفة"),
+            WORKERS_DRIVE_URL
+        ),
+        Article(
+            WORKERS_LAW_ID,
+            WORKERS_LAW_NAME,
+            "2",
+            "تسري أحكام هذا القانون على العاملين في الوزارات والإدارات والمؤسسات والشركات العامة والمنشآت التابعة لها والبلديات وسائر أجهزة الدولة.",
+            listOf("نطاق السريان", "الوزارات", "الإدارات", "أجهزة الدولة"),
+            WORKERS_DRIVE_URL
+        ),
+        Article(
+            WORKERS_LAW_ID,
+            WORKERS_LAW_NAME,
+            "5",
+            "يشترط فيمن يعين في إحدى وظائف الجهات العامة أن يكون:\n" +
+            "1- متمتعاً بالجنسية العربية السورية منذ خمس سنوات على الأقل.\n" +
+            "2- قد أتم الثامنة عشرة من عمره.\n" +
+            "3- خالياً من الأمراض والعاهات التي تمنعه من القيام بالوظيفة.\n" +
+            "4- غير محكوم بجناية أو جنحة شائنة.\n" +
+            "5- غير معزول أو مطرود من إحدى وظائف الجهات العامة.",
+            listOf("شروط التعيين", "الجنسية", "العمر", "الأمراض", "غير محكوم"),
+            WORKERS_DRIVE_URL
+        ),
+        Article(
+            WORKERS_LAW_ID,
+            WORKERS_LAW_NAME,
+            "10",
+            "تحدد بمرسوم بناء على اقتراح الوزير المختص الشروط الخاصة للتعيين في بعض الوظائف ذات الطبيعة الفنية أو التخصصية بما يتناسب مع طبيعة مهامها.",
+            listOf("مرسوم", "شروط خاصة", "وظائف فنية", "تخصصية"),
+            WORKERS_DRIVE_URL
+        )
+    )
 
     private fun normalizeDigits(s: String): String {
         val ar = "٠١٢٣٤٥٦٧٨٩"; val fa = "۰۱۲۳۴۵۶۷۸۹"; var r = s
@@ -59,58 +101,33 @@ object LawsRepository {
     }
 
     suspend fun loadLawsList(): List<LawMeta> {
-        val now = System.currentTimeMillis()
-        cachedLaws?.let { if (now - lastLawsTime < TTL) return it }
+        val baseList = mutableListOf(
+            LawMeta(WORKERS_LAW_ID, WORKERS_LAW_NAME, "قوانين إدارية ووظيفية", WORKERS_DRIVE_URL)
+        )
         return try {
             val db = FirebaseFirestore.getInstance()
             val snap = db.collection("laws").get().await()
-            val list = snap.documents.map {
-                val lawTitle = it.getString("name") 
-                    ?: it.getString("shortTitle") 
-                    ?: it.getString("title") 
-                    ?: it.id
-                val pdfUrl = it.getString("drivePdfUrl")
-                LawMeta(it.id, lawTitle, it.getString("category"), pdfUrl)
-            }.sortedBy { it.name }
-            cachedLaws = list
-            lastLawsTime = now
-            list
+            val remote = snap.documents.map {
+                val title = it.getString("name") ?: it.getString("shortTitle") ?: it.getString("title") ?: it.id
+                LawMeta(it.id, title, it.getString("category"), it.getString("drivePdfUrl"))
+            }
+            (baseList + remote).distinctBy { it.id }.sortedBy { it.name }
         } catch (_: Exception) {
-            cachedLaws ?: emptyList()
+            baseList
         }
     }
 
     private fun detectLawId(question: String, laws: List<LawMeta>): String? {
         val qn = normalizeArabic(question)
-        var best: LawMeta? = null
-        var bestScore = 0
-        for (law in laws) {
-            val nameWords = normalizeArabic(law.name)
-                .split(" ", "(", ")")
-                .filter { it.length >= 3 && !isStop(it) }
-            var score = 0
-            for (w in nameWords) {
-                if (qn.contains(w)) score++
-            }
-            if (score > bestScore) {
-                bestScore = score
-                best = law
-            }
+        if (qn.contains("عاملين") || qn.contains("موظف") || qn.contains("وظيف")) {
+            return WORKERS_LAW_ID
         }
-        return if (bestScore > 0) best?.id else null
-    }
-
-    private fun pickText(data: Map<String, Any?>): String? {
-        val keys = listOf("currentText", "effectiveText", "text", "content", "originalText")
-        for (k in keys) {
-            val v = data[k] as? String
-            if (!v.isNullOrBlank()) return v
+        for (law in laws) {
+            val nameWords = normalizeArabic(law.name).split(" ").filter { it.length >= 3 && !isStop(it) }
+            if (nameWords.any { qn.contains(it) }) return law.id
         }
         return null
     }
-
-    suspend fun searchRelevantLaws(question: String, limit: Int = 6): String =
-        searchRelevantLaws(question, null, limit)
 
     suspend fun searchRelevantLaws(
         question: String,
@@ -118,8 +135,6 @@ object LawsRepository {
         limit: Int = 6
     ): String {
         val laws = loadLawsList()
-        if (laws.isEmpty()) return "⚠️ لم يتم العثور على أي قوانين في قاعدة البيانات."
-
         val num = extractNumber(question)
         val targetLawId = selectedLawId ?: detectLawId(question, laws)
 
@@ -127,117 +142,76 @@ object LawsRepository {
             val res = fetchByNumber(num, targetLawId, laws)
             if (res != null) return res
             return if (targetLawId != null) {
-                val lawName = laws.find { it.id == targetLawId }?.name ?: targetLawId
-                "⚠️ المادة $num غير موجودة ضمن $lawName."
+                val name = laws.find { it.id == targetLawId }?.name ?: targetLawId
+                "⚠️ المادة $num غير موجودة ضمن $name."
             } else {
-                "⚠️ المادة $num غير موجودة في أي من القوانين المتاحة حاليًا."
+                "⚠️ المادة $num غير موجودة في القوانين المتاحة حاليًا."
             }
         }
 
         val all = loadAllArticles(laws)
-        if (all.isEmpty()) return "⚠️ لم يتم العثور على نتائج (قاعدة البيانات فارغة أو تعذر الاتصال)."
+        val qn = normalizeArabic(question)
+        val matched = all.filter { a ->
+            (targetLawId == null || a.lawId == targetLawId) &&
+            (normalizeArabic(a.text).contains(qn) || a.keywords.any { normalizeArabic(it).contains(qn) })
+        }.take(limit)
 
-        val kws = normalizeDigits(question)
-            .split(" ", "،", "؟", "?", ".", ",", "\n", "\t", ":", ";", "\"", "'")
-            .map { it.trim() }
-            .filter { it.length >= 2 && !isStop(it) }
-            .distinct()
-
-        if (kws.isEmpty()) return "⚠️ لم يتم التعرف على كلمات بحث واضحة بالسؤال."
-
-        val scored = all.mapNotNull { a ->
-            if (targetLawId != null && a.lawId != targetLawId) return@mapNotNull null
-            var s = 0
-            for (k in kws) {
-                if (a.text.contains(k, true)) s += 5
-                if (a.keywords.any { it.contains(k, true) }) s += 3
-                if (a.lawName.contains(k, true)) s += 2
-            }
-            if (s > 0) a to s else null
-        }.sortedByDescending { it.second }.take(limit)
-
-        if (scored.isEmpty()) {
-            return if (targetLawId != null) {
-                val lawName = laws.find { it.id == targetLawId }?.name ?: targetLawId
-                "⚠️ لم يتم العثور على نص مطابق لهذا السؤال ضمن $lawName."
-            } else {
-                "⚠️ لم يتم العثور على نص مطابق لهذا السؤال ضمن القوانين المتاحة حاليًا."
-            }
+        if (matched.isEmpty()) {
+            return "⚠️ لم يتم العثور على نص مطابق لهذا البحث."
         }
 
-        return scored.joinToString("\n\n───────────────────────\n\n") { (a, _) ->
-            val pdfSuffix = if (!a.drivePdfUrl.isNullOrEmpty()) "\n\n🔗 رابط القانون الأصلي (Drive PDF):\n${a.drivePdfUrl}" else ""
-            "📖 ${a.lawName} - المادة ${a.number}:\n\n${a.text}$pdfSuffix"
-        }
+        return matched.joinToString("\n\n───────────────────────\n\n") { formatArticleOutput(it) }
     }
 
     private suspend fun fetchByNumber(n: String, targetLawId: String?, laws: List<LawMeta>): String? {
-        val db = FirebaseFirestore.getInstance()
-        return try {
-            if (targetLawId != null) {
-                val lawMeta = laws.find { it.id == targetLawId } ?: return null
-                val doc = db.collection("laws").document(targetLawId)
-                    .collection("articles").document(n).get().await()
-                if (!doc.exists()) return null
-                val text = pickText(doc.data ?: emptyMap())
-                val pdfSuffix = if (!lawMeta.drivePdfUrl.isNullOrEmpty()) "\n\n🔗 رابط القانون الأصلي (Drive PDF):\n${lawMeta.drivePdfUrl}" else ""
-                return if (!text.isNullOrBlank()) "📖 ${lawMeta.name} - المادة $n:\n\n$text$pdfSuffix" else null
-            }
+        // فحص المواد المدمجة أولاً
+        val localMatches = defaultWorkersArticles.filter { it.number == n && (targetLawId == null || targetLawId == WORKERS_LAW_ID) }
+        if (localMatches.isNotEmpty()) {
+            return localMatches.joinToString("\n\n───────────────────────\n\n") { formatArticleOutput(it) }
+        }
 
-            val hits = mutableListOf<String>()
-            for (law in laws) {
-                val doc = db.collection("laws").document(law.id)
-                    .collection("articles").document(n).get().await()
+        // فحص Firestore
+        return try {
+            val db = FirebaseFirestore.getInstance()
+            if (targetLawId != null) {
+                val law = laws.find { it.id == targetLawId }
+                val doc = db.collection("laws").document(targetLawId).collection("articles").document(n).get().await()
                 if (doc.exists()) {
-                    val text = pickText(doc.data ?: emptyMap())
-                    if (!text.isNullOrBlank()) {
-                        val pdfSuffix = if (!law.drivePdfUrl.isNullOrEmpty()) "\n\n🔗 رابط القانون الأصلي (Drive PDF):\n${law.drivePdfUrl}" else ""
-                        hits.add("📖 ${law.name} - المادة $n:\n\n$text$pdfSuffix")
-                    }
-                }
+                    val txt = doc.getString("text") ?: doc.getString("content") ?: ""
+                    val pdf = doc.getString("drivePdfUrl") ?: law?.drivePdfUrl
+                    formatArticleOutput(Article(targetLawId, law?.name ?: targetLawId, n, txt, emptyList(), pdf))
+                } else null
+            } else {
+                null
             }
-            if (hits.isEmpty()) null else hits.joinToString("\n\n───────────────────────\n\n")
         } catch (_: Exception) {
             null
         }
     }
 
     private suspend fun loadAllArticles(laws: List<LawMeta>): List<Article> {
-        val now = System.currentTimeMillis()
-        cachedArticles?.let { if (now - lastArticlesTime < TTL) return it }
-        val res = mutableListOf<Article>()
+        val result = mutableListOf<Article>()
+        result.addAll(defaultWorkersArticles)
         try {
             val db = FirebaseFirestore.getInstance()
             for (law in laws) {
+                if (law.id == WORKERS_LAW_ID) continue
                 val snap = db.collection("laws").document(law.id).collection("articles").get().await()
                 for (doc in snap.documents) {
-                    val data = doc.data ?: continue
-                    val txt = pickText(data) ?: continue
-                    if (txt.isBlank()) continue
-                    val kws = (data["keywords"] as? List<*>)?.mapNotNull { it?.toString() } ?: emptyList()
-                    val numStr = (data["number"] as? Long)?.toString()
-                        ?: (data["number"] as? String)
-                        ?: doc.id
-                    res.add(Article(law.id, law.name, numStr, txt, kws, law.drivePdfUrl))
+                    val txt = doc.getString("text") ?: doc.getString("content") ?: continue
+                    result.add(Article(law.id, law.name, doc.id, txt, emptyList(), law.drivePdfUrl))
                 }
             }
-            cachedArticles = res
-            lastArticlesTime = now
         } catch (_: Exception) {}
-        return res
+        return result
     }
 
-    private fun isStop(w: String) = setOf(
-        "من", "في", "على", "عن", "إلى", "التي", "الذي", "هذا", "هذه", "ذلك", "تلك",
-        "أريد", "أحتاج", "أطلب", "نص", "رقم", "هو", "هي", "ما", "لا", "مع", "بين",
-        "عند", "حتى", "قد", "كان", "لكن", "أو", "ثم", "كل", "بعض", "مادة", "المادة",
-        "ماده", "الماده", "القانون", "قانون"
-    ).contains(w)
-
-    fun clearCache() {
-        cachedArticles = null
-        lastArticlesTime = 0
-        cachedLaws = null
-        lastLawsTime = 0
+    private fun formatArticleOutput(a: Article): String {
+        val linkBlock = if (!a.drivePdfUrl.isNullOrEmpty()) {
+            "\n\n📂 [تحميل وقراءة القانون الأصلي من Google Drive]:\n${a.drivePdfUrl}"
+        } else ""
+        return "📖 ${a.lawName} - المادة ${a.number}:\n\n${a.text}$linkBlock"
     }
+
+    private fun isStop(w: String) = setOf("من", "في", "على", "عن", "إلى", "قانون", "مادة", "رقم").contains(w)
 }
