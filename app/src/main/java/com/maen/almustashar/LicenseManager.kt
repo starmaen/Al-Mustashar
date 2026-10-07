@@ -10,43 +10,45 @@ object LicenseManager {
     private const val KEY_ACTIVATION = "license_key"
     private const val KEY_EXPIRY = "license_expiry"
 
-    // مفتاح رياضي داخلي للتوقيع المشفر
     private const val HMAC_KEY = "AlMustashar@SecureSign#2026!Key"
 
-    // تجزئات SHA-256 لبيانات المالك المشفرة
-    // starsyria2500@gmail.com
+    // SHA-256 HASHES
+    // starsyria2500@gmail.com -> 815b3c3c13867ea69f912c754d7e828469d7b43a9dc7bc6dcbc148332155c88b
     private const val OWNER_EMAIL_HASH = "815b3c3c13867ea69f912c754d7e828469d7b43a9dc7bc6dcbc148332155c88b"
-    // maen@maen@1741965
-    private const val OWNER_PASS_HASH = "6f52aa7bc034a7d4ecb91ee7bb25df00122e23908fbbdb5b550dd4171ffc6cf9"
+    // maen@maen@1741965 -> d39487c53e8fb55964fc5a953a55fb6b4655519db8b438ea2d708fc78cf7d91e
+    private const val OWNER_PASS_HASH = "d39487c53e8fb55964fc5a953a55fb6b4655519db8b438ea2d708fc78cf7d91e"
 
     fun sha256(input: String): String {
-        val bytes = MessageDigest.getInstance("SHA-256").digest(input.trim().toByteArray())
+        val bytes = MessageDigest.getInstance("SHA-256").digest(input.trim().toByteArray(Charsets.UTF_8))
         return bytes.joinToString("") { "%02x".format(it) }
     }
 
     fun verifyOwner(email: String, pass: String): Boolean {
-        return sha256(email.lowercase()) == OWNER_EMAIL_HASH && sha256(pass) == OWNER_PASS_HASH
+        val cleanEmail = email.trim().lowercase()
+        val cleanPass = pass.trim()
+        return sha256(cleanEmail) == OWNER_EMAIL_HASH && sha256(cleanPass) == OWNER_PASS_HASH
     }
 
     fun generateCode(deviceId: String, expiryDays: Int): String {
         val expiryTime = if (expiryDays == -1) 9999999999L else (System.currentTimeMillis() / 1000L) + (expiryDays * 86400L)
-        val payload = "${deviceId.uppercase()}:$expiryTime"
+        val payload = "${deviceId.trim().uppercase()}:$expiryTime"
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(HMAC_KEY.toByteArray(), "HmacSHA256"))
-        val sign = mac.doFinal(payload.toByteArray()).joinToString("") { "%02X".format(it) }.take(8)
+        mac.init(SecretKeySpec(HMAC_KEY.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        val sign = mac.doFinal(payload.toByteArray(Charsets.UTF_8)).joinToString("") { "%02X".format(it) }.take(8)
         return "MST-$sign-$expiryTime"
     }
 
     fun verifyAndSaveCode(context: Context, deviceId: String, code: String): Boolean {
-        val parts = code.trim().split("-")
+        val cleanCode = code.trim()
+        val parts = cleanCode.split("-")
         if (parts.size != 3 || parts[0] != "MST") return false
         val sign = parts[1]
         val expiryTime = parts[2].toLongOrNull() ?: return false
 
-        val payload = "${deviceId.uppercase()}:$expiryTime"
+        val payload = "${deviceId.trim().uppercase()}:$expiryTime"
         val mac = Mac.getInstance("HmacSHA256")
-        mac.init(SecretKeySpec(HMAC_KEY.toByteArray(), "HmacSHA256"))
-        val expectedSign = mac.doFinal(payload.toByteArray()).joinToString("") { "%02X".format(it) }.take(8)
+        mac.init(SecretKeySpec(HMAC_KEY.toByteArray(Charsets.UTF_8), "HmacSHA256"))
+        val expectedSign = mac.doFinal(payload.toByteArray(Charsets.UTF_8)).joinToString("") { "%02X".format(it) }.take(8)
 
         if (sign != expectedSign) return false
 
@@ -54,7 +56,7 @@ object LicenseManager {
         if (expiryTime != 9999999999L && now > expiryTime) return false
 
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        prefs.edit().putString(KEY_ACTIVATION, code).putLong(KEY_EXPIRY, expiryTime).apply()
+        prefs.edit().putString(KEY_ACTIVATION, cleanCode).putLong(KEY_EXPIRY, expiryTime).apply()
         return true
     }
 

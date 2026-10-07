@@ -82,47 +82,47 @@ class LicenseActivity : AppCompatActivity() {
     }
 
     private fun showOwnerAccessDialog() {
-        val dialogView = LayoutInflater.from(this).inflate(android.R.layout.activity_list_item, null)
-        val layout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(50, 40, 50, 20)
-        }
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_owner_login, null)
+        val etEmail = view.findViewById<EditText>(R.id.dialogOwnerEmail)
+        val etPass = view.findViewById<EditText>(R.id.dialogOwnerPass)
+        val btnStudio = view.findViewById<Button>(R.id.btnDialogOwnerStudio)
+        val btnUser = view.findViewById<Button>(R.id.btnDialogAppUser)
+        val btnCancel = view.findViewById<Button>(R.id.btnDialogCancel)
 
-        val etEmail = EditText(this).apply {
-            hint = "البريد الإلكتروني للمالك"
-            inputType = android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-        }
-        val etPass = EditText(this).apply {
-            hint = "كلمة المرور"
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .setCancelable(false)
+            .create()
 
-        layout.addView(etEmail)
-        layout.addView(etPass)
+        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
 
-        AlertDialog.Builder(this)
-            .setTitle("بوابة المالك")
-            .setView(layout)
-            .setPositiveButton("دخول لغرفة المالك") { _, _ ->
-                verifyAndProceed(etEmail.text.toString(), etPass.text.toString(), targetOwner = true)
-            }
-            .setNeutralButton("دخول كمستخدم") { _, _ ->
-                verifyAndProceed(etEmail.text.toString(), etPass.text.toString(), targetOwner = false)
-            }
-            .setNegativeButton("إلغاء", null)
-            .show()
-    }
-
-    private fun verifyAndProceed(email: String, pass: String, targetOwner: Boolean) {
-        if (LicenseManager.verifyOwner(email, pass)) {
-            if (targetOwner) {
+        btnStudio.setOnClickListener {
+            val email = etEmail.text.toString()
+            val pass = etPass.text.toString()
+            if (LicenseManager.verifyOwner(email, pass)) {
+                dialog.dismiss()
                 startActivity(Intent(this, OwnerPanelActivity::class.java))
             } else {
-                goToMain()
+                Toast.makeText(this, "بيانات الاعتماد غير صحيحة", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            Toast.makeText(this, "بيانات الاعتماد غير صحيحة", Toast.LENGTH_SHORT).show()
         }
+
+        btnUser.setOnClickListener {
+            val email = etEmail.text.toString()
+            val pass = etPass.text.toString()
+            if (LicenseManager.verifyOwner(email, pass)) {
+                dialog.dismiss()
+                goToMain()
+            } else {
+                Toast.makeText(this, "بيانات الاعتماد غير صحيحة", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        dialog.show()
     }
 
     private fun goToMain() {
