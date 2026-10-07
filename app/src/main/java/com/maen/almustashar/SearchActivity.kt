@@ -115,50 +115,52 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-        findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
+                findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
             val text = tvSearchResult.text.toString()
-            var rawTarget: String? = null
+            val folderUrl = "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+            var targetUrl: String? = null
 
+            // أ) البحث عن رابط Drive في النص المعروض
             val marker = "https://drive.google.com/"
             val sIdx = text.indexOf(marker)
             if (sIdx != -1) {
                 val sub = text.substring(sIdx)
                 val eIdx = sub.indexOfFirst { it.isWhitespace() }
-                rawTarget = if (eIdx != -1) sub.substring(0, eIdx) else sub
+                targetUrl = if (eIdx != -1) sub.substring(0, eIdx) else sub
             }
 
-            if (rawTarget.isNullOrBlank()) {
+            // ب) البحث عبر القانون المختار في القائمة
+            if (targetUrl.isNullOrBlank()) {
                 val selectedId = (spinnerLaw.selectedItem as? LawChoice)?.id
                 if (!selectedId.isNullOrBlank()) {
-                    rawTarget = cachedLaws.find { it.id == selectedId }?.drivePdfUrl
+                    targetUrl = cachedLaws.find { it.id == selectedId }?.drivePdfUrl
                 }
             }
 
-            if (rawTarget.isNullOrBlank()) {
+            // ج) البحث بمطابقة اسم القانون الظاهر في النتيجة
+            if (targetUrl.isNullOrBlank()) {
                 for (law in cachedLaws) {
                     if (text.contains(law.name, ignoreCase = true) || text.contains(law.id, ignoreCase = true)) {
                         if (!law.drivePdfUrl.isNullOrBlank()) {
-                            rawTarget = law.drivePdfUrl
+                            targetUrl = law.drivePdfUrl
                             break
                         }
                     }
                 }
             }
 
-            if (!rawTarget.isNullOrBlank()) {
-                val finalUrl = if (rawTarget.startsWith("http://") || rawTarget.startsWith("https://")) {
-                    rawTarget
-                } else {
-                    "https://drive.google.com/file/d/" + rawTarget + "/view?usp=drivesdk"
-                }
-                try {
-                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(finalUrl.trim()))
-                    startActivity(browserIntent)
-                } catch (e: Exception) {
-                    Toast.makeText(this, "تعذر فتح الرابط: " + e.message, Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                Toast.makeText(this, "ملف الـ PDF غير مسجل لهذا القانون في قاعدة البيانات حالياً", Toast.LENGTH_SHORT).show()
+            // د) إذا لم يكن هناك رابط مخصص، فتح مجلد أرشيف القوانين على Drive
+            val finalUrl = when {
+                targetUrl.isNullOrBlank() -> folderUrl
+                targetUrl.startsWith("http://") || targetUrl.startsWith("https://") -> targetUrl
+                else -> "https://drive.google.com/file/d/" + targetUrl + "/view?usp=drivesdk"
+            }
+
+            try {
+                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(finalUrl.trim()))
+                startActivity(browserIntent)
+            } catch (e: Exception) {
+                Toast.makeText(this, "تعذر فتح الرابط: " + e.message, Toast.LENGTH_SHORT).show()
             }
         }
     }

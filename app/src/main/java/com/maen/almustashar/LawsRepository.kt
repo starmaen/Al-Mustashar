@@ -99,48 +99,52 @@ object LawsRepository {
         return null
     }
 
-    suspend fun searchRelevantLaws(question: String, selectedLawId: String?, limit: Int = 6): String {
+    suspend fun searchRelevantLaws(rawQuery: String, targetLawId: String? = null): String {
+        val query = rawQuery.trim()
         val laws = loadLawsList()
-        if (laws.isEmpty()) return "⚠️ لم يتم العثور على أي قوانين في قاعدة البيانات السحابية."
 
-        val num = extractNumber(question)
-        val targetLawId = selectedLawId ?: detectLawId(question, laws)
-
-        if (num != null) {
-            val res = fetchByNumber(num, targetLawId, laws)
-            if (res != null) return res
-            return if (targetLawId != null) {
-                val lawName = laws.find { it.id == targetLawId }?.name ?: targetLawId
-                "⚠️ المادة $num غير موجودة ضمن $lawName."
-            } else {
-                "⚠️ المادة $num غير موجودة في أي من القوانين المتاحة حاليًا."
+        // 1. حالة طلب القانون كاملا (نص فارغ مع تحديد قانون، أو عبارة كاملا/كامل)
+        val isFullRequest = query.isEmpty() || query.contains("كامل") || query.contains("كاملا")
+        if (targetLawId != null && isFullRequest) {
+            val allArticles = loadAllArticles().filter { it.lawId == targetLawId }
+                .sortedBy { it.number.toIntOrNull() ?: 9999 }
+            if (allArticles.isNotEmpty()) {
+                return allArticles.joinToString("\n\n───────────────────────\n\n") { a ->
+                    formatOutput(a.lawName, a.number, a.text, a.drivePdfUrl)
+                }
             }
         }
 
-        // بحث بالكلمات المفتاحية من Firestore مباشرة
-        val all = loadAllArticles(laws)
-        if (all.isEmpty()) return "⚠️ لم يتم العثور على نتائج في قاعدة البيانات."
+        // 2. فحص استخراج رقم المادة من النص
+        val digits = query.filter { it.isDigit() }
+        if (digits.isNotEmpty() && (query.length <= 5 || query.startsWith("مادة") || query.startsWith("المادة"))) {
+            val res = fetchByNumber(digits, targetLawId, laws)
+            if (!res.isNullOrBlank()) return res
+        }
 
-        val kws = normalizeDigits(question)
-            .split(" ", "،", "؟", "?", ".", ",", "\n", "\t", ":", ";")
+        // 3. البحث السياقي والموضوعي (في النصوص والكلمات المفتاحية)
+        val cleanTerms = query.split(" ")
             .map { it.trim() }
-            .filter { it.length >= 2 && !isStop(it) }
+            .filter { it.length > 1 && !it.all { ch -> ch.isDigit() } }
 
-        val scored = all.mapNotNull { a ->
-            if (targetLawId != null && a.lawId != targetLawId) return@mapNotNull null
-            var s = 0
-            for (k in kws) {
-                if (a.text.contains(k, true)) s += 5
-                if (a.keywords.any { it.contains(k, true) }) s += 3
+        val allArticles = loadAllArticles()
+        val pool = if (targetLawId != null) allArticles.filter { it.lawId == targetLawId } else allArticles
+
+        val scored = pool.mapNotNull { a ->
+            var score = 0
+            for (term in cleanTerms) {
+                if (a.text.contains(term, ignoreCase = true)) score += 3
+                if (a.keywords.any { it.contains(term, ignoreCase = true) }) score += 5
+                if (a.lawName.contains(term, ignoreCase = true)) score += 2
             }
-            if (s > 0) a to s else null
-        }.sortedByDescending { it.second }.take(limit)
+            if (score > 0) Pair(a, score) else null
+        }.sortedByDescending { it.second }
 
         if (scored.isEmpty()) {
             return "⚠️ لم يتم العثور على نص مطابق لهذا البحث."
         }
 
-        return scored.joinToString("\n\n───────────────────────\n\n") { (a, _) ->
+        return scored.take(25).joinToString("\n\n───────────────────────\n\n") { (a, _) ->
             formatOutput(a.lawName, a.number, a.text, a.drivePdfUrl)
         }
     }

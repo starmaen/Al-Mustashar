@@ -150,10 +150,16 @@
         <Button
             android:id="@+id/btnOpenPdf"
             android:layout_width="0dp"
-            android:layout_height="46dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
             android:layout_weight="1"
             android:backgroundTint="#0284C7"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
             android:text="📄 الأصل PDF"
+            android:textSize="12sp"
             android:textColor="#FFFFFF" />
     </LinearLayout>
 
