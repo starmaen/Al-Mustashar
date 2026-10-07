@@ -123,6 +123,7 @@ class SearchActivity : AppCompatActivity() {
                 if (endIndex != -1) sub.substring(0, endIndex) else sub
             } else null
 
+            if (!pdfUrl.isNullOrBlank()) {
                 try {
                     val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(pdfUrl))
                     startActivity(browserIntent)
@@ -130,9 +131,6 @@ class SearchActivity : AppCompatActivity() {
                     Toast.makeText(this, "تعذر فتح الرابط: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(this, "ملف الـ PDF غير متوفر لهذه المادة حالياً", Toast.LENGTH_SHORT).show()
-            }
-        } else {
                 Toast.makeText(this, "ملف الـ PDF غير متوفر لهذه المادة حالياً", Toast.LENGTH_SHORT).show()
             }
         }
