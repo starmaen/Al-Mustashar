@@ -1,10 +1,10 @@
 package com.maen.almustashar
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -20,27 +20,37 @@ class AccountActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         val user = auth.currentUser
 
-        val tvEmail = findViewById<TextView>(R.id.tvAccountEmail)
+        val tvName = findViewById<TextView>(R.id.tvName)
+        val tvEmail = findViewById<TextView>(R.id.tvEmail)
         val btnLogout = findViewById<Button>(R.id.btnLogout)
-        val btnResetPass = findViewById<Button>(R.id.btnResetPassword)
 
         if (user != null) {
             tvEmail?.text = user.email
+            tvName?.text = user.displayName ?: "مستخدم مسجل"
         } else {
             tvEmail?.text = "غير مسجل الدخول"
+            tvName?.text = "زائر"
         }
 
-        btnResetPass?.setOnClickListener {
-            val email = user?.email
-            if (!email.isNullOrEmpty()) {
-                auth.sendPasswordResetEmail(email)
-                    .addOnSuccessListener {
-                        Toast.makeText(this, "تم إرسال رابط إعادة تعيين كلمة المرور إلى بريدك", Toast.LENGTH_LONG).show()
-                    }
-                    .addOnFailureListener { e ->
-                        Toast.makeText(this, "فشل الإرسال: ${e.message}", Toast.LENGTH_SHORT).show()
-                    }
+        findViewById<android.view.View>(R.id.rowEmail)?.setOnClickListener {
+            val intent = Intent(Intent.ACTION_SENDTO).apply {
+                data = Uri.parse("mailto:starsyria2500@gmail.com")
             }
+            try { startActivity(intent) } catch (_: Exception) {}
+        }
+
+        findViewById<android.view.View>(R.id.rowWhatsApp)?.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("https://wa.me/963938466549")
+            }
+            try { startActivity(intent) } catch (_: Exception) {}
+        }
+
+        findViewById<android.view.View>(R.id.rowTelegram)?.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                data = Uri.parse("https://t.me/maenstar")
+            }
+            try { startActivity(intent) } catch (_: Exception) {}
         }
 
         btnLogout?.setOnClickListener {
