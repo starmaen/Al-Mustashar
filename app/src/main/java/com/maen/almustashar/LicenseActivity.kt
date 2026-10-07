@@ -1,5 +1,6 @@
 package com.maen.almustashar
 
+import android.content.Intent
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -13,17 +14,16 @@ class LicenseActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_license)
-        val tvId = findViewById<android.widget.TextView>(R.id.tvDeviceId)
-        findViewById<android.widget.Button>(R.id.btnCopyDeviceId).setOnClickListener {
-            val fullText = tvId.text.toString()
-            val idOnly = if (fullText.contains(":")) fullText.substringAfterLast(":").trim() else fullText.trim()
-            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("device_id", idOnly))
-            android.widget.Toast.makeText(this, "تم نسخ معرف الجهاز", android.widget.Toast.LENGTH_SHORT).show()
-        }
 
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        findViewById<TextView>(R.id.tvDeviceId).text = "معرّف جهازك: " + deviceId
+        val tvId = findViewById<TextView>(R.id.tvDeviceId)
+        tvId.text = "معرّف جهازك: " + deviceId
+
+        findViewById<Button>(R.id.btnCopyDeviceId).setOnClickListener {
+            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("device_id", deviceId))
+            Toast.makeText(this, "تم نسخ معرف الجهاز", Toast.LENGTH_SHORT).show()
+        }
 
         var ownerTapsLogo = 0
         var lastTapLogo = 0L
@@ -38,13 +38,20 @@ class LicenseActivity : AppCompatActivity() {
             }
         }
 
-
         findViewById<Button>(R.id.btnActivate).setOnClickListener {
             val code = findViewById<EditText>(R.id.etActivationCode).text.toString().trim()
             if (code.isEmpty()) {
                 Toast.makeText(this, "الرجاء إدخال كود التفعيل", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "سيتم ربط التفعيل الفعلي بالخطوة القادمة", Toast.LENGTH_SHORT).show()
+                LicenseManager.activateWithCode(deviceId, code) { success, message ->
+                    runOnUiThread {
+                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                        if (success) {
+                            startActivity(Intent(this, LoginActivity::class.java))
+                            finish()
+                        }
+                    }
+                }
             }
         }
     }
@@ -53,10 +60,10 @@ class LicenseActivity : AppCompatActivity() {
         val layout = android.widget.LinearLayout(this)
         layout.orientation = android.widget.LinearLayout.VERTICAL
         layout.setPadding(50, 40, 50, 10)
-        val emailInput = android.widget.EditText(this)
+        val emailInput = EditText(this)
         emailInput.hint = "البريد الإلكتروني"
         layout.addView(emailInput)
-        val passInput = android.widget.EditText(this)
+        val passInput = EditText(this)
         passInput.hint = "الرقم السري"
         passInput.inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
         layout.addView(passInput)
@@ -71,22 +78,18 @@ class LicenseActivity : AppCompatActivity() {
                         if (success) {
                             android.app.AlertDialog.Builder(this)
                                 .setTitle("اختر الإجراء")
-                                .setItems(arrayOf("دخول كمستخدم عادي", "حجرة المالك (توليد الأكواد)")) { _, which ->
+                                .setItems(arrayOf("الدخول كمستخدم", "الدخول كمالك")) { _, which ->
                                     if (which == 0) {
-                                        getSharedPreferences("owner_prefs", MODE_PRIVATE).edit().putBoolean("ownerVerified", true).apply()
-                                        val intent = android.content.Intent(this, MainActivity::class.java)
-                                        intent.putExtra("ownerBypass", true)
-                                        intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK
-                                        startActivity(intent)
+                                        startActivity(Intent(this, LoginActivity::class.java))
                                         finish()
                                     } else {
-                                        startActivity(android.content.Intent(this, OwnerPanelActivity::class.java))
+                                        startActivity(Intent(this, OwnerPanelActivity::class.java))
                                     }
                                 }
                                 .setCancelable(false)
                                 .show()
                         } else {
-                            android.widget.Toast.makeText(this, "بيانات غير صحيحة", android.widget.Toast.LENGTH_SHORT).show()
+                            Toast.makeText(this, "بيانات غير صحيحة", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
@@ -94,5 +97,4 @@ class LicenseActivity : AppCompatActivity() {
             .setNegativeButton("إلغاء", null)
             .show()
     }
-
 }
