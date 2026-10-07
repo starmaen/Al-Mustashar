@@ -1,7 +1,6 @@
 package com.maen.almustashar
 
 import android.content.Context
-import java.security.MessageDigest
 import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
@@ -12,7 +11,6 @@ object LicenseManager {
 
     private const val HMAC_KEY = "AlMustashar@SecureSign#2026!Key"
 
-    // بيانات المالك المعتمدة
     private const val OWNER_EMAIL = "starsyria2500@gmail.com"
     private const val OWNER_PASS = "maen@maen@1741965"
 
@@ -29,6 +27,11 @@ object LicenseManager {
         mac.init(SecretKeySpec(HMAC_KEY.toByteArray(Charsets.UTF_8), "HmacSHA256"))
         val sign = mac.doFinal(payload.toByteArray(Charsets.UTF_8)).joinToString("") { "%02X".format(it) }.take(8)
         return "MST-$sign-$expiryTime"
+    }
+
+    fun grantOwnerDeviceLicense(context: Context, deviceId: String) {
+        val permanentCode = generateCode(deviceId, -1)
+        verifyAndSaveCode(context, deviceId, permanentCode)
     }
 
     fun verifyAndSaveCode(context: Context, deviceId: String, code: String): Boolean {
@@ -56,7 +59,6 @@ object LicenseManager {
     fun isLicensed(context: Context): Boolean {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val code = prefs.getString(KEY_ACTIVATION, null) ?: return false
-        val devId = DeviceUtils.getDeviceId(context)
         val parts = code.split("-")
         if (parts.size != 3) return false
         val expiryTime = parts[2].toLongOrNull() ?: return false

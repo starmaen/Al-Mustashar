@@ -5,6 +5,8 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.text.method.LinkMovementMethod
+import android.text.util.Linkify
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
@@ -50,6 +52,11 @@ class SearchActivity : AppCompatActivity() {
         tvSearchResult = findViewById(R.id.tvSearchResult)
         searchActions = findViewById(R.id.searchActions)
 
+        // تفعيل النقر المباشر على روابط الإنترنت داخل نص المادة وضبط ألوانها
+        tvSearchResult.movementMethod = LinkMovementMethod.getInstance()
+        tvSearchResult.setTextColor(android.graphics.Color.parseColor("#0F2042"))
+        tvSearchResult.setLinkTextColor(android.graphics.Color.parseColor("#1565C0"))
+
         spinnerLaw.adapter = ArrayAdapter(
             this,
             android.R.layout.simple_spinner_item,
@@ -58,7 +65,6 @@ class SearchActivity : AppCompatActivity() {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         }
 
-        // جلب قائمة القوانين الفعلية من قاعدة البيانات ديناميكياً
         lifecycleScope.launch {
             try {
                 val laws = LawsRepository.loadLawsList()
@@ -72,9 +78,7 @@ class SearchActivity : AppCompatActivity() {
                 ).apply {
                     setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
                 }
-            } catch (_: Exception) {
-                // يبقى الخيار الافتراضي "كل القوانين" عند فشل الجلب
-            }
+            } catch (_: Exception) {}
         }
 
         btnDoSearch.setOnClickListener { performSearch() }
@@ -93,7 +97,7 @@ class SearchActivity : AppCompatActivity() {
             if (text.isNotEmpty()) {
                 val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cb.setPrimaryClip(ClipData.newPlainText("Article", text))
-                Toast.makeText(this, "تم نسخ نص المادة", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "تم نسخ نص المادة ورابط القانون", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -129,6 +133,7 @@ class SearchActivity : AppCompatActivity() {
 
                 if (result.isNotBlank() && !result.startsWith("⚠️")) {
                     tvSearchResult.text = result
+                    Linkify.addLinks(tvSearchResult, Linkify.WEB_URLS)
                     scrollResults.visibility = View.VISIBLE
                     searchActions.visibility = View.VISIBLE
                 } else {

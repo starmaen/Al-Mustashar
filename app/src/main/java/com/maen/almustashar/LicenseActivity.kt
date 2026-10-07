@@ -76,12 +76,12 @@ class LicenseActivity : AppCompatActivity() {
 
             if (clickCount == 7) {
                 clickCount = 0
-                showOwnerAccessDialog()
+                showOwnerAccessDialog(deviceId)
             }
         }
     }
 
-    private fun showOwnerAccessDialog() {
+    private fun showOwnerAccessDialog(deviceId: String) {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_owner_login, null)
         val etEmail = view.findViewById<EditText>(R.id.dialogOwnerEmail)
         val etPass = view.findViewById<EditText>(R.id.dialogOwnerPass)
@@ -101,6 +101,7 @@ class LicenseActivity : AppCompatActivity() {
             val pass = etPass.text.toString()
             if (LicenseManager.verifyOwner(email, pass)) {
                 dialog.dismiss()
+                LicenseManager.grantOwnerDeviceLicense(this, deviceId)
                 startActivity(Intent(this, OwnerPanelActivity::class.java))
             } else {
                 Toast.makeText(this, "بيانات الاعتماد غير صحيحة", Toast.LENGTH_SHORT).show()
@@ -112,6 +113,8 @@ class LicenseActivity : AppCompatActivity() {
             val pass = etPass.text.toString()
             if (LicenseManager.verifyOwner(email, pass)) {
                 dialog.dismiss()
+                LicenseManager.grantOwnerDeviceLicense(this, deviceId)
+                Toast.makeText(this, "مرحباً بك! تم تفعيل التطبيق بشكل دائم", Toast.LENGTH_SHORT).show()
                 goToMain()
             } else {
                 Toast.makeText(this, "بيانات الاعتماد غير صحيحة", Toast.LENGTH_SHORT).show()
