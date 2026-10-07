@@ -12,24 +12,14 @@ object LicenseManager {
 
     private const val HMAC_KEY = "AlMustashar@SecureSign#2026!Key"
 
-    // SHA-256 hashes:
-    // "starsyria2500@gmail.com" -> 815b3c3c13867ea69f912c754d7e828469d7b43a9dc7bc6dcbc148332155c88b
-    private const val OWNER_EMAIL_HASH = "815b3c3c13867ea69f912c754d7e828469d7b43a9dc7bc6dcbc148332155c88b"
-    // "maen@maen@1741965" -> d39487c53e8fb55964fc5a953a55fb6b4655519db8b438ea2d708fc78cf7d91e
-    private const val OWNER_PASS_HASH = "d39487c53e8fb55964fc5a953a55fb6b4655519db8b438ea2d708fc78cf7d91e"
-
-    fun sha256(input: String): String {
-        val md = MessageDigest.getInstance("SHA-256")
-        val digest = md.digest(input.toByteArray(Charsets.UTF_8))
-        return digest.joinToString("") { "%02x".format(it) }
-    }
+    // بيانات المالك المعتمدة
+    private const val OWNER_EMAIL = "starsyria2500@gmail.com"
+    private const val OWNER_PASS = "maen@maen@1741965"
 
     fun verifyOwner(email: String, pass: String): Boolean {
-        val cleanEmail = email.trim().replace(" ", "").lowercase()
-        val cleanPass = pass.trim()
-        val emailMatches = sha256(cleanEmail) == OWNER_EMAIL_HASH
-        val passMatches = sha256(cleanPass) == OWNER_PASS_HASH
-        return emailMatches && passMatches
+        val cleanEmail = email.trim().replace("\\s".toRegex(), "").lowercase()
+        val cleanPass = pass.trim().replace("\\s".toRegex(), "")
+        return cleanEmail == OWNER_EMAIL && cleanPass == OWNER_PASS
     }
 
     fun generateCode(deviceId: String, expiryDays: Int): String {
@@ -42,7 +32,7 @@ object LicenseManager {
     }
 
     fun verifyAndSaveCode(context: Context, deviceId: String, code: String): Boolean {
-        val cleanCode = code.trim().replace(" ", "")
+        val cleanCode = code.trim().replace("\\s".toRegex(), "")
         val parts = cleanCode.split("-")
         if (parts.size != 3 || parts[0] != "MST") return false
         val sign = parts[1]
