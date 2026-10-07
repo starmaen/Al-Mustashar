@@ -106,7 +106,7 @@ object LawsRepository {
         // 1. حالة طلب القانون كاملا (نص فارغ مع تحديد قانون، أو عبارة كاملا/كامل)
         val isFullRequest = query.isEmpty() || query.contains("كامل") || query.contains("كاملا")
         if (targetLawId != null && isFullRequest) {
-            val allArticles = loadAllArticles().filter { it.lawId == targetLawId }
+            val allArticles = loadAllArticles(laws).filter { it.lawId == targetLawId }
                 .sortedBy { it.number.toIntOrNull() ?: 9999 }
             if (allArticles.isNotEmpty()) {
                 return allArticles.joinToString("\n\n───────────────────────\n\n") { a ->
@@ -127,7 +127,7 @@ object LawsRepository {
             .map { it.trim() }
             .filter { it.length > 1 && !it.all { ch -> ch.isDigit() } }
 
-        val allArticles = loadAllArticles()
+        val allArticles = loadAllArticles(laws)
         val pool = if (targetLawId != null) allArticles.filter { it.lawId == targetLawId } else allArticles
 
         val scored = pool.mapNotNull { a ->
