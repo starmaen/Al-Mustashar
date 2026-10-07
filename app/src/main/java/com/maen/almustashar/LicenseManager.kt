@@ -35,7 +35,6 @@ object LicenseManager {
             .addOnFailureListener { onResult(false) }
     }
 
-
     fun generateCode(): String {
         val chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
         val sb = StringBuilder()
@@ -64,4 +63,25 @@ object LicenseManager {
             .addOnFailureListener { onResult(false, "فشل الإنشاء: " + (it.message ?: "")) }
     }
 
+    fun activateWithCode(deviceId: String, code: String, onResult: (Boolean, String) -> Unit) {
+        db.collection("deviceLicenses").document(deviceId).get()
+            .addOnSuccessListener { doc ->
+                if (!doc.exists()) {
+                    onResult(false, "لا يوجد ترخيص مسجل لهذا الجهاز")
+                    return@addOnSuccessListener
+                }
+                val storedCode = doc.getString("code") ?: ""
+                val active = doc.getBoolean("active") ?: false
+                val expiresAt = doc.getLong("expiresAt") ?: -1L
+                val notExpired = expiresAt == -1L || expiresAt > System.currentTimeMillis()
+                if (active && notExpired && code.equals(storedCode, ignoreCase = true)) {
+                    onResult(true, "تم التفعيل بنجاح")
+                } else if (!notExpired) {
+                    onResult(false, "انتهت صلاحية الترخيص")
+                } else {
+                    onResult(false, "كود التفعيل غير صحيح")
+                }
+            }
+            .addOnFailureListener { onResult(false, "خطأ بالاتصال: " + (it.message ?: "")) }
+    }
 }
