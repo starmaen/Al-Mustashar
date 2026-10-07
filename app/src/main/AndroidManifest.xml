@@ -31,9 +31,6 @@
         <activity android:name=".CaseEditActivity" android:exported="false" />
         <activity android:name=".DecisionsActivity" android:exported="false" />
         <activity android:name=".DecisionEditActivity" android:exported="false" />
-
-        <activity android:name=".LicenseActivity" android:exported="false" />
-    <activity android:name=".OwnerPanelActivity" android:exported="false" />
-</application>
+    </application>
 
 </manifest>
