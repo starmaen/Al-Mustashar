@@ -119,11 +119,14 @@ class SearchActivity : AppCompatActivity() {
             val text = tvSearchResult.text.toString()
             var rawTarget: String? = null
 
-            // أ) البحث عن أي رابط drive داخل النص
-            val driveRegex = Regex("https://drive\.google\.com/[^\s]+")
-            rawTarget = driveRegex.find(text)?.value
+            val marker = "https://drive.google.com/"
+            val sIdx = text.indexOf(marker)
+            if (sIdx != -1) {
+                val sub = text.substring(sIdx)
+                val eIdx = sub.indexOfFirst { it.isWhitespace() }
+                rawTarget = if (eIdx != -1) sub.substring(0, eIdx) else sub
+            }
 
-            // ب) إذا لم يتوفر، المطابقة مع القانون المحدد في القائمة
             if (rawTarget.isNullOrBlank()) {
                 val selectedId = (spinnerLaw.selectedItem as? LawChoice)?.id
                 if (!selectedId.isNullOrBlank()) {
@@ -131,7 +134,6 @@ class SearchActivity : AppCompatActivity() {
                 }
             }
 
-            // ج) إذا كان البحث في كل القوانين، المطابقة مع اسم القانون الظاهر في النتيجة
             if (rawTarget.isNullOrBlank()) {
                 for (law in cachedLaws) {
                     if (text.contains(law.name, ignoreCase = true) || text.contains(law.id, ignoreCase = true)) {
@@ -144,15 +146,16 @@ class SearchActivity : AppCompatActivity() {
             }
 
             if (!rawTarget.isNullOrBlank()) {
-                val finalUrl = when {
-                    rawTarget.startsWith("http://") || rawTarget.startsWith("https://") -> rawTarget
-                    else -> "https://drive.google.com/file/d/$rawTarget/view?usp=drivesdk"
+                val finalUrl = if (rawTarget.startsWith("http://") || rawTarget.startsWith("https://")) {
+                    rawTarget
+                } else {
+                    "https://drive.google.com/file/d/" + rawTarget + "/view?usp=drivesdk"
                 }
                 try {
                     val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(finalUrl.trim()))
                     startActivity(browserIntent)
                 } catch (e: Exception) {
-                    Toast.makeText(this, "تعذر فتح الرابط: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "تعذر فتح الرابط: " + e.message, Toast.LENGTH_SHORT).show()
                 }
             } else {
                 Toast.makeText(this, "ملف الـ PDF غير مسجل لهذا القانون في قاعدة البيانات حالياً", Toast.LENGTH_SHORT).show()
