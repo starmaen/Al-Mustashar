@@ -5,14 +5,20 @@ import kotlinx.coroutines.tasks.await
 
 object LawsRepository {
 
-    data class LawMeta(val id: String, val name: String, val category: String?)
+    data class LawMeta(
+        val id: String,
+        val name: String,
+        val category: String?,
+        val drivePdfUrl: String? = null
+    )
 
     data class Article(
         val lawId: String,
         val lawName: String,
         val number: String,
         val text: String,
-        val keywords: List<String> = emptyList()
+        val keywords: List<String> = emptyList(),
+        val drivePdfUrl: String? = null
     )
 
     private var cachedLaws: List<LawMeta>? = null
@@ -52,7 +58,6 @@ object LawsRepository {
         return null
     }
 
-    // جلب قائمة القوانين ديناميكياً من قاعدة البيانات (أي قانون جديد يُضاف يظهر تلقائياً)
     suspend fun loadLawsList(): List<LawMeta> {
         val now = System.currentTimeMillis()
         cachedLaws?.let { if (now - lastLawsTime < TTL) return it }
@@ -60,7 +65,12 @@ object LawsRepository {
             val db = FirebaseFirestore.getInstance()
             val snap = db.collection("laws").get().await()
             val list = snap.documents.map {
-                LawMeta(it.id, it.getString("name") ?: it.id, it.getString("category"))
+                val lawTitle = it.getString("name") 
+                    ?: it.getString("shortTitle") 
+                    ?: it.getString("title") 
+                    ?: it.id
+                val pdfUrl = it.getString("drivePdfUrl")
+                LawMeta(it.id, lawTitle, it.getString("category"), pdfUrl)
             }.sortedBy { it.name }
             cachedLaws = list
             lastLawsTime = now
@@ -70,7 +80,6 @@ object LawsRepository {
         }
     }
 
-    // تحديد القانون من نص السؤال الحر عبر مطابقة اسم القانون الفعلي (وليس قائمة ثابتة)
     private fun detectLawId(question: String, laws: List<LawMeta>): String? {
         val qn = normalizeArabic(question)
         var best: LawMeta? = null
@@ -91,7 +100,6 @@ object LawsRepository {
         return if (bestScore > 0) best?.id else null
     }
 
-    // استخراج نص المادة من أي حقل موجود فعلياً، مع أولوية للنص الحالي المعدّل
     private fun pickText(data: Map<String, Any?>): String? {
         val keys = listOf("currentText", "effectiveText", "text", "content", "originalText")
         for (k in keys) {
@@ -101,7 +109,6 @@ object LawsRepository {
         return null
     }
 
-    // التوافق مع أي استدعاء قديم للدالة بدون تحديد قانون
     suspend fun searchRelevantLaws(question: String, limit: Int = 6): String =
         searchRelevantLaws(question, null, limit)
 
@@ -158,7 +165,10 @@ object LawsRepository {
             }
         }
 
-        return scored.joinToString("\n\n") { (a, _) -> "📖 ${a.lawName} - المادة ${a.number}:\n${a.text}" }
+        return scored.joinToString("\n\n───────────────────────\n\n") { (a, _) ->
+            val pdfSuffix = if (!a.drivePdfUrl.isNullOrEmpty()) "\n\n🔗 رابط القانون الأصلي (Drive PDF):\n${a.drivePdfUrl}" else ""
+            "📖 ${a.lawName} - المادة ${a.number}:\n\n${a.text}$pdfSuffix"
+        }
     }
 
     private suspend fun fetchByNumber(n: String, targetLawId: String?, laws: List<LawMeta>): String? {
@@ -170,7 +180,8 @@ object LawsRepository {
                     .collection("articles").document(n).get().await()
                 if (!doc.exists()) return null
                 val text = pickText(doc.data ?: emptyMap())
-                return if (!text.isNullOrBlank()) "📖 ${lawMeta.name} - المادة $n:\n\n$text" else null
+                val pdfSuffix = if (!lawMeta.drivePdfUrl.isNullOrEmpty()) "\n\n🔗 رابط القانون الأصلي (Drive PDF):\n${lawMeta.drivePdfUrl}" else ""
+                return if (!text.isNullOrBlank()) "📖 ${lawMeta.name} - المادة $n:\n\n$text$pdfSuffix" else null
             }
 
             val hits = mutableListOf<String>()
@@ -180,7 +191,8 @@ object LawsRepository {
                 if (doc.exists()) {
                     val text = pickText(doc.data ?: emptyMap())
                     if (!text.isNullOrBlank()) {
-                        hits.add("📖 ${law.name} - المادة $n:\n\n$text")
+                        val pdfSuffix = if (!law.drivePdfUrl.isNullOrEmpty()) "\n\n🔗 رابط القانون الأصلي (Drive PDF):\n${law.drivePdfUrl}" else ""
+                        hits.add("📖 ${law.name} - المادة $n:\n\n$text$pdfSuffix")
                     }
                 }
             }
@@ -206,7 +218,7 @@ object LawsRepository {
                     val numStr = (data["number"] as? Long)?.toString()
                         ?: (data["number"] as? String)
                         ?: doc.id
-                    res.add(Article(law.id, law.name, numStr, txt, kws))
+                    res.add(Article(law.id, law.name, numStr, txt, kws, law.drivePdfUrl))
                 }
             }
             cachedArticles = res
