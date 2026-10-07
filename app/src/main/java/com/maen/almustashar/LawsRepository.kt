@@ -103,10 +103,26 @@ object LawsRepository {
         val query = rawQuery.trim()
         val laws = loadLawsList()
 
-        // 1. حالة طلب القانون كاملا (نص فارغ مع تحديد قانون، أو عبارة كاملا/كامل)
-        val isFullRequest = query.isEmpty() || query.contains("كامل") || query.contains("كاملا")
-        if (targetLawId != null && isFullRequest) {
-            val allArticles = loadAllArticles(laws).filter { it.lawId == targetLawId }
+        // مطابقة القانون بالاسم إذا كتب المستخدم اسم القانون
+        var effectiveLawId = targetLawId
+        if (effectiveLawId == null) {
+            val matchedLaw = laws.find { law ->
+                query.contains(law.name, ignoreCase = true) ||
+                law.name.contains(query.replace("كامل", "").replace("كاملا", "").trim(), ignoreCase = true)
+            }
+            if (matchedLaw != null) {
+                effectiveLawId = matchedLaw.id
+            }
+        }
+
+        // 1. طلب القانون كاملاً (إذا تم تحديد قانون وكان الاستعلام يطابق اسمه أو يحتوي على "كامل")
+        val isFullLawQuery = query.isEmpty() ||
+                query.contains("كامل") ||
+                query.contains("كاملا") ||
+                (effectiveLawId != null && (laws.find { it.id == effectiveLawId }?.name?.let { query.contains(it) } == true))
+
+        if (effectiveLawId != null && isFullLawQuery) {
+            val allArticles = loadAllArticles(laws).filter { it.lawId == effectiveLawId }
                 .sortedBy { it.number.toIntOrNull() ?: 9999 }
             if (allArticles.isNotEmpty()) {
                 return allArticles.joinToString("\n\n───────────────────────\n\n") { a ->
@@ -115,26 +131,26 @@ object LawsRepository {
             }
         }
 
-        // 2. فحص استخراج رقم المادة من النص
+        // 2. البحث برقم المادة فقط أو رقم مادة ضمن قانون
         val digits = query.filter { it.isDigit() }
-        if (digits.isNotEmpty() && (query.length <= 5 || query.startsWith("مادة") || query.startsWith("المادة"))) {
-            val res = fetchByNumber(digits, targetLawId, laws)
+        if (digits.isNotEmpty() && (query.length <= 5 || query.contains("مادة") || query.contains("المادة"))) {
+            val res = fetchByNumber(digits, effectiveLawId, laws)
             if (!res.isNullOrBlank()) return res
         }
 
-        // 3. البحث السياقي والموضوعي (في النصوص والكلمات المفتاحية)
+        // 3. البحث الموضوعي / السياقي
         val cleanTerms = query.split(" ")
             .map { it.trim() }
-            .filter { it.length > 1 && !it.all { ch -> ch.isDigit() } }
+            .filter { it.length > 1 && !it.all { ch -> ch.isDigit() } && it !in listOf("قانون", "القانون", "كامل", "كاملا") }
 
         val allArticles = loadAllArticles(laws)
-        val pool = if (targetLawId != null) allArticles.filter { it.lawId == targetLawId } else allArticles
+        val pool = if (effectiveLawId != null) allArticles.filter { it.lawId == effectiveLawId } else allArticles
 
         val scored = pool.mapNotNull { a ->
             var score = 0
             for (term in cleanTerms) {
-                if (a.text.contains(term, ignoreCase = true)) score += 3
-                if (a.keywords.any { it.contains(term, ignoreCase = true) }) score += 5
+                if (a.text.contains(term, ignoreCase = true)) score += 4
+                if (a.keywords.any { it.contains(term, ignoreCase = true) }) score += 6
                 if (a.lawName.contains(term, ignoreCase = true)) score += 2
             }
             if (score > 0) Pair(a, score) else null
