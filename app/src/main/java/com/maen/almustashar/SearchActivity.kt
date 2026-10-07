@@ -38,6 +38,7 @@ class SearchActivity : AppCompatActivity() {
         override fun toString(): String = title
     }
 
+    private var cachedLaws: List<LawsRepository.LawMeta> = emptyList()
     private var lawChoices: List<LawChoice> = listOf(LawChoice(null, "كل القوانين"))
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -69,6 +70,7 @@ class SearchActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val laws = LawsRepository.loadLawsList()
+                cachedLaws = laws
                 val choices = mutableListOf(LawChoice(null, "كل القوانين"))
                 choices.addAll(laws.map { LawChoice(it.id, it.name) })
                 lawChoices = choices
@@ -115,23 +117,45 @@ class SearchActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
             val text = tvSearchResult.text.toString()
-            val marker = "https://drive.google.com/"
-            val startIndex = text.indexOf(marker)
-            val pdfUrl = if (startIndex != -1) {
-                val sub = text.substring(startIndex)
-                val endIndex = sub.indexOfFirst { it.isWhitespace() }
-                if (endIndex != -1) sub.substring(0, endIndex) else sub
-            } else null
+            var rawTarget: String? = null
 
-            if (!pdfUrl.isNullOrBlank()) {
+            // أ) البحث عن أي رابط drive داخل النص
+            val driveRegex = Regex("https://drive\.google\.com/[^\s]+")
+            rawTarget = driveRegex.find(text)?.value
+
+            // ب) إذا لم يتوفر، المطابقة مع القانون المحدد في القائمة
+            if (rawTarget.isNullOrBlank()) {
+                val selectedId = (spinnerLaw.selectedItem as? LawChoice)?.id
+                if (!selectedId.isNullOrBlank()) {
+                    rawTarget = cachedLaws.find { it.id == selectedId }?.drivePdfUrl
+                }
+            }
+
+            // ج) إذا كان البحث في كل القوانين، المطابقة مع اسم القانون الظاهر في النتيجة
+            if (rawTarget.isNullOrBlank()) {
+                for (law in cachedLaws) {
+                    if (text.contains(law.name, ignoreCase = true) || text.contains(law.id, ignoreCase = true)) {
+                        if (!law.drivePdfUrl.isNullOrBlank()) {
+                            rawTarget = law.drivePdfUrl
+                            break
+                        }
+                    }
+                }
+            }
+
+            if (!rawTarget.isNullOrBlank()) {
+                val finalUrl = when {
+                    rawTarget.startsWith("http://") || rawTarget.startsWith("https://") -> rawTarget
+                    else -> "https://drive.google.com/file/d/$rawTarget/view?usp=drivesdk"
+                }
                 try {
-                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(pdfUrl))
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(finalUrl.trim()))
                     startActivity(browserIntent)
                 } catch (e: Exception) {
                     Toast.makeText(this, "تعذر فتح الرابط: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(this, "ملف الـ PDF غير متوفر لهذه المادة حالياً", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "ملف الـ PDF غير مسجل لهذا القانون في قاعدة البيانات حالياً", Toast.LENGTH_SHORT).show()
             }
         }
     }
