@@ -61,7 +61,7 @@ class SearchActivity : AppCompatActivity() {
 
         spinnerLaw.adapter = ArrayAdapter(
             this,
-            android.R.layout.simple_spinner_item,
+            android.R.layout.simple_spinner_dropdown_item,
             lawChoices
         ).apply {
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -76,7 +76,7 @@ class SearchActivity : AppCompatActivity() {
                 lawChoices = choices
                 spinnerLaw.adapter = ArrayAdapter(
                     this@SearchActivity,
-                    android.R.layout.simple_spinner_item,
+                    android.R.layout.simple_spinner_dropdown_item,
                     lawChoices
                 ).apply {
                     setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
@@ -115,7 +115,7 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-                        findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
+                                findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
             val text = tvSearchResult.text.toString()
             var rawTarget: String? = null
 
@@ -147,24 +147,24 @@ class SearchActivity : AppCompatActivity() {
                 }
             }
 
-            // رابط مجلد القوانين العام (للقراءة فقط عبر الويب)
             val folderPreviewUrl = "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3?usp=sharing"
 
             val finalUrl = when {
                 rawTarget.isNullOrBlank() -> folderPreviewUrl
                 rawTarget.contains("/view") -> rawTarget.replace("/view", "/preview")
                 rawTarget.startsWith("http") -> rawTarget
-                else -> "https://drive.google.com/file/d/$rawTarget/preview"
+                else -> "https://drive.google.com/file/d/" + rawTarget + "/preview"
             }
 
             try {
-                // فتح في متصفح الويب الخارجي للقراءة فقط لعزل حساب المالك
+                // فتح الرابط عبر المتصفح فقط لعزل تطبيق Google Drive تماماً وعدم طلب أي حساب
                 val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(finalUrl.trim())).apply {
                     addCategory(Intent.CATEGORY_BROWSABLE)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 startActivity(browserIntent)
             } catch (e: Exception) {
-                Toast.makeText(this, "تعذر فتح المستند: ${e.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "تعذر فتح المستند: " + e.message, Toast.LENGTH_SHORT).show()
             }
         }
     }

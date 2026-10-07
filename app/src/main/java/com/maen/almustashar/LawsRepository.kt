@@ -103,9 +103,9 @@ object LawsRepository {
         val query = rawQuery.trim()
         val laws = loadLawsList()
 
-        // مطابقة القانون بالاسم إذا كتب المستخدم اسم القانون
+        // مطابقة القانون بالاسم تلقائياً
         var effectiveLawId = targetLawId
-        if (effectiveLawId == null) {
+        if (effectiveLawId == null && query.isNotEmpty()) {
             val matchedLaw = laws.find { law ->
                 query.contains(law.name, ignoreCase = true) ||
                 law.name.contains(query.replace("كامل", "").replace("كاملا", "").trim(), ignoreCase = true)
@@ -115,13 +115,16 @@ object LawsRepository {
             }
         }
 
-        // 1. طلب القانون كاملاً (إذا تم تحديد قانون وكان الاستعلام يطابق اسمه أو يحتوي على "كامل")
-        val isFullLawQuery = query.isEmpty() ||
-                query.contains("كامل") ||
-                query.contains("كاملا") ||
-                (effectiveLawId != null && (laws.find { it.id == effectiveLawId }?.name?.let { query.contains(it) } == true))
+        // 1. عرض القانون كاملاً إذا:
+        // - تم اختيار قانون والبحث فارغ
+        // - أو تم كتابة كلمة كامل/كاملا
+        // - أو كتب المستخدم اسم القانون مباشرة (مثل: القانون المدني) دون أرقام أو كلمات تخصصية
+        val hasDigits = query.any { it.isDigit() }
+        val isExplicitLawNameOnly = effectiveLawId != null && !hasDigits &&
+            (query.isEmpty() || query.contains("كامل") || query.contains("كاملا") ||
+             laws.find { it.id == effectiveLawId }?.name?.let { query.replace(" ", "").contains(it.replace(" ", "")) } == true)
 
-        if (effectiveLawId != null && isFullLawQuery) {
+        if (effectiveLawId != null && isExplicitLawNameOnly) {
             val allArticles = loadAllArticles(laws).filter { it.lawId == effectiveLawId }
                 .sortedBy { it.number.toIntOrNull() ?: 9999 }
             if (allArticles.isNotEmpty()) {
@@ -131,7 +134,7 @@ object LawsRepository {
             }
         }
 
-        // 2. البحث برقم المادة فقط أو رقم مادة ضمن قانون
+        // 2. البحث برقم المادة
         val digits = query.filter { it.isDigit() }
         if (digits.isNotEmpty() && (query.length <= 5 || query.contains("مادة") || query.contains("المادة"))) {
             val res = fetchByNumber(digits, effectiveLawId, laws)
@@ -160,7 +163,7 @@ object LawsRepository {
             return "⚠️ لم يتم العثور على نص مطابق لهذا البحث."
         }
 
-        return scored.take(25).joinToString("\n\n───────────────────────\n\n") { (a, _) ->
+        return scored.take(30).joinToString("\n\n───────────────────────\n\n") { (a, _) ->
             formatOutput(a.lawName, a.number, a.text, a.drivePdfUrl)
         }
     }
