@@ -12,25 +12,59 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.AlMustashar">
 
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity
+            android:name=".LicenseActivity"
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <activity android:name=".ConsultActivity" android:exported="false" />
-        <activity android:name=".LoginActivity" android:exported="false" />
-        <activity android:name=".RegisterActivity" android:exported="false" />
-        <activity android:name=".SearchActivity" android:exported="false" />
-        <activity android:name=".AccountActivity" android:exported="false" />
-        <activity android:name=".QueriesActivity" android:exported="false" />
-        <activity android:name=".QueryDetailActivity" android:exported="false" />
-        <activity android:name=".GeneralSearchActivity" android:exported="false" />
-        <activity android:name=".CasesActivity" android:exported="false" />
-        <activity android:name=".CaseEditActivity" android:exported="false" />
-        <activity android:name=".DecisionsActivity" android:exported="false" />
-        <activity android:name=".DecisionEditActivity" android:exported="false" />
+        <activity
+            android:name=".OwnerPanelActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ConsultActivity"
+            android:exported="false" />
+        <activity
+            android:name=".LoginActivity"
+            android:exported="false" />
+        <activity
+            android:name=".RegisterActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SearchActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AccountActivity"
+            android:exported="false" />
+        <activity
+            android:name=".QueriesActivity"
+            android:exported="false" />
+        <activity
+            android:name=".QueryDetailActivity"
+            android:exported="false" />
+        <activity
+            android:name=".GeneralSearchActivity"
+            android:exported="false" />
+        <activity
+            android:name=".CasesActivity"
+            android:exported="false" />
+        <activity
+            android:name=".CaseEditActivity"
+            android:exported="false" />
+        <activity
+            android:name=".DecisionsActivity"
+            android:exported="false" />
+        <activity
+            android:name=".DecisionEditActivity"
+            android:exported="false" />
     </application>
 
 </manifest>

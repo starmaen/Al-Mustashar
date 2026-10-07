@@ -19,6 +19,15 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        if (!LicenseManager.isLicensed(this)) {
+            val intent = Intent(this, LicenseActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(intent)
+            finish()
+            return
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -28,24 +37,34 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.ivMenu).setOnClickListener {
             drawer.openDrawer(GravityCompat.END)
         }
+
         binding.ivLogo.setOnClickListener {
             drawer.openDrawer(GravityCompat.END)
         }
 
-        binding.btnAbout.setOnClickListener { showAboutDialog() }
+        binding.btnAbout.setOnClickListener {
+            showAboutDialog()
+        }
 
         findViewById<View>(R.id.navCases).setOnClickListener {
             drawer.closeDrawer(GravityCompat.END)
-            requireLogin { startActivity(Intent(this, CasesActivity::class.java)) }
+            requireLogin {
+                startActivity(Intent(this, CasesActivity::class.java))
+            }
         }
+
         findViewById<View>(R.id.navGeneral)?.setOnClickListener {
             drawer.closeDrawer(GravityCompat.END)
             startActivity(Intent(this, GeneralSearchActivity::class.java))
         }
+
         findViewById<View>(R.id.navQueries).setOnClickListener {
             drawer.closeDrawer(GravityCompat.END)
-            requireLogin { startActivity(Intent(this, QueriesActivity::class.java)) }
+            requireLogin {
+                startActivity(Intent(this, QueriesActivity::class.java))
+            }
         }
+
         findViewById<View>(R.id.navSettings).setOnClickListener {
             drawer.closeDrawer(GravityCompat.END)
             startActivity(Intent(this, AccountActivity::class.java))
@@ -54,18 +73,21 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (!LicenseManager.isLicensed(this)) {
+            startActivity(Intent(this, LicenseActivity::class.java))
+            finish()
+            return
+        }
         updateUI()
     }
 
     private fun updateUI() {
         val user = auth.currentUser
-
         if (user != null) {
-            binding.tvWelcome.text = "مرحباً، \${user.email}"
+            binding.tvWelcome.text = "مرحباً، ${user.email}"
             binding.btnLogin.text = "حسابي"
             binding.btnConsult.visibility = View.VISIBLE
             binding.btnSearch.visibility = View.VISIBLE
-
             binding.btnConsult.setOnClickListener {
                 startActivity(Intent(this, ConsultActivity::class.java))
             }
@@ -83,7 +105,6 @@ class MainActivity : AppCompatActivity() {
             binding.btnLogin.text = "تسجيل الدخول"
             binding.btnConsult.visibility = View.GONE
             binding.btnSearch.visibility = View.GONE
-
             binding.btnLogin.setOnClickListener {
                 startActivity(Intent(this, LoginActivity::class.java))
             }
@@ -118,13 +139,14 @@ class MainActivity : AppCompatActivity() {
         val msg = """
             المستشار القانوني الذكي
             الإصدار: 1.0.0
-
-            للتواصل:
-            starsyria2500@gmail.com
+            للتواصل: starsyria2500@gmail.com
             +963 938 466 549
             @maenstar
         """.trimIndent()
-        AlertDialog.Builder(this).setTitle("حول التطبيق").setMessage(msg)
-            .setPositiveButton("حسناً", null).show()
+        AlertDialog.Builder(this)
+            .setTitle("حول التطبيق")
+            .setMessage(msg)
+            .setPositiveButton("حسناً", null)
+            .show()
     }
 }
