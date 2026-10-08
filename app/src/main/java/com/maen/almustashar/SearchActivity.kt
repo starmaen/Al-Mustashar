@@ -223,14 +223,17 @@ class SearchActivity : AppCompatActivity() {
 
     private fun searchDriveCloud(query: String) {
         lifecycleScope.launch {
+            var errorDetail = ""
             val filesList = withContext(Dispatchers.IO) {
                 try {
+                    val folderId = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+                    // 1. محاولة استدعاء الدالة السحابية
                     val url = "https://us-central1-al-mustashar-7f6b7.cloudfunctions.net/searchDriveLaws"
                     val jsonBody = "{\"query\": \"$query\"}".toRequestBody("application/json".toMediaType())
                     val request = Request.Builder().url(url).post(jsonBody).build()
 
-                    httpClient.newCall(request).execute().use { resp ->
-                        if (!resp.isSuccessful) return@withContext emptyList<DriveLawFile>()
+                    val resp = httpClient.newCall(request).execute()
+                    if (resp.isSuccessful) {
                         val body = resp.body?.string().orEmpty()
                         val root = JsonParser.parseString(body).asJsonObject
                         val arr = root.getAsJsonArray("files") ?: return@withContext emptyList<DriveLawFile>()
@@ -247,11 +250,14 @@ class SearchActivity : AppCompatActivity() {
                                 )
                             )
                         }
-                        list
+                        return@withContext list
+                    } else {
+                        errorDetail = "كود الخادم: ${resp.code}"
                     }
-                } catch (_: Exception) {
-                    emptyList<DriveLawFile>()
+                } catch (e: Exception) {
+                    errorDetail = e.localizedMessage ?: "فشل الاتصال"
                 }
+                emptyList<DriveLawFile>()
             }
 
             progressBar.visibility = View.GONE
@@ -259,9 +265,20 @@ class SearchActivity : AppCompatActivity() {
                 driveAdapter.submitList(filesList)
                 rvDriveResults.visibility = View.VISIBLE
             } else {
-                tvEmpty.text = "لم يتم العثور على وثائق مطابقة في Drive أو تعذر الوصول للسحابة حالياً."
+                tvEmpty.text = "لم يتم العثور على نتائج في Drive ($errorDetail)
+
+يمكنك تصفح مجلد القوانين السحابي مباشرة."
                 tvEmpty.visibility = View.VISIBLE
+                
+                // زر فوري لفتح مجلد القوانين الأصلي في Drive مباشرة
+                searchActions.visibility = View.VISIBLE
+                btnOpenPdf.text = "📂 فتح مجلد القوانين على Drive"
+                btnOpenPdf.setOnClickListener {
+                    val driveIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"))
+                    startActivity(driveIntent)
+                }
             }
         }
+    }
     }
 }

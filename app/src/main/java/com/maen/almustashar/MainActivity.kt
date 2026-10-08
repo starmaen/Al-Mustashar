@@ -1,13 +1,10 @@
 package com.maen.almustashar
-
-
 import android.content.Intent
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import com.maen.almustashar.LicenseManager
-import com.maen.almustashar.OwnerPanelActivity
+
 import android.content.Intent
 import android.os.Bundle
 import android.content.Intent
@@ -222,7 +219,7 @@ class MainActivity : AppCompatActivity() {
         val logo = findViewById<android.view.View>(R.id.ivLogo) ?: return
         logo.setOnClickListener {
             val now = System.currentTimeMillis()
-            if (now - lastLogoClickTime > 2000) {
+            if (now - lastLogoClickTime > 2000L) {
                 logoClickCount = 0
             }
             lastLogoClickTime = now
@@ -265,7 +262,7 @@ class MainActivity : AppCompatActivity() {
                 val email = etEmail.text.toString().trim()
                 val pass = etPass.text.toString().trim()
                 if (LicenseManager.verifyOwner(email, pass)) {
-                    val deviceId = LicenseManager.getDeviceId(ctx)
+                    val deviceId = DeviceUtils.getDeviceId(ctx)
                     LicenseManager.grantOwnerDeviceLicense(ctx, deviceId)
                     dialog.dismiss()
                     startActivity(Intent(ctx, OwnerPanelActivity::class.java))
