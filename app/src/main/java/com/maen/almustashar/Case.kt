@@ -13,6 +13,7 @@ data class Case(
     val clientPhone: String = "",
     val opponentName: String = "",
     val opponentLawyer: String = "",
+    val witnesses: String = "",
     val date: String = "",
     val nextSessionDate: String = "",
     val lastSessionDecision: String = "",

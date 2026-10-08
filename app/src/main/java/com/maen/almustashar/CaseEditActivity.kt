@@ -37,6 +37,7 @@ class CaseEditActivity : AppCompatActivity() {
     private lateinit var etClientPhone: EditText
     private lateinit var etOpponentName: EditText
     private lateinit var etOpponentLawyer: EditText
+    private lateinit var etWitnesses: EditText
     private lateinit var etDate: EditText
     private lateinit var etNextSessionDate: EditText
     private lateinit var etLastSessionDecision: EditText
@@ -79,6 +80,7 @@ class CaseEditActivity : AppCompatActivity() {
         etClientPhone = findViewById(R.id.etClientPhone)
         etOpponentName = findViewById(R.id.etOpponentName)
         etOpponentLawyer = findViewById(R.id.etOpponentLawyer)
+        etWitnesses = findViewById(R.id.etWitnesses)
         etDate = findViewById(R.id.etDate)
         etNextSessionDate = findViewById(R.id.etNextSessionDate)
         etLastSessionDecision = findViewById(R.id.etLastSessionDecision)
@@ -307,6 +309,7 @@ class CaseEditActivity : AppCompatActivity() {
                 etClientPhone.setText(c.clientPhone)
                 etOpponentName.setText(c.opponentName)
                 etOpponentLawyer.setText(c.opponentLawyer)
+                etWitnesses.setText(c.witnesses)
                 etDate.setText(c.date)
                 etNextSessionDate.setText(c.nextSessionDate)
                 etLastSessionDecision.setText(c.lastSessionDecision)
@@ -343,6 +346,7 @@ class CaseEditActivity : AppCompatActivity() {
             clientPhone = etClientPhone.text?.toString()?.trim() ?: "",
             opponentName = etOpponentName.text?.toString()?.trim() ?: "",
             opponentLawyer = etOpponentLawyer.text?.toString()?.trim() ?: "",
+            witnesses = etWitnesses.text?.toString()?.trim() ?: "",
             date = etDate.text?.toString()?.trim() ?: "",
             nextSessionDate = etNextSessionDate.text?.toString()?.trim() ?: "",
             lastSessionDecision = etLastSessionDecision.text?.toString()?.trim() ?: "",

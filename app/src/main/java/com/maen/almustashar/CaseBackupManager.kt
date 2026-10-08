@@ -31,6 +31,7 @@ object CaseBackupManager {
                     put("clientPhone", c.clientPhone)
                     put("opponentName", c.opponentName)
                     put("opponentLawyer", c.opponentLawyer)
+                    put("witnesses", c.witnesses)
                     put("date", c.date)
                     put("nextSessionDate", c.nextSessionDate)
                     put("lastSessionDecision", c.lastSessionDecision)
@@ -79,6 +80,7 @@ object CaseBackupManager {
                     clientPhone = obj.optString("clientPhone"),
                     opponentName = obj.optString("opponentName"),
                     opponentLawyer = obj.optString("opponentLawyer"),
+                    witnesses = obj.optString("witnesses"),
                     date = obj.optString("date"),
                     nextSessionDate = obj.optString("nextSessionDate"),
                     lastSessionDecision = obj.optString("lastSessionDecision"),

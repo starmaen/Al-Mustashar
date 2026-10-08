@@ -42,69 +42,75 @@ class LegalDraftingActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_legal_drafting)
+        try {
+            setContentView(R.layout.activity_legal_drafting)
 
-        spType = findViewById(R.id.spDraftType)
-        etTarget = findViewById(R.id.etTargetEntity)
-        etParties = findViewById(R.id.etParties)
-        etFacts = findViewById(R.id.etFactsAndDemands)
-        btnAttach = findViewById(R.id.btnAttachImage)
-        tvAttachStatus = findViewById(R.id.tvAttachmentStatus)
-        btnGenerate = findViewById(R.id.btnGenerateDraft)
-        progress = findViewById(R.id.progressDraft)
-        layoutResult = findViewById(R.id.layoutResult)
-        etResult = findViewById(R.id.etDraftResult)
-        btnCopy = findViewById(R.id.btnCopyDraft)
-        btnShare = findViewById(R.id.btnShareDraft)
+            spType = findViewById(R.id.spDraftType)
+            etTarget = findViewById(R.id.etTargetEntity)
+            etParties = findViewById(R.id.etParties)
+            etFacts = findViewById(R.id.etFactsAndDemands)
+            btnAttach = findViewById(R.id.btnAttachImage)
+            tvAttachStatus = findViewById(R.id.tvAttachmentStatus)
+            btnGenerate = findViewById(R.id.btnGenerateDraft)
+            progress = findViewById(R.id.progressDraft)
+            layoutResult = findViewById(R.id.layoutResult)
+            etResult = findViewById(R.id.etDraftResult)
+            btnCopy = findViewById(R.id.btnCopyDraft)
+            btnShare = findViewById(R.id.btnShareDraft)
 
-        // أنواع المذكرات والاستدعاءات
-        val types = arrayOf(
-            "مذكرة جوابية ودفاع أمام المحكمة",
-            "استدعاء إداري / بلدي (بيان قيد، شرح تنظيمي)",
-            "استدعاء دعوى جديدة (لائحة ادعاء)",
-            "مذكرة إبراز مستندات ودفوع تمهيدية",
-            "طلب إخلاء سبيل أو استرداد حجز",
-            "لائحة طعن بالاستئناف / النقض",
-            "إنذار عدلي موجه عبر الكاتب بالعدل"
-        )
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, types)
-        spType.adapter = adapter
+            val types = arrayOf(
+                "مذكرة دفاع / جوابية أمام المحكمة",
+                "استدعاء إداري / بلدي (بيان قيد عقاري وشرح تنظيمي)",
+                "استدعاء دعوى جديدة (لائحة ادعاء)",
+                "مذكرة إبراز مستندات ودفوع تمهيدية",
+                "طلب إخلاء سبيل أو استرداد حجز",
+                "لائحة طعن بالاستئناف / النقض",
+                "إنذار عدلي موجه عبر الكاتب بالعدل"
+            )
+            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, types)
+            spType.adapter = adapter
 
-        // تلقي بيانات الدعوى إن تم الفتح من داخل قضية
-        intent.getStringExtra("case_title")?.let { title ->
-            val basis = intent.getStringExtra("case_basis") ?: ""
-            val court = intent.getStringExtra("case_court") ?: ""
-            val parties = intent.getStringExtra("case_parties") ?: ""
-            etTarget.setText(court)
-            etParties.setText("الدعوى: $title | أساس: $basis | الأطراف: $parties")
-        }
-
-        btnAttach.setOnClickListener {
-            imagePicker.launch("image/*")
-        }
-
-        btnGenerate.setOnClickListener {
-            generateDraft()
-        }
-
-        btnCopy.setOnClickListener {
-            val text = etResult.text.toString()
-            if (text.isNotEmpty()) {
-                val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clip.setPrimaryClip(ClipData.newPlainText("LegalDraft", text))
-                Toast.makeText(this, "تم نسخ المذكرة للحافظة بنجاح", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        btnShare.setOnClickListener {
-            val text = etResult.text.toString()
-            if (text.isNotEmpty()) {
-                val share = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_TEXT, text)
+            // استلام بيانات القضية الممررة بأمان
+            intent?.let {
+                val title = it.getStringExtra("case_title") ?: ""
+                val basis = it.getStringExtra("case_basis") ?: ""
+                val court = it.getStringExtra("case_court") ?: ""
+                val parties = it.getStringExtra("case_parties") ?: ""
+                if (court.isNotBlank()) etTarget.setText(court)
+                if (title.isNotBlank() || parties.isNotBlank()) {
+                    etParties.setText("الدعوى: $title | أساس: $basis | الأطراف: $parties")
                 }
-                startActivity(Intent.createChooser(share, "مشاركة المذكرة القضائية عبر:"))
             }
+
+            btnAttach.setOnClickListener {
+                imagePicker.launch("image/*")
+            }
+
+            btnGenerate.setOnClickListener {
+                generateDraft()
+            }
+
+            btnCopy.setOnClickListener {
+                val text = etResult.text.toString()
+                if (text.isNotEmpty()) {
+                    val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clip.setPrimaryClip(ClipData.newPlainText("LegalDraft", text))
+                    Toast.makeText(this, "تم نسخ المذكرة للحافظة بنجاح", Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            btnShare.setOnClickListener {
+                val text = etResult.text.toString()
+                if (text.isNotEmpty()) {
+                    val share = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, text)
+                    }
+                    startActivity(Intent.createChooser(share, "مشاركة المذكرة القضائية عبر:"))
+                }
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "خطأ في تهيئة الشاشة: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -113,8 +119,7 @@ class LegalDraftingActivity : AppCompatActivity() {
             contentResolver.openInputStream(uri)?.use { stream ->
                 val bmp = BitmapFactory.decodeStream(stream)
                 val bos = ByteArrayOutputStream()
-                // ضغط خفيف لضمان سرعة الإرسال والاستجابة
-                bmp.compress(Bitmap.CompressFormat.JPEG, 85, bos)
+                bmp.compress(Bitmap.CompressFormat.JPEG, 80, bos)
                 val b64 = Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
                 attachedImagesBase64.clear()
                 attachedImagesBase64.add(Pair(b64, "image/jpeg"))
@@ -122,12 +127,12 @@ class LegalDraftingActivity : AppCompatActivity() {
                 tvAttachStatus.setTextColor(android.graphics.Color.parseColor("#2E7D32"))
             }
         } catch (e: Exception) {
-            Toast.makeText(this, "فشل تجهيز الصورة: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "فشل معالجة الصورة: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun generateDraft() {
-        val selectedType = spType.selectedItem.toString()
+        val selectedType = spType.selectedItem?.toString() ?: ""
         val target = etTarget.text.toString().trim()
         val parties = etParties.text.toString().trim()
         val facts = etFacts.text.toString().trim()
@@ -148,11 +153,17 @@ class LegalDraftingActivity : AppCompatActivity() {
         layoutResult.visibility = View.GONE
 
         lifecycleScope.launch {
-            val result = AIClient.draftLegalDocument(promptBuilder.toString(), attachedImagesBase64)
-            progress.visibility = View.GONE
-            btnGenerate.isEnabled = true
-            layoutResult.visibility = View.VISIBLE
-            etResult.setText(result)
+            try {
+                val result = AIClient.draftLegalDocument(promptBuilder.toString(), attachedImagesBase64)
+                progress.visibility = View.GONE
+                btnGenerate.isEnabled = true
+                layoutResult.visibility = View.VISIBLE
+                etResult.setText(result)
+            } catch (e: Exception) {
+                progress.visibility = View.GONE
+                btnGenerate.isEnabled = true
+                Toast.makeText(this@LegalDraftingActivity, "خطأ: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 }

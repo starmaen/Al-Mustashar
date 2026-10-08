@@ -199,6 +199,29 @@
                 android:gravity="right"/>
         </LinearLayout>
 
+        <!-- بند الشهود والإثبات -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="👥 قائمة الشهود والبينات الشخصية"
+            android:textColor="#C5A059"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etWitnesses"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minLines="2"
+            android:gravity="top|right"
+            android:hint="سجل الشهود: الأسماء، صفتهم (شهود إثبات/نفي)، موضوع الشهادة..."
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"/>
+
         <!-- القسم الثالث: التواريخ والجلسة القادمة -->
         <TextView
             android:layout_width="match_parent"
