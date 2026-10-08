@@ -2,7 +2,8 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5">
+    android:background="#F4F6F9"
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -15,120 +16,395 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
-            android:text="إضافة دعوى جديدة"
-            android:textColor="#1A237E"
+            android:text="⚖️ إضافة ملف دعوى جديد"
+            android:textColor="#0F2042"
             android:textSize="22sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:gravity="right" />
+
+        <!-- القسم الأول: بيانات الدعوى والمحكمة -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="بيانات المحكمة والأساس"
+            android:textColor="#C5A059"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginBottom="6dp"
+            android:gravity="right"/>
 
         <EditText
             android:id="@+id/etTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="اسم الدعوى *"
+            android:hint="موضوع الدعوى * (مثال: تثبيت بيع عقار، طلاق للشقاق)"
             android:padding="12dp"
-            android:background="#FFFFFF"
-            android:textColor="#212121"
-            android:textColorHint="#9E9E9E" />
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right" />
 
-        <EditText
-            android:id="@+id/etDate"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:hint="تاريخ الدعوى (مثال: 2026-10-15)"
-            android:padding="12dp"
-            android:background="#FFFFFF"
-            android:textColor="#212121"
-            android:textColorHint="#9E9E9E" />
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
 
-        <EditText
-            android:id="@+id/etCourt"
+            <EditText
+                android:id="@+id/etCaseYear"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="سنة الدعوى (مثال: 2026)"
+                android:inputType="number"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+
+            <EditText
+                android:id="@+id/etBasisNumber"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:hint="رقم الأساس (مثال: 1420)"
+                android:inputType="number"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+        </LinearLayout>
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:hint="المحكمة"
-            android:padding="12dp"
-            android:background="#FFFFFF"
-            android:textColor="#212121"
-            android:textColorHint="#9E9E9E" />
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <EditText
+                android:id="@+id/etChamber"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="الغرفة (الأولى، الثانية...)"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+
+            <EditText
+                android:id="@+id/etCourt"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:hint="المحكمة (بداية، صلح، استئناف...)"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+        </LinearLayout>
 
         <EditText
-            android:id="@+id/etClient"
+            android:id="@+id/etJudgeName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:hint="اسم العميل"
+            android:layout_marginTop="8dp"
+            android:hint="اسم القاضي / الهيئة الحاكمة"
             android:padding="12dp"
-            android:background="#FFFFFF"
-            android:textColor="#212121"
-            android:textColorHint="#9E9E9E" />
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <!-- القسم الثاني: أطراف الخصومة والوكالة -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="أطراف الخصومة والاتصال"
+            android:textColor="#C5A059"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp"
+            android:gravity="right"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/etClientRole"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="صفة الموكل (مدعٍ / مدعى عليه)"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+
+            <EditText
+                android:id="@+id/etClient"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1.8"
+                android:layout_marginStart="8dp"
+                android:hint="اسم الموكل *"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/etClientPhone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="رقم هاتف الموكل (للاتصال والواتساب السريع)"
+            android:inputType="phone"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+            <EditText
+                android:id="@+id/etOpponentLawyer"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="محامي الخصم"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+
+            <EditText
+                android:id="@+id/etOpponentName"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:hint="اسم الخصم"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+        </LinearLayout>
+
+        <!-- القسم الثالث: التواريخ والجلسة القادمة -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="إدارة الجلسات والمواعيد"
+            android:textColor="#C5A059"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp"
+            android:gravity="right"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/etNextSessionDate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:focusable="false"
+                android:clickable="true"
+                android:hint="📅 موعد الجلسة القادمة"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+
+            <EditText
+                android:id="@+id/etDate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:focusable="false"
+                android:clickable="true"
+                android:hint="📅 تاريخ افتتاح الدعوى"
+                android:padding="12dp"
+                android:background="@android:drawable/edit_text"
+                android:textColor="#0F2042"
+                android:gravity="right"/>
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/etLastSessionDecision"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="ما تقرر في الجلسة السابقة (القرار التمهيدي)"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etNextSessionRequired"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="المطلوب في الجلسة القادمة (مذكرة، إبراز، استجواب...)"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <!-- القسم الرابع: تفاصيل ودفوع الدعوى -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="وقائع ودفوع الدعوى والقرار"
+            android:textColor="#C5A059"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp"
+            android:gravity="right"/>
 
         <EditText
             android:id="@+id/etSummary"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:minLines="4"
-            android:gravity="top|start"
-            android:hint="ملخص الدعوى"
+            android:minLines="3"
+            android:gravity="top|right"
+            android:hint="ملخص ووقائع الدعوى والأسانيد القانونية"
             android:padding="12dp"
-            android:background="#FFFFFF"
-            android:textColor="#212121"
-            android:textColorHint="#9E9E9E" />
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"/>
 
         <EditText
             android:id="@+id/etSessions"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:minLines="3"
-            android:gravity="top|start"
-            android:hint="مواعيد الجلسات (سطر لكل جلسة)"
+            android:layout_marginTop="8dp"
+            android:minLines="2"
+            android:gravity="top|right"
+            android:hint="سجل الجلسات السابقة والملاحظات المتراكمة"
             android:padding="12dp"
-            android:background="#FFFFFF"
-            android:textColor="#212121"
-            android:textColorHint="#9E9E9E" />
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"/>
 
         <EditText
             android:id="@+id/etProcedures"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:minLines="3"
-            android:gravity="top|start"
-            android:hint="الإجراءات"
+            android:layout_marginTop="8dp"
+            android:minLines="2"
+            android:gravity="top|right"
+            android:hint="الإجراءات المتخذة وملاحظات المحامي السرية"
             android:padding="12dp"
-            android:background="#FFFFFF"
-            android:textColor="#212121"
-            android:textColorHint="#9E9E9E" />
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"/>
+
+        <EditText
+            android:id="@+id/etStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="حالة الدعوى (قيد النظر / محكومة / قيد التنفيذ / مشطوبة)"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etFinalJudgment"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:minLines="2"
+            android:gravity="top|right"
+            android:hint="منطوق القرار النهائي وحيثيات الحكم (إن صدر)"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"/>
+
+        <!-- أزرار الإجراءات -->
+        <Button
+            
+        <!-- القسم الخامس: المرفقات والمستندات المؤرشفة -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="📎 الوثائق والمرفقات المؤرشفة (صور / PDF / مستندات)"
+            android:textColor="#C5A059"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp"
+            android:gravity="right"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btnAddDocument"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:text="➕ إضافة مرفق (PDF / صورة / مستند)"
+                android:textSize="13sp"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#2E7D32" />
+        </LinearLayout>
+
+        <!-- قائمة عرض المرفقات المضافة -->
+        <LinearLayout
+            android:id="@+id/layoutDocumentsList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp" />
 
         <Button
             android:id="@+id/btnDecisions"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="16dp"
-            android:text="⚖️ قرارات المحكمة"
+            android:layout_height="54dp"
+            android:layout_marginTop="20dp"
+            android:text="⚖️ قرارات وأحكام الدعوى"
             android:textColor="#FFFFFF"
-            android:backgroundTint="#FFB800"
+            android:textStyle="bold"
+            android:backgroundTint="#C5A059"
             android:visibility="gone" />
 
         <Button
             android:id="@+id/btnSave"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="10dp"
-            android:text="حفظ"
+            android:layout_height="54dp"
+            android:layout_marginTop="12dp"
+            android:text="حفظ ملف الدعوى"
+            android:textSize="16sp"
+            android:textStyle="bold"
             android:textColor="#FFFFFF"
-            android:backgroundTint="#1A237E" />
+            android:backgroundTint="#0F2042" />
 
         <Button
             android:id="@+id/btnDelete"
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="54dp"
             android:layout_marginTop="10dp"
-            android:text="حذف الدعوى"
+            android:text="حذف الدعوى نهائياً"
             android:textColor="#FFFFFF"
-            android:backgroundTint="#F44336"
+            android:backgroundTint="#D32F2F"
             android:visibility="gone" />
 
     </LinearLayout>
