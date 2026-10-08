@@ -220,61 +220,34 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun searchDriveCloud(query: String) {
-        lifecycleScope.launch {
-            var errorInfo = ""
-            val folderId = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
-            val apiKey = StringBuilder("AQ.Ab8RN6KmTYMlQDnnJ").append("gx2n4-OCuZYx7sJ6oVOk3TXUHvstG0jJg").toString()
+        progressBar.visibility = View.GONE
+        tvEmpty.visibility = View.VISIBLE
+        searchActions.visibility = View.VISIBLE
+        rvDriveResults.visibility = View.GONE
 
-            val filesList = withContext(Dispatchers.IO) {
-                try {
-                    val encodedQ = java.net.URLEncoder.encode("'" + folderId + "' in parents and name contains '" + query + "' and trashed = false", "UTF-8")
-                    val driveApiUrl = "https://www.googleapis.com/drive/v3/files?q=" + encodedQ + "&fields=files(id,name,mimeType,webViewLink,webContentLink)&key=" + apiKey
-
-                    val request = Request.Builder().url(driveApiUrl).get().build()
-                    val resp = httpClient.newCall(request).execute()
-
-                    if (resp.isSuccessful) {
-                        val body = resp.body?.string().orEmpty()
-                        val root = JsonParser.parseString(body).asJsonObject
-                        val arr = root.getAsJsonArray("files") ?: return@withContext emptyList<DriveLawFile>()
-                        val list = mutableListOf<DriveLawFile>()
-                        for (elem in arr) {
-                            val obj = elem.asJsonObject
-                            list.add(
-                                DriveLawFile(
-                                    id = obj.get("id")?.asString.orEmpty(),
-                                    name = obj.get("name")?.asString.orEmpty(),
-                                    mimeType = obj.get("mimeType")?.asString.orEmpty(),
-                                    webViewLink = obj.get("webViewLink")?.asString,
-                                    webContentLink = obj.get("webContentLink")?.asString
-                                )
-                            )
-                        }
-                        return@withContext list
-                    } else {
-                        errorInfo = "رمز الاستجابة: " + resp.code.toString()
-                    }
-                } catch (e: Exception) {
-                    errorInfo = e.localizedMessage ?: "خطأ في الاتصال"
-                }
-                emptyList<DriveLawFile>()
-            }
-
-            progressBar.visibility = View.GONE
-            if (filesList.isNotEmpty()) {
-                driveAdapter.submitList(filesList)
-                rvDriveResults.visibility = View.VISIBLE
-            } else {
-                tvEmpty.text = "لم يتم العثور على وثائق في أرشيف Drive (" + errorInfo + ")\nيمكنك تصفح مجلد القوانين مباشرة أدناه."
-                tvEmpty.visibility = View.VISIBLE
-
-                searchActions.visibility = View.VISIBLE
-                btnOpenPdf.text = "📂 فتح مجلد القوانين في Drive"
-                btnOpenPdf.setOnClickListener {
-                    val directDriveUrl = "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
-                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(directDriveUrl)))
-                }
-            }
+        tvEmpty.text = "جاري فتح البحث في أرشيف Drive عن: \"$query\""
+        
+        btnOpenPdf.text = "🔍 ابحث عن '$query' في مجلد القوانين"
+        btnOpenPdf.setOnClickListener {
+            openDriveFolderSearch(query)
         }
+
+        // فتح البحث تلقائياً في Drive
+        openDriveFolderSearch(query)
+    }
+
+    private fun openDriveFolderSearch(query: String) {
+        try {
+            val folderId = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+            val encodedQuery = java.net.URLEncoder.encode("parent:'$folderId' $query", "UTF-8")
+            val driveUri = Uri.parse("https://drive.google.com/drive/u/0/search?q=$encodedQuery")
+            
+            val intent = Intent(Intent.ACTION_VIEW, driveUri)
+            startActivity(intent)
+        } catch (e: Exception) {
+            val fallbackUri = Uri.parse("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3")
+            startActivity(Intent(Intent.ACTION_VIEW, fallbackUri))
+        }
+    }
     }
 }
