@@ -132,10 +132,7 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-        btnOpenPdf.setOnClickListener {
-            val target = currentPdfUrl ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
-        }
+        btnOpenPdf.setOnClickListener { openInBrowser(currentPdfUrl ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3") }
     }
 
     private fun setupLawsSpinner() {
@@ -207,53 +204,38 @@ class SearchActivity : AppCompatActivity() {
         }
     }
 
-    private fun searchDriveDynamic(query: String) {
-        lifecycleScope.launch {
+    private fun openInBrowser(url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addCategory(Intent.CATEGORY_BROWSABLE)
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(Intent.createChooser(intent, "فتح بواسطة المتصفح"))
+        } catch (_: Exception) {
             try {
-                if (cachedLaws.isEmpty()) {
-                    cachedLaws = LawsRepository.loadLawsList()
-                }
-
-                fun normalize(s: String) = s.lowercase()
-                    .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-                    .replace("ة", "ه").replace("ى", "ي")
-                    .replace("السوري", "")
-                    .replace(Regex("[^a-zA-Z0-9\\u0621-\\u064A]"), "")
-
-                val nq = normalize(query)
-                val matchedFiles = cachedLaws.filter { law ->
-                    val nl = normalize(law.name)
-                    nl.contains(nq) || nq.contains(nl)
-                }.map { law ->
-                    DriveLawFile(
-                        id = law.id,
-                        name = law.name,
-                        mimeType = "application/pdf",
-                        webViewLink = law.drivePdfUrl ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3",
-                        webContentLink = law.drivePdfUrl
-                    )
-                }
-
-                progressBar.visibility = View.GONE
-
-                if (matchedFiles.isNotEmpty()) {
-                    driveAdapter.submitList(matchedFiles)
-                    rvDriveResults.visibility = View.VISIBLE
-                } else {
-                    tvEmpty.text = "لم يتم العثور على وثائق مطابقة لـ: \"$query\"\nيمكنك تصفح مجلد Drive الكامل مباشرة بالأسفل."
-                    tvEmpty.visibility = View.VISIBLE
-
-                    searchActions.visibility = View.VISIBLE
-                    btnOpenPdf.text = "📂 فتح مجلد القوانين في Drive"
-                    btnOpenPdf.setOnClickListener {
-                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3")))
-                    }
-                }
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             } catch (e: Exception) {
-                progressBar.visibility = View.GONE
-                tvEmpty.text = "تعذر البحث في مراجع Drive: ${e.localizedMessage}"
-                tvEmpty.visibility = View.VISIBLE
+                Toast.makeText(this, "تعذر فتح الرابط", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun searchDriveDynamic(query: String) {
+        progressBar.visibility = View.GONE
+        tvEmpty.text = "سيتم فتح أرشيف Drive للبحث عن:
+"$query""
+        tvEmpty.visibility = View.VISIBLE
+
+        searchActions.visibility = View.VISIBLE
+        btnOpenPdf.text = "📂 فتح نتائج البحث في المتصفح"
+        
+        val folderId = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+        val targetUrl = "https://drive.google.com/drive/folders/$folderId"
+        
+        btnOpenPdf.setOnClickListener {
+            openInBrowser(targetUrl)
+        }
+        
+        openInBrowser(targetUrl)
     }
 }
