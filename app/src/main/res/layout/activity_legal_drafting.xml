@@ -25,12 +25,12 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="يصيغ لك استدعاءً أو مذكرة قضائية رصينة بناءً على معطياتك ومستنداتك"
+            android:text="صياغة استدعاءات إدارية، مذكرات دفاع، ولوائح قضائية رصينة"
             android:textColor="#757575"
             android:textSize="12sp"
             android:gravity="right" />
 
-        <!-- نوع المعاملة أو الطلب -->
+        <!-- نوع المعاملة -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -44,7 +44,7 @@
         <Spinner
             android:id="@+id/spDraftType"
             android:layout_width="match_parent"
-            android:layout_height="46dp"
+            android:layout_height="48dp"
             android:layout_marginTop="4dp"
             android:background="@android:drawable/btn_dropdown" />
 
@@ -54,7 +54,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
-            android:hint="الجهة الموجه إليها (مثال: محكمة البداية المدنية / مجلس مدينة دمشق)"
+            android:hint="الجهة الموجه إليها (مثال: محكمة البداية المدنية / مجلس المدينة)"
             android:padding="12dp"
             android:background="@android:drawable/edit_text"
             android:textColor="#0F2042"
@@ -66,13 +66,13 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
-            android:hint="أطراف العلاقة (المستدعي / الموكل، الخصم، رقم الأساس إن وجد)"
+            android:hint="أطراف العلاقة (المستدعي، الخصم، رقم الأساس إن وجد)"
             android:padding="12dp"
             android:background="@android:drawable/edit_text"
             android:textColor="#0F2042"
             android:gravity="right" />
 
-        <!-- الوقائع والمعطيات والمطلوب -->
+        <!-- الوقائع والمطالب -->
         <EditText
             android:id="@+id/etFactsAndDemands"
             android:layout_width="match_parent"
@@ -80,7 +80,7 @@
             android:layout_marginTop="8dp"
             android:minLines="4"
             android:gravity="top|right"
-            android:hint="اكتب الوقائع بإيجاز والمطلوب تحقيقه (مثال: طلب بيان وضع عقار مع مخطط تنظيمي، أو مذكرة دفع بالتقادم وتفنيد شهادة الشهود)..."
+            android:hint="اكتب الوقائع والمطلوب بإيجاز (مثال: طلب بيان وضع عقار وشرح تنظيمي من البلدية، أو مذكرة دفاع وتفنيد شهادة الشهود)..."
             android:padding="12dp"
             android:background="@android:drawable/edit_text"
             android:textColor="#0F2042" />
@@ -96,11 +96,11 @@
             <Button
                 android:id="@+id/btnAttachImage"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:text="📎 إرفاق صورة مستند/سند"
-                android:textColor="#0F2042"
+                android:layout_height="42dp"
+                android:text="📎 إرفاق صورة مستند"
+                android:textColor="#FFFFFF"
                 android:textSize="12sp"
-                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+                android:backgroundTint="#0F2042" />
 
             <TextView
                 android:id="@+id/tvAttachmentStatus"
@@ -114,7 +114,7 @@
                 android:gravity="right" />
         </LinearLayout>
 
-        <!-- زر التوليد والتقدم -->
+        <!-- مؤشر التحميل -->
         <ProgressBar
             android:id="@+id/progressDraft"
             android:layout_width="wrap_content"
@@ -123,6 +123,7 @@
             android:layout_marginTop="12dp"
             android:visibility="gone" />
 
+        <!-- زر توليد المذكرة -->
         <Button
             android:id="@+id/btnGenerateDraft"
             android:layout_width="match_parent"
@@ -132,9 +133,9 @@
             android:textColor="#FFFFFF"
             android:textSize="15sp"
             android:textStyle="bold"
-            android:backgroundTint="#0F2042" />
+            android:backgroundTint="#C5A059" />
 
-        <!-- نتيجة الصياغة وأزرار النسخ والمشاركة -->
+        <!-- منطقة النتيجة وأزرار الحفظ والمشاركة -->
         <LinearLayout
             android:id="@+id/layoutResult"
             android:layout_width="match_parent"
@@ -152,7 +153,7 @@
                 <Button
                     android:id="@+id/btnCopyDraft"
                     android:layout_width="wrap_content"
-                    android:layout_height="38dp"
+                    android:layout_height="40dp"
                     android:text="📋 نسخ النص"
                     android:textColor="#FFFFFF"
                     android:textSize="12sp"
@@ -161,7 +162,7 @@
                 <Button
                     android:id="@+id/btnShareDraft"
                     android:layout_width="wrap_content"
-                    android:layout_height="38dp"
+                    android:layout_height="40dp"
                     android:layout_marginStart="8dp"
                     android:text="📤 مشاركة"
                     android:textColor="#FFFFFF"
@@ -177,7 +178,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="المسودة الجاهزة:"
-                    android:textColor="#C5A059"
+                    android:textColor="#0F2042"
                     android:textStyle="bold"
                     android:textSize="13sp" />
             </LinearLayout>
