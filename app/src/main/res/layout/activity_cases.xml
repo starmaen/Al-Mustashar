@@ -11,7 +11,7 @@
         android:layout_height="match_parent"
         android:orientation="vertical">
 
-        <!-- شريط الرأس والبحث الفوري -->
+        <!-- شريط الرأس والبحث وخيارات التخزين -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -34,16 +34,14 @@
                 android:layout_height="44dp"
                 android:layout_marginTop="10dp"
                 android:background="@android:drawable/edit_text"
-                android:hint="🔍 ابحث برقم الأساس، اسم الموكل، الخصم، أو المحكمة..."
+                android:hint="🔍 ابحث بالأساس، الموكل، الخصم، أو المحكمة..."
                 android:textSize="14sp"
                 android:paddingStart="12dp"
                 android:paddingEnd="12dp"
                 android:textColor="#0F2042"
                 android:gravity="right|center_vertical" />
 
-            <TextView
-                
-            <!-- شريط خيارات التخزين والنسخ الاحتياطي (الذاكرة الداخلية / الميموري / درايف) -->
+            <!-- أزرار النسخ الاحتياطي والتخزين (SD/درايف) -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
