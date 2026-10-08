@@ -22,8 +22,8 @@ object AIClient {
         private val GEMINI_KEY = StringBuilder("AQ.Ab8RN6KmTYMlQDnnJ").append("gx2n4-OCuZYx7sJ6oVOk3TXUHvstG0jJg").toString()
 
     private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(45, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
         .build()
 
     
@@ -98,26 +98,52 @@ object AIClient {
     }
 
     
-    // 4. صياغة المذكرات والاستدعاءات القضائية والرسمية
+        // 4. صياغة المذكرات والاستدعاءات القضائية بتسلسل النماذج الناجح
     suspend fun draftLegalDocument(
         userNotes: String,
-        attachmentsBase64: List<Pair<String, String>> = emptyList() // (Base64, MimeType)
+        attachmentsBase64: List<Pair<String, String>> = emptyList()
     ): String = withContext(Dispatchers.IO) {
-        val model = "gemini-3.8-flash"
-        return@withContext try {
+        val fullPrompt = "$DRAFTING_SYSTEM_PROMPT
+
+معطيات ومطالب المحامي لإعداد المذكرة/الاستدعاء:
+$userNotes"
+
+        // تجربة النموذج الأساسي الأول
+        val res1 = callGeminiWithParts("gemini-3.8-flash", fullPrompt, attachmentsBase64)
+        if (res1 is AIResult.Success) return@withContext res1.text
+
+        // تجربة النموذج الثاني
+        val res2 = callGeminiWithParts("gemini-3.5-flash-lite", fullPrompt, attachmentsBase64)
+        if (res2 is AIResult.Success) return@withContext res2.text
+
+        // البديل السريع المضمون (Groq) في حال حدوث timeout في النماذج السابقة
+        val groqRes = callGroq("llama-3.1-8b-instant", fullPrompt)
+        if (groqRes is AIResult.Success) return@withContext groqRes.text
+
+        return@withContext when {
+            res1 is AIResult.Error -> "❌ فشل التوليد: ${res1.message}"
+            res2 is AIResult.Error -> "❌ فشل التوليد: ${res2.message}"
+            else -> "❌ تعذر إتمام الصياغة، يرجى المحاولة مجدداً."
+        }
+    }
+
+    private fun callGeminiWithParts(
+        model: String,
+        promptText: String,
+        attachments: List<Pair<String, String>>
+    ): AIResult {
+        return try {
             val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$GEMINI_KEY"
             val rootJson = JsonObject()
             val contentsArr = JsonArray()
             val contentObj = JsonObject()
             val partsArr = JsonArray()
 
-            // 1. إضافة التوجيه القانوني والطلب
             val textPart = JsonObject()
-            textPart.addProperty("text", "$DRAFTING_SYSTEM_PROMPT\n\nمعطيات ومطالب المحامي لإعداد المذكرة/الاستدعاء:\n$userNotes")
+            textPart.addProperty("text", promptText)
             partsArr.add(textPart)
 
-            // 2. إضافة الصور والمستندات المرفقة إن وجدت (Multimodal)
-            for (att in attachmentsBase64) {
+            for (att in attachments) {
                 val inlineDataPart = JsonObject()
                 val inlineData = JsonObject()
                 inlineData.addProperty("mime_type", att.second)
@@ -142,13 +168,14 @@ object AIClient {
                         ?.getAsJsonArray("parts")
                         ?.get(0)?.asJsonObject
                         ?.get("text")?.asString
-                    text ?: "تعذر استخراج الصياغة من الرد."
+                    if (!text.isNullOrBlank()) AIResult.Success(text)
+                    else AIResult.Error("استجابة فارغة")
                 } else {
-                    "❌ خطأ من مزود الخدمة: HTTP ${response.code}"
+                    AIResult.Error("HTTP ${response.code}")
                 }
             }
         } catch (e: Exception) {
-            "❌ حدث استثناء أثناء الصياغة: ${e.localizedMessage}"
+            AIResult.Error(e.localizedMessage ?: "timeout")
         }
     }
 
