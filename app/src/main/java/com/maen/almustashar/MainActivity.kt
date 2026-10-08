@@ -2,6 +2,13 @@ package com.maen.almustashar
 
 import android.content.Intent
 import android.os.Bundle
+import android.content.Intent
+import android.widget.EditText
+import android.widget.Button
+import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import com.maen.almustashar.LicenseManager
+import com.maen.almustashar.OwnerPanelActivity
 import android.view.View
 import android.widget.ImageView
 import androidx.appcompat.app.AlertDialog
@@ -19,6 +26,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setupOwnerSecretAccess()
 
         if (!LicenseManager.isLicensed(this)) {
             val intent = Intent(this, LicenseActivity::class.java)
@@ -149,4 +157,52 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("حسناً", null)
             .show()
     }
+
+    private fun setupOwnerSecretAccess() {
+        val toolbar = findViewById<androidx.appcompat.widget.Toolbar>(R.id.toolbar) 
+            ?: findViewById<android.view.View>(R.id.topAppBar) 
+            ?: findViewById<android.view.View>(android.R.id.content)
+            
+        toolbar.setOnLongClickListener {
+            showOwnerLoginDialog()
+            true
+        }
+    }
+
+    private fun showOwnerLoginDialog() {
+        val view = layoutInflater.inflate(R.layout.dialog_owner_access, null)
+        val dialog = AlertDialog.Builder(this)
+            .setView(view)
+            .create()
+
+        val etEmail = view.findViewById<EditText>(R.id.dialogOwnerEmail)
+        val etPass = view.findViewById<EditText>(R.id.dialogOwnerPass)
+        val btnStudio = view.findViewById<Button>(R.id.btnDialogOwnerStudio)
+        val btnOwner = view.findViewById<Button>(R.id.btnDialogOwnerPanel)
+
+        btnOwner?.setOnClickListener {
+            val email = etEmail.text.toString().trim()
+            val pass = etPass.text.toString().trim()
+            if (LicenseManager.verifyOwner(email, pass)) {
+                dialog.dismiss()
+                startActivity(Intent(this, OwnerPanelActivity::class.java))
+            } else {
+                Toast.makeText(this, "بيانات المالك غير صحيحة", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        btnStudio?.setOnClickListener {
+            val email = etEmail.text.toString().trim()
+            val pass = etPass.text.toString().trim()
+            if (LicenseManager.verifyOwner(email, pass)) {
+                dialog.dismiss()
+                startActivity(Intent(this, OwnerPanelActivity::class.java))
+            } else {
+                Toast.makeText(this, "بيانات المالك غير صحيحة", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        dialog.show()
+    }
+
 }

@@ -225,7 +225,7 @@ class SearchActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val filesList = withContext(Dispatchers.IO) {
                 try {
-                    val url = "https://us-central1-almustashar-law.cloudfunctions.net/searchDriveLaws"
+                    val url = "https://us-central1-al-mustashar-7f6b7.cloudfunctions.net/searchDriveLaws"
                     val jsonBody = "{\"query\": \"$query\"}".toRequestBody("application/json".toMediaType())
                     val request = Request.Builder().url(url).post(jsonBody).build()
 
