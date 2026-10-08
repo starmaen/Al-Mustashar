@@ -116,7 +116,7 @@
             android:textColor="#0F2042"
             android:gravity="right"/>
 
-        <!-- القسم الثاني: أطراف الخصومة والوكالة -->
+        <!-- القسم الثاني: أطراف الخصومة والاتصال -->
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -336,9 +336,6 @@
             android:background="@android:drawable/edit_text"
             android:textColor="#0F2042"/>
 
-        <!-- أزرار الإجراءات -->
-        <Button
-            
         <!-- القسم الخامس: المرفقات والمستندات المؤرشفة -->
         <TextView
             android:layout_width="match_parent"
@@ -351,23 +348,15 @@
             android:layout_marginBottom="6dp"
             android:gravity="right"/>
 
-        <LinearLayout
+        <Button
+            android:id="@+id/btnAddDocument"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
+            android:layout_height="48dp"
+            android:text="➕ إضافة مرفق (PDF / صورة / مستند)"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#2E7D32" />
 
-            <Button
-                android:id="@+id/btnAddDocument"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="➕ إضافة مرفق (PDF / صورة / مستند)"
-                android:textSize="13sp"
-                android:textColor="#FFFFFF"
-                android:backgroundTint="#2E7D32" />
-        </LinearLayout>
-
-        <!-- قائمة عرض المرفقات المضافة -->
         <LinearLayout
             android:id="@+id/layoutDocumentsList"
             android:layout_width="match_parent"
@@ -375,6 +364,7 @@
             android:orientation="vertical"
             android:layout_marginTop="8dp" />
 
+        <!-- أزرار الإجراءات -->
         <Button
             android:id="@+id/btnDecisions"
             android:layout_width="match_parent"
