@@ -260,29 +260,28 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun openDirectInBrowserOnly(url: String) {
+        var target = url
+        if (target.contains("/view")) {
+            target = target.replace("/view", "/preview")
+        }
         try {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                addCategory(Intent.CATEGORY_BROWSABLE)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            val pm = packageManager
-            val resolveInfos = pm.queryIntentActivities(browserIntent, PackageManager.MATCH_DEFAULT_ONLY)
-            val nonDriveBrowser = resolveInfos.firstOrNull { 
-                !it.activityInfo.packageName.contains("com.google.android.apps.docs") &&
-                !it.activityInfo.packageName.contains("drive")
-            }
-
-            if (nonDriveBrowser != null) {
-                browserIntent.setPackage(nonDriveBrowser.activityInfo.packageName)
-                startActivity(browserIntent)
-            } else {
-                startActivity(Intent.createChooser(browserIntent, "فتح الرابط عبر المتصفح"))
-            }
+            val customTabs = androidx.browser.customtabs.CustomTabsIntent.Builder().setShowTitle(true).build()
+            customTabs.intent.setPackage("com.android.chrome")
+            customTabs.launchUrl(this, Uri.parse(target))
         } catch (_: Exception) {
             try {
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-            } catch (e: Exception) {
-                Toast.makeText(this, "تعذر فتح الرابط", Toast.LENGTH_SHORT).show()
+                val customTabs = androidx.browser.customtabs.CustomTabsIntent.Builder().setShowTitle(true).build()
+                customTabs.launchUrl(this, Uri.parse(target))
+            } catch (_: Exception) {
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(target)).apply {
+                        addCategory(Intent.CATEGORY_BROWSABLE)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    startActivity(browserIntent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "تعذر فتح الرابط", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

@@ -1,12 +1,13 @@
 package com.maen.almustashar
 
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import android.widget.Toast
+import androidx.browser.customtabs.CustomTabsIntent
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
@@ -28,27 +29,35 @@ class DriveLawAdapter : ListAdapter<DriveLawFile, DriveLawAdapter.DriveViewHolde
 
         holder.itemView.setOnClickListener {
             val context = holder.itemView.context
-            val url = item.webViewLink ?: item.webContentLink ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
-            
+            var rawUrl = item.webViewLink ?: item.webContentLink ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+
+            // تحويل رابط view إلى preview لمنع فتح تطبيق Drive الداخلي
+            if (rawUrl.contains("/view")) {
+                rawUrl = rawUrl.replace("/view", "/preview")
+            }
+
             try {
-                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                    addCategory(Intent.CATEGORY_BROWSABLE)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                val pm = context.packageManager
-                val resolveInfos = pm.queryIntentActivities(browserIntent, PackageManager.MATCH_DEFAULT_ONLY)
-                val nonDrive = resolveInfos.firstOrNull { 
-                    !it.activityInfo.packageName.contains("com.google.android.apps.docs") &&
-                    !it.activityInfo.packageName.contains("drive")
-                }
-                if (nonDrive != null) {
-                    browserIntent.setPackage(nonDrive.activityInfo.packageName)
-                    context.startActivity(browserIntent)
-                } else {
-                    context.startActivity(Intent.createChooser(browserIntent, "فتح عبر المتصفح"))
-                }
+                // الفتح عبر CustomTabsIntent يضمن الفتح في المتصفح المدمج بدون طلب حسابات درايف
+                val customTabs = CustomTabsIntent.Builder()
+                    .setShowTitle(true)
+                    .build()
+                customTabs.intent.setPackage("com.android.chrome")
+                customTabs.launchUrl(context, Uri.parse(rawUrl))
             } catch (_: Exception) {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                try {
+                    val customTabsFallback = CustomTabsIntent.Builder().setShowTitle(true).build()
+                    customTabsFallback.launchUrl(context, Uri.parse(rawUrl))
+                } catch (_: Exception) {
+                    try {
+                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(rawUrl)).apply {
+                            addCategory(Intent.CATEGORY_BROWSABLE)
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                        }
+                        context.startActivity(browserIntent)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "تعذر فتح المستند", Toast.LENGTH_SHORT).show()
+                    }
+                }
             }
         }
     }
