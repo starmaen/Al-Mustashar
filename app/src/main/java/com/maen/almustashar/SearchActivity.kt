@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.text.util.Linkify
@@ -53,6 +54,7 @@ class SearchActivity : AppCompatActivity() {
     private var cachedLaws: List<LawsRepository.LawMeta> = emptyList()
     private var lawChoices: List<LawChoice> = listOf(LawChoice(null, "كل القوانين"))
     private var currentPdfUrl: String? = null
+    private val defaultDriveFolder = "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -86,14 +88,14 @@ class SearchActivity : AppCompatActivity() {
                 searchActions.visibility = View.GONE
                 tvEmpty.visibility = View.GONE
                 rvDriveResults.visibility = View.GONE
-                etSearch.hint = "ابحث بالاسم عن ملف أو قانون في مراجع Drive..."
+                etSearch.hint = "ابحث عن ملف أو قانون في مراجع Drive..."
             } else {
                 spinnerLaw.visibility = View.VISIBLE
                 rvDriveResults.visibility = View.GONE
                 tvEmpty.visibility = View.GONE
                 scrollResults.visibility = View.GONE
                 searchActions.visibility = View.GONE
-                etSearch.hint = "مثال: الماده 44، أو قانون العاملين..."
+                etSearch.hint = "ابحث برقم المادة أو اسم القانون أو الموضوع..."
             }
         }
 
@@ -133,8 +135,8 @@ class SearchActivity : AppCompatActivity() {
         }
 
         btnOpenPdf.setOnClickListener {
-            val target = currentPdfUrl ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
-            openInBrowser(target)
+            val target = currentPdfUrl ?: defaultDriveFolder
+            openDirectInBrowserOnly(target)
         }
     }
 
@@ -172,7 +174,7 @@ class SearchActivity : AppCompatActivity() {
         rvDriveResults.visibility = View.GONE
 
         if (rbDrive.isChecked) {
-            searchDriveDynamic(query)
+            searchDriveFiles(query)
         } else {
             searchFirestoreLaws(query)
         }
@@ -193,7 +195,7 @@ class SearchActivity : AppCompatActivity() {
 
                     val driveUrlRegex = Regex("https://drive\\.google\\.com/[^\\s]+")
                     val match = driveUrlRegex.find(result)
-                    currentPdfUrl = match?.value ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+                    currentPdfUrl = match?.value ?: defaultDriveFolder
                     btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
                 } else {
                     tvEmpty.text = result
@@ -207,7 +209,7 @@ class SearchActivity : AppCompatActivity() {
         }
     }
 
-    private fun searchDriveDynamic(query: String) {
+    private fun searchDriveFiles(query: String) {
         lifecycleScope.launch {
             try {
                 if (cachedLaws.isEmpty()) {
@@ -229,7 +231,7 @@ class SearchActivity : AppCompatActivity() {
                         id = law.id,
                         name = law.name,
                         mimeType = "application/pdf",
-                        webViewLink = law.drivePdfUrl ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3",
+                        webViewLink = law.drivePdfUrl ?: defaultDriveFolder,
                         webContentLink = law.drivePdfUrl
                     )
                 }
@@ -240,30 +242,42 @@ class SearchActivity : AppCompatActivity() {
                     driveAdapter.submitList(matchedFiles)
                     rvDriveResults.visibility = View.VISIBLE
                 } else {
-                    tvEmpty.text = "لم يتم العثور على وثائق مطابقة لهذا الاسم في الأرشيف."
+                    tvEmpty.text = "لم يتم العثور على ملف يطابق: \"$query\"\nيمكنك فتح أرشيف Drive العام مباشرة:"
                     tvEmpty.visibility = View.VISIBLE
 
                     searchActions.visibility = View.VISIBLE
-                    btnOpenPdf.text = "📂 فتح مجلد القوانين في المتصفح"
+                    btnOpenPdf.text = "📂 فتح مجلد الأرشيف في المتصفح"
                     btnOpenPdf.setOnClickListener {
-                        openInBrowser("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3")
+                        openDirectInBrowserOnly(defaultDriveFolder)
                     }
                 }
             } catch (e: Exception) {
                 progressBar.visibility = View.GONE
-                tvEmpty.text = "تعذر البحث: ${e.localizedMessage}"
+                tvEmpty.text = "تعذر إتمام البحث في الأرشيف: ${e.localizedMessage}"
                 tvEmpty.visibility = View.VISIBLE
             }
         }
     }
 
-    private fun openInBrowser(url: String) {
+    private fun openDirectInBrowserOnly(url: String) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                 addCategory(Intent.CATEGORY_BROWSABLE)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-            startActivity(Intent.createChooser(intent, "فتح بواسطة المتصفح"))
+            val pm = packageManager
+            val resolveInfos = pm.queryIntentActivities(browserIntent, PackageManager.MATCH_DEFAULT_ONLY)
+            val nonDriveBrowser = resolveInfos.firstOrNull { 
+                !it.activityInfo.packageName.contains("com.google.android.apps.docs") &&
+                !it.activityInfo.packageName.contains("drive")
+            }
+
+            if (nonDriveBrowser != null) {
+                browserIntent.setPackage(nonDriveBrowser.activityInfo.packageName)
+                startActivity(browserIntent)
+            } else {
+                startActivity(Intent.createChooser(browserIntent, "فتح الرابط عبر المتصفح"))
+            }
         } catch (_: Exception) {
             try {
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
