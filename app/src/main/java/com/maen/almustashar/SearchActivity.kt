@@ -9,6 +9,7 @@ import android.os.Bundle
 import android.text.method.LinkMovementMethod
 import android.text.util.Linkify
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -59,7 +60,7 @@ class SearchActivity : AppCompatActivity() {
         tvSearchResult.setTextColor(android.graphics.Color.parseColor("#0F2042"))
         tvSearchResult.setLinkTextColor(android.graphics.Color.parseColor("#1565C0"))
 
-        spinnerLaw.adapter = LawSpinnerAdapter(this, lawChoices)
+        spinnerLaw.adapter = LawSpinnerAdapter(this@SearchActivity, lawChoices)
 
         lifecycleScope.launch {
             try {
@@ -68,7 +69,7 @@ class SearchActivity : AppCompatActivity() {
                 val choices = mutableListOf(LawChoice(null, "كل القوانين"))
                 choices.addAll(laws.map { LawChoice(it.id, it.name) })
                 lawChoices = choices
-                spinnerLaw.adapter = LawSpinnerAdapter(this, lawChoices)
+                spinnerLaw.adapter = LawSpinnerAdapter(this@SearchActivity, lawChoices)
             } catch (_: Exception) {}
         }
 
