@@ -19,22 +19,12 @@ sealed class AIResult {
 
 object AIClient {
     private val GROQ_KEY = StringBuilder("gsk_").append("cvxjbsW6q8CQfCLOrmTg").append("WGdyb0FYEs0DsbD8n1am4ZwEJORizjIM").toString()
-        private val GEMINI_KEY = StringBuilder("AQ.Ab8RN6KmTYMlQDnnJ").append("gx2n4-OCuZYx7sJ6oVOk3TXUHvstG0jJg").toString()
+    private val GEMINI_KEY = StringBuilder("AQ.Ab8RN6KmTYMlQDnnJ").append("gx2n4-OCuZYx7sJ6oVOk3TXUHvstG0jJg").toString()
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
         .readTimeout(120, TimeUnit.SECONDS)
         .build()
-
-    
-    private const val DRAFTING_SYSTEM_PROMPT = """أنت محامٍ ومستشار قضائي سوري عريق يتمتع بأعلى درجات البلاغة والصياغة القانونية الرصينة.
-مهمتك: صياغة مذكرات، استدعاءات، لوائح جوابية، وطلبات رسمية للبلديات والمحاكم والدوائر الحكومية.
-
-شروط الصياغة الصارمة:
-1. الالتزام بالديباجة القضائية والأعراف القانونية (الجهة الموجه إليها، أطراف الدعوى إن وجدت، من حيث الشكل، من حيث الوقائع، من حيث القانون والأسانيد، والطلبات الختامية بدقة).
-2. عدم كتابة أي مقدمات أو اعتذارات أو نصوص حوارية (مثل: إليك المذكرة...)، بل ابدأ مباشرة من عنوان المذكرة أو الاستدعاء وكأنها مطبوعة على ورق المحامي الرسمي وجاهزة للتقديم مباشرة للقاضي أو الدائرة الرسمية.
-3. تفنيد المستندات المرفقة (سواء صور قيود عقارية، تقارير، أو ضبوط) والاستناد إليها كأدلة دامغة.
-4. سلامة لغوية وإعرابية تامة خالية من الركاكة والعبارات غير الدارجة قضائياً."""
 
     private const val SYSTEM_PROMPT = """أنت مستشار ومرجع قانوني سوري خبير ومتخصص في التشريعات والقضاء السوري.
 مهمتك تقديم دراسة قانونية وافية وتحليل شامل معزز بالنصوص الرسمية بالهيكل الآتي:
@@ -42,6 +32,13 @@ object AIClient {
 2. 📜 السند القانوني النافذ (أرقام المواد ونصوصها الصريحة من القانون السوري ذي الصلة).
 3. 💡 التحليل القانوني وإبداء الرأي والحل أو العقوبة المقررة.
 4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية."""
+
+    private const val DRAFTING_SYSTEM_PROMPT = """أنت محامٍ ومستشار قضائي سوري عريق يتمتع بأعلى درجات البلاغة والصياغة القانونية الرصينة.
+مهمتك: صياغة مذكرات واستدعاءات ولوائح جوابية وطلبات رسمية للبلديات والمحاكم والدوائر الحكومية.
+شروط الصياغة الصارمة:
+1. الالتزام بالديباجة القضائية والأعراف القانونية الرسمية.
+2. عدم كتابة أي مقدمات حوارية بل ابدأ مباشرة بديباجة المذكرة الرسمية.
+3. تفنيد المعطيات والمستندات بأسلوب رصين ومحكم لغوياً وقانونياً."""
 
     // 1. الاستشارة القانونية
     suspend fun askLegalQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
@@ -73,18 +70,12 @@ object AIClient {
         val groqRes = callGroq("llama-3.1-8b-instant", prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
-        return@withContext when {
-            res1 is AIResult.Error -> "❌ خطأ: ${res1.message}"
-            res2 is AIResult.Error -> "❌ خطأ البديل: ${res2.message}"
-            groqRes is AIResult.Error -> "❌ خطأ Groq: ${groqRes.message}"
-            else -> "❌ تعذر الاتصال بمزود الخدمة."
-        }
+        return@withContext "❌ تعذر الاتصال بمزود الخدمة."
     }
 
     // 3. البحث في مواد القوانين
     suspend fun fetchLawArticleFromAI(rawQ: String): String = withContext(Dispatchers.IO) {
         val searchPrompt = "استخرج النص الحرفي والكامل للمادة القانونية التالية من التشريعات السورية بدقة متناهية:\n$rawQ"
-        
         val res1 = callGemini("gemini-3.8-flash", searchPrompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
@@ -97,34 +88,32 @@ object AIClient {
         return@withContext ""
     }
 
-    
-        // 4. صياغة المذكرات والاستدعاءات القضائية بتسلسل النماذج الناجح
+    // 4. صياغة المذكرات والاستدعاءات القضائية
     suspend fun draftLegalDocument(
         userNotes: String,
         attachmentsBase64: List<Pair<String, String>> = emptyList()
     ): String = withContext(Dispatchers.IO) {
-        val fullPrompt = "$DRAFTING_SYSTEM_PROMPT
+        val fullPrompt = DRAFTING_SYSTEM_PROMPT + "\n\nمعطيات ومطالب الصياغة:\n" + userNotes
 
-معطيات ومطالب المحامي لإعداد المذكرة/الاستدعاء:
-$userNotes"
-
-        // تجربة النموذج الأساسي الأول
         val res1 = callGeminiWithParts("gemini-3.8-flash", fullPrompt, attachmentsBase64)
         if (res1 is AIResult.Success) return@withContext res1.text
 
-        // تجربة النموذج الثاني
         val res2 = callGeminiWithParts("gemini-3.5-flash-lite", fullPrompt, attachmentsBase64)
         if (res2 is AIResult.Success) return@withContext res2.text
 
-        // البديل السريع المضمون (Groq) في حال حدوث timeout في النماذج السابقة
         val groqRes = callGroq("llama-3.1-8b-instant", fullPrompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         return@withContext when {
             res1 is AIResult.Error -> "❌ فشل التوليد: ${res1.message}"
             res2 is AIResult.Error -> "❌ فشل التوليد: ${res2.message}"
-            else -> "❌ تعذر إتمام الصياغة، يرجى المحاولة مجدداً."
+            groqRes is AIResult.Error -> "❌ فشل البديل: ${groqRes.message}"
+            else -> "❌ تعذر إتمام الصياغة، يرجى إعادة المحاولة."
         }
+    }
+
+    private fun callGemini(model: String, prompt: String): AIResult {
+        return callGeminiWithParts(model, "$SYSTEM_PROMPT\n\nالسؤال القانوني: $prompt", emptyList())
     }
 
     private fun callGeminiWithParts(
@@ -168,8 +157,11 @@ $userNotes"
                         ?.getAsJsonArray("parts")
                         ?.get(0)?.asJsonObject
                         ?.get("text")?.asString
-                    if (!text.isNullOrBlank()) AIResult.Success(text)
-                    else AIResult.Error("استجابة فارغة")
+                    if (!text.isNullOrBlank()) {
+                        AIResult.Success(text)
+                    } else {
+                        AIResult.Error("رد فارغ من مزود الخدمة")
+                    }
                 } else {
                     AIResult.Error("HTTP ${response.code}")
                 }
@@ -179,69 +171,26 @@ $userNotes"
         }
     }
 
-    private fun callGemini(model: String, prompt: String): AIResult {
-        return try {
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$GEMINI_KEY"
-
-            val rootJson = JsonObject()
-            val contentsArr = JsonArray()
-            val contentObj = JsonObject()
-            val partsArr = JsonArray()
-            val partObj = JsonObject()
-
-            partObj.addProperty("text", "$SYSTEM_PROMPT\n\nالسؤال القانوني: $prompt")
-            partsArr.add(partObj)
-            contentObj.add("parts", partsArr)
-            contentsArr.add(contentObj)
-            rootJson.add("contents", contentsArr)
-
-            val body = rootJson.toString().toRequestBody("application/json".toMediaType())
-            val request = Request.Builder().url(url).post(body).build()
-
-            client.newCall(request).execute().use { response ->
-                val respStr = response.body?.string().orEmpty()
-                if (response.isSuccessful) {
-                    val parsed = JsonParser.parseString(respStr).asJsonObject
-                    val text = parsed.getAsJsonArray("candidates")
-                        ?.get(0)?.asJsonObject
-                        ?.getAsJsonObject("content")
-                        ?.getAsJsonArray("parts")
-                        ?.get(0)?.asJsonObject
-                        ?.get("text")?.asString
-                    if (!text.isNullOrBlank()) {
-                        AIResult.Success(text)
-                    } else {
-                        AIResult.Error("رد فارغ من مزود الخدمة")
-                    }
-                } else {
-                    AIResult.Error("HTTP ${response.code}: $respStr")
-                }
-            }
-        } catch (e: Exception) {
-            AIResult.Error("Exception: ${e.localizedMessage}")
-        }
-    }
-
     private fun callGroq(model: String, prompt: String): AIResult {
         return try {
             val url = "https://api.groq.com/openai/v1/chat/completions"
-            val root = JsonObject().apply {
-                addProperty("model", model)
-                val messages = JsonArray().apply {
-                    add(JsonObject().apply {
-                        addProperty("role", "system")
-                        addProperty("content", SYSTEM_PROMPT)
-                    })
-                    add(JsonObject().apply {
-                        addProperty("role", "user")
-                        addProperty("content", prompt)
-                    })
-                }
-                add("messages", messages)
-                addProperty("temperature", 0.4)
-            }
+            val rootJson = JsonObject()
+            rootJson.addProperty("model", model)
+            val messagesArr = JsonArray()
 
-            val body = root.toString().toRequestBody("application/json".toMediaType())
+            val sysMsg = JsonObject()
+            sysMsg.addProperty("role", "system")
+            sysMsg.addProperty("content", DRAFTING_SYSTEM_PROMPT)
+            messagesArr.add(sysMsg)
+
+            val userMsg = JsonObject()
+            userMsg.addProperty("role", "user")
+            userMsg.addProperty("content", prompt)
+            messagesArr.add(userMsg)
+
+            rootJson.add("messages", messagesArr)
+
+            val body = rootJson.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
                 .url(url)
                 .addHeader("Authorization", "Bearer $GROQ_KEY")
@@ -259,14 +208,14 @@ $userNotes"
                     if (!text.isNullOrBlank()) {
                         AIResult.Success(text)
                     } else {
-                        AIResult.Error("رد فارغ من مزود الخدمة")
+                        AIResult.Error("رد فارغ من Groq")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}: $respStr")
+                    AIResult.Error("HTTP ${response.code}")
                 }
             }
         } catch (e: Exception) {
-            AIResult.Error("Exception: ${e.localizedMessage}")
+            AIResult.Error(e.localizedMessage ?: "خطأ في الاتصال")
         }
     }
 }
