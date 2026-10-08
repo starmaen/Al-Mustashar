@@ -23,6 +23,19 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import android.widget.RadioButton
+import android.widget.RadioGroup
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.gson.JsonParser
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
+
 
 class SearchActivity : AppCompatActivity() {
 
@@ -34,6 +47,16 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var scrollResults: NestedScrollView
     private lateinit var tvSearchResult: TextView
     private lateinit var searchActions: LinearLayout
+    private lateinit var rgMode: RadioGroup
+    private lateinit var rbFirestore: RadioButton
+    private lateinit var rbDrive: RadioButton
+    private lateinit var rvDriveResults: RecyclerView
+    private lateinit var driveAdapter: DriveLawAdapter
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(15, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
+        .build()
+
 
     private data class LawChoice(val id: String?, val title: String) {
         override fun toString(): String = title
@@ -54,6 +77,28 @@ class SearchActivity : AppCompatActivity() {
         scrollResults = findViewById(R.id.scrollResults)
         tvSearchResult = findViewById(R.id.tvSearchResult)
         searchActions = findViewById(R.id.searchActions)
+        rgMode = findViewById(R.id.rgSearchMode)
+        rbFirestore = findViewById(R.id.rbModeFirestore)
+        rbDrive = findViewById(R.id.rbModeDrive)
+        rvDriveResults = findViewById(R.id.rvDriveResults)
+        
+        driveAdapter = DriveLawAdapter()
+        rvDriveResults.layoutManager = LinearLayoutManager(this)
+        rvDriveResults.adapter = driveAdapter
+
+        rgMode.setOnCheckedChangeListener { _, checkedId ->
+            if (checkedId == R.id.rbModeDrive) {
+                spinnerLaw.visibility = View.GONE
+                scrollResults.visibility = View.GONE
+                searchActions.visibility = View.GONE
+                etSearch.hint = "ابحث بالنص الكامل داخل وثائق ومراجع Drive..."
+            } else {
+                spinnerLaw.visibility = View.VISIBLE
+                rvDriveResults.visibility = View.GONE
+                etSearch.hint = "مثال: المادة 117 أصول جزائية، أو 221 مدنية..."
+            }
+        }
+
 
         // تفعيل النقر المباشر على روابط الإنترنت داخل نص المادة وضبط ألوانها
         tvSearchResult.movementMethod = LinkMovementMethod.getInstance()
@@ -164,7 +209,7 @@ class SearchActivity : AppCompatActivity() {
     private fun performSearch() {
         val query = etSearch.text?.toString()?.trim() ?: ""
         if (query.isEmpty()) {
-            Toast.makeText(this, "يرجى إدخال رقم المادة أو موضوع البحث", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "يرجى إدخال كلمة البحث أولاً", Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -172,7 +217,16 @@ class SearchActivity : AppCompatActivity() {
         tvEmpty.visibility = View.GONE
         scrollResults.visibility = View.GONE
         searchActions.visibility = View.GONE
+        rvDriveResults.visibility = View.GONE
 
+        if (rbDrive.isChecked) {
+            searchDriveCloud(query)
+        } else {
+            searchFirestoreLaws(query)
+        }
+    }
+
+    private fun searchFirestoreLaws(query: String) {
         lifecycleScope.launch {
             try {
                 val selectedLawId = (spinnerLaw.selectedItem as? LawChoice)?.id
@@ -189,6 +243,57 @@ class SearchActivity : AppCompatActivity() {
                     tvEmpty.visibility = View.VISIBLE
                 }
             } catch (e: Exception) {
+                progressBar.visibility = View.GONE
+                tvEmpty.text = "تعذر إتمام البحث المحلي/المهيكل: ${e.localizedMessage}"
+                tvEmpty.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private fun searchDriveCloud(query: String) {
+        lifecycleScope.launch {
+            val filesList = withContext(Dispatchers.IO) {
+                try {
+                    // رابط الدالة السحابية searchDriveLaws
+                    val url = "https://us-central1-almustashar-law.cloudfunctions.net/searchDriveLaws"
+                    val jsonBody = "{\"query\": \"$query\"}".toRequestBody("application/json".toMediaType())
+                    val request = Request.Builder().url(url).post(jsonBody).build()
+
+                    httpClient.newCall(request).execute().use { resp ->
+                        if (!resp.isSuccessful) return@withContext emptyList<DriveLawFile>()
+                        val body = resp.body?.string().orEmpty()
+                        val root = JsonParser.parseString(body).asJsonObject
+                        val arr = root.getAsJsonArray("files") ?: return@withContext emptyList<DriveLawFile>()
+                        val list = mutableListOf<DriveLawFile>()
+                        for (elem in arr) {
+                            val obj = elem.asJsonObject
+                            list.add(
+                                DriveLawFile(
+                                    id = obj.get("id")?.asString.orEmpty(),
+                                    name = obj.get("name")?.asString.orEmpty(),
+                                    mimeType = obj.get("mimeType")?.asString.orEmpty(),
+                                    webViewLink = obj.get("webViewLink")?.asString,
+                                    webContentLink = obj.get("webContentLink")?.asString
+                                )
+                            )
+                        }
+                        list
+                    }
+                } catch (_: Exception) {
+                    emptyList<DriveLawFile>()
+                }
+            }
+
+            progressBar.visibility = View.GONE
+            if (filesList.isNotEmpty()) {
+                driveAdapter.submitList(filesList)
+                rvDriveResults.visibility = View.VISIBLE
+            } else {
+                tvEmpty.text = "لم يتم العثور على وثائق مطابقة في Drive أو تعذر الوصول للسحابة حالياً."
+                tvEmpty.visibility = View.VISIBLE
+            }
+        }
+    } catch (e: Exception) {
                 progressBar.visibility = View.GONE
                 tvEmpty.text = "حدث خطأ أثناء البحث: ${e.localizedMessage}"
                 tvEmpty.visibility = View.VISIBLE
