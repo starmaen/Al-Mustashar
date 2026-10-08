@@ -160,11 +160,11 @@ class SearchActivity : AppCompatActivity() {
     private fun setupLawsSpinner() {
         lifecycleScope.launch {
             try {
-                cachedLaws = LawsRepository.getAvailableLaws()
+                cachedLaws = LawsRepository.loadLawsList()
                 val list = mutableListOf<LawChoice>()
                 list.add(LawChoice(null, "كل القوانين"))
                 for (law in cachedLaws) {
-                    list.add(LawChoice(law.id, law.title))
+                    list.add(LawChoice(law.id, law.name))
                 }
                 lawChoices = list
                 val adapter = ArrayAdapter(this@SearchActivity, android.R.layout.simple_spinner_dropdown_item, lawChoices)
