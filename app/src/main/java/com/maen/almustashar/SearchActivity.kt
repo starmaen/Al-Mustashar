@@ -59,13 +59,7 @@ class SearchActivity : AppCompatActivity() {
         tvSearchResult.setTextColor(android.graphics.Color.parseColor("#0F2042"))
         tvSearchResult.setLinkTextColor(android.graphics.Color.parseColor("#1565C0"))
 
-        spinnerLaw.adapter = ArrayAdapter(
-            this,
-            android.R.layout.simple_spinner_dropdown_item,
-            lawChoices
-        ).apply {
-            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        }
+        spinnerLaw.adapter = LawSpinnerAdapter(this, lawChoices)
 
         lifecycleScope.launch {
             try {
@@ -74,13 +68,7 @@ class SearchActivity : AppCompatActivity() {
                 val choices = mutableListOf(LawChoice(null, "كل القوانين"))
                 choices.addAll(laws.map { LawChoice(it.id, it.name) })
                 lawChoices = choices
-                spinnerLaw.adapter = ArrayAdapter(
-                    this@SearchActivity,
-                    android.R.layout.simple_spinner_dropdown_item,
-                    lawChoices
-                ).apply {
-                    setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-                }
+                spinnerLaw.adapter = LawSpinnerAdapter(this, lawChoices)
             } catch (_: Exception) {}
         }
 
@@ -206,4 +194,30 @@ class SearchActivity : AppCompatActivity() {
             }
         }
     }
+
+    private class LawSpinnerAdapter(
+        context: android.content.Context,
+        private val items: List<LawChoice>
+    ) : ArrayAdapter<LawChoice>(context, android.R.layout.simple_spinner_item, items) {
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = super.getView(position, convertView, parent) as TextView
+            view.setTextColor(android.graphics.Color.parseColor("#0F2042"))
+            view.textSize = 15f
+            view.setTypeface(null, android.graphics.Typeface.BOLD)
+            view.gravity = android.view.Gravity.RIGHT or android.view.Gravity.CENTER_VERTICAL
+            return view
+        }
+
+        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = super.getDropDownView(position, convertView, parent) as TextView
+            view.setTextColor(android.graphics.Color.parseColor("#0F2042"))
+            view.setBackgroundColor(android.graphics.Color.WHITE)
+            view.textSize = 15f
+            view.setPadding(32, 24, 32, 24)
+            view.gravity = android.view.Gravity.RIGHT or android.view.Gravity.CENTER_VERTICAL
+            return view
+        }
+    }
+
 }

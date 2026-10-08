@@ -103,33 +103,42 @@ object LawsRepository {
         val query = rawQuery.trim()
         val laws = loadLawsList()
 
-        // 1. التعرف التلقائي على القانون المذكور في نص البحث
+        fun norm(s: String): String {
+            return s.lowercase()
+                .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+                .replace("ة", "ه").replace("ى", "ي")
+                .replace("السوري", "")
+                .replace("كامل", "").replace("كاملا", "")
+                .replace(Regex("[^a-zA-Z0-9\u0621-\u064A]"), "")
+        }
+
+        val normQ = norm(query)
+
+        // 1. التعرف التلقائي الذكي على القانون إذا كتب المستخدم اسمه
         var effectiveLawId = targetLawId
-        if (effectiveLawId == null && query.isNotEmpty()) {
-            val matchedLaw = laws.find { law ->
-                val cleanLaw = law.name.replace("السوري", "").trim()
-                val cleanQ = query.replace("السوري", "").replace("كامل", "").replace("كاملا", "").trim()
-                cleanQ.contains(cleanLaw, ignoreCase = true) || cleanLaw.contains(cleanQ, ignoreCase = true)
+        if (effectiveLawId == null && normQ.isNotEmpty()) {
+            val matched = laws.find { law ->
+                val nl = norm(law.name)
+                nl.isNotEmpty() && (normQ.contains(nl) || nl.contains(normQ))
             }
-            if (matchedLaw != null) {
-                effectiveLawId = matchedLaw.id
+            if (matched != null) {
+                effectiveLawId = matched.id
             }
         }
 
-        // 2. حالة طلب القانون كاملاً:
-        // إذا كان البحث فارغاً وتم اختيار قانون من القائمة
-        // أو إذا كتب المستخدم اسم القانون كاملاً (مثل: "القانون المدني") دون أرقام أو كلمات سياقية إضافية
-        // أو إذا وردت كلمة كامل/كاملا
+        // 2. فحص هل المطلوب عرض القانون كاملاً؟
         val hasDigits = query.any { it.isDigit() }
-        val isExplicitLawDump = effectiveLawId != null && !hasDigits &&
-            (query.isEmpty() || query.contains("كامل") || query.contains("كاملا") ||
-             laws.find { it.id == effectiveLawId }?.name?.let {
-                 val n1 = it.replace(" ", "").replace("السوري", "")
-                 val n2 = query.replace(" ", "").replace("السوري", "")
-                 n1.contains(n2) || n2.contains(n1)
-             } == true)
+        val isExplicitFullLaw = effectiveLawId != null && !hasDigits && (
+            query.isEmpty() ||
+            query.contains("كامل") ||
+            query.contains("كاملا") ||
+            laws.find { it.id == effectiveLawId }?.let {
+                val nl = norm(it.name)
+                normQ == nl || normQ.contains(nl) || nl.contains(normQ)
+            } == true
+        )
 
-        if (effectiveLawId != null && isExplicitLawDump) {
+        if (effectiveLawId != null && isExplicitFullLaw) {
             val allArticles = loadAllArticles(laws).filter { it.lawId == effectiveLawId }
                 .sortedBy { it.number.toIntOrNull() ?: 9999 }
             if (allArticles.isNotEmpty()) {
@@ -139,14 +148,14 @@ object LawsRepository {
             }
         }
 
-        // 3. البحث برقم المادة
+        // 3. البحث برقم المادة فقط
         val digits = query.filter { it.isDigit() }
         if (digits.isNotEmpty() && (query.length <= 5 || query.contains("مادة") || query.contains("المادة"))) {
             val res = fetchByNumber(digits, effectiveLawId, laws)
             if (!res.isNullOrBlank()) return res
         }
 
-        // 4. البحث السياقي والموضوعي (في النصوص والكلمات المفتاحية)
+        // 4. البحث السياقي والموضوعي (في النصوص والكلمات الدلالية)
         val cleanTerms = query.split(" ")
             .map { it.trim() }
             .filter { it.length > 1 && !it.all { ch -> ch.isDigit() } && it !in listOf("قانون", "القانون", "كامل", "كاملا", "السوري") }
