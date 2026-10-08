@@ -19,10 +19,9 @@ import java.io.ByteArrayOutputStream
 
 class LegalDraftingActivity : AppCompatActivity() {
 
-    private lateinit var spType: Spinner
-    private lateinit var etTarget: EditText
-    private lateinit var etParties: EditText
+    private lateinit var etHeader: EditText
     private lateinit var etFacts: EditText
+    private lateinit var etFooter: EditText
     private lateinit var btnAttach: Button
     private lateinit var tvAttachStatus: TextView
     private lateinit var btnGenerate: Button
@@ -45,10 +44,9 @@ class LegalDraftingActivity : AppCompatActivity() {
         try {
             setContentView(R.layout.activity_legal_drafting)
 
-            spType = findViewById(R.id.spDraftType)
-            etTarget = findViewById(R.id.etTargetEntity)
-            etParties = findViewById(R.id.etParties)
+            etHeader = findViewById(R.id.etCustomHeader)
             etFacts = findViewById(R.id.etFactsAndDemands)
+            etFooter = findViewById(R.id.etCustomFooter)
             btnAttach = findViewById(R.id.btnAttachImage)
             tvAttachStatus = findViewById(R.id.tvAttachmentStatus)
             btnGenerate = findViewById(R.id.btnGenerateDraft)
@@ -58,19 +56,7 @@ class LegalDraftingActivity : AppCompatActivity() {
             btnCopy = findViewById(R.id.btnCopyDraft)
             btnShare = findViewById(R.id.btnShareDraft)
 
-            val types = arrayOf(
-                "مذكرة دفاع / جوابية أمام المحكمة",
-                "استدعاء إداري / بلدي (بيان قيد عقاري وشرح تنظيمي)",
-                "استدعاء دعوى جديدة (لائحة ادعاء)",
-                "مذكرة إبراز مستندات ودفوع تمهيدية",
-                "طلب إخلاء سبيل أو استرداد حجز",
-                "لائحة طعن بالاستئناف / النقض",
-                "إنذار عدلي موجه عبر الكاتب بالعدل"
-            )
-            val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, types)
-            spType.adapter = adapter
-
-                        // استلام بيانات القضية الممررة بدقة وتحديد صفة الموكل
+            // توليد الترويسة والخاتمة التلقائية بناءً على ملف القضية
             intent?.let {
                 val title = it.getStringExtra("case_title") ?: ""
                 val basis = it.getStringExtra("case_basis") ?: ""
@@ -78,11 +64,19 @@ class LegalDraftingActivity : AppCompatActivity() {
                 val cName = it.getStringExtra("client_name") ?: ""
                 val cRole = it.getStringExtra("client_role") ?: "مدعٍ"
                 val opp = it.getStringExtra("opponent_name") ?: ""
-                
-                if (court.isNotBlank()) etTarget.setText(court)
-                if (cName.isNotBlank() || title.isNotBlank()) {
-                    etParties.setText("الموكل: $cName (صفته: $cRole) | الخصم: $opp | الدعوى: $title (أساس: $basis)")
-                }
+
+                val courtHeader = if (court.isNotBlank()) "إلى $court الموقرة\n" else "إلى المحكمة الموقرة\n"
+                val partiesHeader = StringBuilder(courtHeader)
+                if (cName.isNotBlank()) partiesHeader.append("المستدعي / الجهة ال${cRole}: $cName (يمثلها الوكيل المحامي)\n")
+                if (opp.isNotBlank()) partiesHeader.append("الجهة المدعى عليها: $opp\n")
+                if (basis.isNotBlank()) partiesHeader.append("الدعوى: $title | أساس: $basis\n")
+                partiesHeader.append("الموضوع: مذكرة في الدعوى الماثلة")
+
+                etHeader.setText(partiesHeader.toString())
+
+                // خاتمة افتراضية رصينة
+                val defaultFooter = "بكل تحفظ واحترام\nالوكيل المحامي عن الجهة ال${cRole}"
+                etFooter.setText(defaultFooter)
             }
 
             btnAttach.setOnClickListener {
@@ -90,7 +84,7 @@ class LegalDraftingActivity : AppCompatActivity() {
             }
 
             btnGenerate.setOnClickListener {
-                generateDraft()
+                generateAndMergeDraft()
             }
 
             btnCopy.setOnClickListener {
@@ -98,7 +92,7 @@ class LegalDraftingActivity : AppCompatActivity() {
                 if (text.isNotEmpty()) {
                     val clip = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                     clip.setPrimaryClip(ClipData.newPlainText("LegalDraft", text))
-                    Toast.makeText(this, "تم نسخ المذكرة للحافظة بنجاح", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "تم نسخ المذكرة بالكامل للحافظة", Toast.LENGTH_SHORT).show()
                 }
             }
 
@@ -130,38 +124,45 @@ class LegalDraftingActivity : AppCompatActivity() {
                 tvAttachStatus.setTextColor(android.graphics.Color.parseColor("#2E7D32"))
             }
         } catch (e: Exception) {
-            Toast.makeText(this, "فشل معالجة الصورة: ${e.message}", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "فشل تجهيز المرفق: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun generateDraft() {
-        val selectedType = spType.selectedItem?.toString() ?: ""
-        val target = etTarget.text.toString().trim()
-        val parties = etParties.text.toString().trim()
+    private fun generateAndMergeDraft() {
+        val header = etHeader.text.toString().trim()
         val facts = etFacts.text.toString().trim()
+        val footer = etFooter.text.toString().trim()
 
         if (facts.isEmpty() && attachedImagesBase64.isEmpty()) {
-            Toast.makeText(this, "يرجى كتابة وقائع الطلب أو إرفاق مستند", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "يرجى كتابة موضوع ووقائع المذكرة للذكاء الاصطناعي", Toast.LENGTH_SHORT).show()
             return
         }
-
-        val promptBuilder = StringBuilder()
-        promptBuilder.append("نوع الطلب: $selectedType\n")
-        if (target.isNotEmpty()) promptBuilder.append("الجهة الموجه إليها: $target\n")
-        if (parties.isNotEmpty()) promptBuilder.append("أطراف العلاقة: $parties\n")
-        promptBuilder.append("الوقائع والمطالب:\n$facts\n")
 
         progress.visibility = View.VISIBLE
         btnGenerate.isEnabled = false
         layoutResult.visibility = View.GONE
 
+        // توجيه الذكاء الاصطناعي لصياغة متن المذكرة فقط
+        val prompt = "صغ صلب ومتن المذكرة القضائية/الاستدعاء حصراً (من حيث الوقائع، الأسانيد القانونية السورية، والطلبات) دون كتابة ترويسة أو خاتمة:\n$facts"
+
         lifecycleScope.launch {
             try {
-                val result = AIClient.draftLegalDocument(promptBuilder.toString(), attachedImagesBase64)
+                val aiBody = AIClient.draftLegalDocument(prompt, attachedImagesBase64)
+                
+                // دمج الأجزاء الثلاثة بنص واحد متناسق
+                val fullDocument = StringBuilder()
+                if (header.isNotEmpty()) {
+                    fullDocument.append(header).append("\n\n-------------------------\n\n")
+                }
+                fullDocument.append(aiBody)
+                if (footer.isNotEmpty()) {
+                    fullDocument.append("\n\n-------------------------\n\n").append(footer)
+                }
+
                 progress.visibility = View.GONE
                 btnGenerate.isEnabled = true
                 layoutResult.visibility = View.VISIBLE
-                etResult.setText(result)
+                etResult.setText(fullDocument.toString())
             } catch (e: Exception) {
                 progress.visibility = View.GONE
                 btnGenerate.isEnabled = true
