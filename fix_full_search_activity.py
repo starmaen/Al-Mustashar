@@ -1,14 +1,15 @@
-package com.maen.almustashar
+code = '''package com.maen.almustashar
 
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
+import android.text.method.LinkMovementMethod
 import android.text.util.Linkify
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -25,14 +26,15 @@ import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import kotlinx.coroutines.launch
-import java.net.HttpURLConnection
-import java.net.URL
-import java.net.URLEncoder
-import org.json.JSONObject
+import com.google.gson.JsonParser
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.concurrent.TimeUnit
 
 class SearchActivity : AppCompatActivity() {
 
@@ -54,6 +56,11 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var rvDriveResults: RecyclerView
     private lateinit var driveAdapter: DriveLawAdapter
 
+    private val httpClient = OkHttpClient.Builder()
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
     private data class LawChoice(val id: String?, val title: String) {
         override fun toString(): String = title
     }
@@ -61,7 +68,6 @@ class SearchActivity : AppCompatActivity() {
     private var cachedLaws: List<LawsRepository.LawMeta> = emptyList()
     private var lawChoices: List<LawChoice> = listOf(LawChoice(null, "كل القوانين"))
     private var currentPdfUrl: String? = null
-    private val defaultDriveFolder = "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,16 +99,11 @@ class SearchActivity : AppCompatActivity() {
                 spinnerLaw.visibility = View.GONE
                 scrollResults.visibility = View.GONE
                 searchActions.visibility = View.GONE
-                tvEmpty.visibility = View.GONE
-                rvDriveResults.visibility = View.GONE
-                etSearch.hint = "ابحث عن ملف أو قانون في مراجع Drive..."
+                etSearch.hint = "ابحث بالنص الكامل داخل وثائق ومراجع Drive..."
             } else {
                 spinnerLaw.visibility = View.VISIBLE
                 rvDriveResults.visibility = View.GONE
-                tvEmpty.visibility = View.GONE
-                scrollResults.visibility = View.GONE
-                searchActions.visibility = View.GONE
-                etSearch.hint = "ابحث برقم المادة أو اسم القانون أو الموضوع..."
+                etSearch.hint = "مثال: المادة 117 أصول جزائية، أو 221 مدنية..."
             }
         }
 
@@ -142,19 +143,28 @@ class SearchActivity : AppCompatActivity() {
         }
 
         btnOpenPdf.setOnClickListener {
-            val target = currentPdfUrl ?: defaultDriveFolder
-            openDirectInBrowserOnly(target)
+            val url = currentPdfUrl
+            if (!url.isNullOrBlank()) {
+                try {
+                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                    startActivity(browserIntent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "تعذر فتح رابط المستند: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "المستند الأصلي غير مرفق لهذه المادة", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
     private fun setupLawsSpinner() {
         lifecycleScope.launch {
             try {
-                cachedLaws = LawsRepository.loadLawsList()
+                cachedLaws = LawsRepository.getAvailableLaws()
                 val list = mutableListOf<LawChoice>()
                 list.add(LawChoice(null, "كل القوانين"))
                 for (law in cachedLaws) {
-                    list.add(LawChoice(law.id, law.name))
+                    list.add(LawChoice(law.id, law.title))
                 }
                 lawChoices = list
                 val adapter = ArrayAdapter(this@SearchActivity, android.R.layout.simple_spinner_dropdown_item, lawChoices)
@@ -181,7 +191,7 @@ class SearchActivity : AppCompatActivity() {
         rvDriveResults.visibility = View.GONE
 
         if (rbDrive.isChecked) {
-            searchDriveFiles(query)
+            searchDriveCloud(query)
         } else {
             searchFirestoreLaws(query)
         }
@@ -199,143 +209,66 @@ class SearchActivity : AppCompatActivity() {
                     Linkify.addLinks(tvSearchResult, Linkify.WEB_URLS)
                     scrollResults.visibility = View.VISIBLE
                     searchActions.visibility = View.VISIBLE
-
-                    val driveUrlRegex = Regex("https://drive\\.google\\.com/[^\\s]+")
-                    val match = driveUrlRegex.find(result)
-                    currentPdfUrl = match?.value ?: defaultDriveFolder
-                    btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
                 } else {
                     tvEmpty.text = result
                     tvEmpty.visibility = View.VISIBLE
                 }
             } catch (e: Exception) {
                 progressBar.visibility = View.GONE
-                tvEmpty.text = "تعذر إتمام البحث: ${e.localizedMessage}"
+                tvEmpty.text = "تعذر إتمام البحث المهيكل: ${e.localizedMessage}"
                 tvEmpty.visibility = View.VISIBLE
             }
         }
     }
 
-    private fun searchDriveFiles(query: String) {
+    private fun searchDriveCloud(query: String) {
         lifecycleScope.launch {
-            try {
-                // 1. محاولة البحث الموازي في السيرفر المحلي لمواد الـ PDF
-                var localResultText = ""
-                var localPdfUrl: String? = null
-                
-                withContext(Dispatchers.IO) {
-                    try {
-                        val encoded = URLEncoder.encode(query, "UTF-8")
-                        val url = URL("http://127.0.0.1:3000/api/search?q=" + encoded)
-                        val conn = url.openConnection() as HttpURLConnection
-                        conn.connectTimeout = 1500
-                        conn.readTimeout = 2000
-                        if (conn.responseCode == 200) {
-                            val text = conn.inputStream.bufferedReader().readText()
-                            val json = JSONObject(text)
-                            val results = json.optJSONArray("results")
-                            if (results != null && results.length() > 0) {
-                                val sb = StringBuilder()
-                                for (i in 0 until results.length()) {
-                                    val item = results.getJSONObject(i)
-                                    val law = item.optString("law")
-                                    val art = item.optString("article")
-                                    val artText = item.optString("text")
-                                    if (localPdfUrl == null) {
-                                        localPdfUrl = item.optString("previewUrl")
-                                    }
-                                    sb.append("📜 ").append(law).append(" - المادة (").append(art).append(")\n")
-                                    sb.append(artText).append("\n\n-------------------\n\n")
-                                }
-                                localResultText = sb.toString().trim()
-                            }
-                        }
-                    } catch (_: Exception) {}
-                }
-
-                if (localResultText.isNotEmpty()) {
-                    progressBar.visibility = View.GONE
-                    tvSearchResult.text = localResultText
-                    Linkify.addLinks(tvSearchResult, Linkify.WEB_URLS)
-                    scrollResults.visibility = View.VISIBLE
-                    searchActions.visibility = View.VISIBLE
-                    currentPdfUrl = localPdfUrl ?: defaultDriveFolder
-                    btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
-                    return@launch
-                }
-
-                // 2. إذا لم يعثر السيرفر المحلي على نص أو كان مغلقاً، يفحص أسماء الملفات
-                if (cachedLaws.isEmpty()) {
-                    cachedLaws = LawsRepository.loadLawsList()
-                }
-
-                fun normalize(s: String) = s.lowercase()
-                    .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-                    .replace("ة", "ه").replace("ى", "ي")
-                    .replace("السوري", "")
-                    .replace(Regex("[^a-zA-Z0-9\\u0621-\\u064A]"), "")
-
-                val nq = normalize(query)
-                val matchedFiles = cachedLaws.filter { law ->
-                    val nl = normalize(law.name)
-                    nl.contains(nq) || nq.contains(nl)
-                }.map { law ->
-                    DriveLawFile(
-                        id = law.id,
-                        name = law.name,
-                        mimeType = "application/pdf",
-                        webViewLink = law.drivePdfUrl ?: defaultDriveFolder,
-                        webContentLink = law.drivePdfUrl
-                    )
-                }
-
-                progressBar.visibility = View.GONE
-
-                if (matchedFiles.isNotEmpty()) {
-                    driveAdapter.submitList(matchedFiles)
-                    rvDriveResults.visibility = View.VISIBLE
-                } else {
-                    tvEmpty.text = "لم يتم العثور على نتائج تطابق: \"$query\"\nيمكنك فتح أرشيف Drive العام مباشرة:"
-                    tvEmpty.visibility = View.VISIBLE
-
-                    searchActions.visibility = View.VISIBLE
-                    btnOpenPdf.text = "📂 فتح مجلد الأرشيف في المتصفح"
-                    btnOpenPdf.setOnClickListener {
-                        openDirectInBrowserOnly(defaultDriveFolder)
-                    }
-                }
-            } catch (e: Exception) {
-                progressBar.visibility = View.GONE
-                tvEmpty.text = "تعذر إتمام البحث: ${e.localizedMessage}"
-                tvEmpty.visibility = View.VISIBLE
-            }
-        }
-    }
-
-    private fun openDirectInBrowserOnly(url: String) {
-        var target = url
-        if (target.contains("/view")) {
-            target = target.replace("/view", "/preview")
-        }
-        try {
-            val customTabs = androidx.browser.customtabs.CustomTabsIntent.Builder().setShowTitle(true).build()
-            customTabs.intent.setPackage("com.android.chrome")
-            customTabs.launchUrl(this, Uri.parse(target))
-        } catch (_: Exception) {
-            try {
-                val customTabs = androidx.browser.customtabs.CustomTabsIntent.Builder().setShowTitle(true).build()
-                customTabs.launchUrl(this, Uri.parse(target))
-            } catch (_: Exception) {
+            val filesList = withContext(Dispatchers.IO) {
                 try {
-                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(target)).apply {
-                        addCategory(Intent.CATEGORY_BROWSABLE)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    val url = "https://us-central1-almustashar-law.cloudfunctions.net/searchDriveLaws"
+                    val jsonBody = "{\\"query\\": \\"$query\\"}".toRequestBody("application/json".toMediaType())
+                    val request = Request.Builder().url(url).post(jsonBody).build()
+
+                    httpClient.newCall(request).execute().use { resp ->
+                        if (!resp.isSuccessful) return@withContext emptyList<DriveLawFile>()
+                        val body = resp.body?.string().orEmpty()
+                        val root = JsonParser.parseString(body).asJsonObject
+                        val arr = root.getAsJsonArray("files") ?: return@withContext emptyList<DriveLawFile>()
+                        val list = mutableListOf<DriveLawFile>()
+                        for (elem in arr) {
+                            val obj = elem.asJsonObject
+                            list.add(
+                                DriveLawFile(
+                                    id = obj.get("id")?.asString.orEmpty(),
+                                    name = obj.get("name")?.asString.orEmpty(),
+                                    mimeType = obj.get("mimeType")?.asString.orEmpty(),
+                                    webViewLink = obj.get("webViewLink")?.asString,
+                                    webContentLink = obj.get("webContentLink")?.asString
+                                )
+                            )
+                        }
+                        list
                     }
-                    startActivity(browserIntent)
-                } catch (e: Exception) {
-                    Toast.makeText(this, "تعذر فتح الرابط", Toast.LENGTH_SHORT).show()
+                } catch (_: Exception) {
+                    emptyList<DriveLawFile>()
                 }
+            }
+
+            progressBar.visibility = View.GONE
+            if (filesList.isNotEmpty()) {
+                driveAdapter.submitList(filesList)
+                rvDriveResults.visibility = View.VISIBLE
+            } else {
+                tvEmpty.text = "لم يتم العثور على وثائق مطابقة في Drive أو تعذر الوصول للسحابة حالياً."
+                tvEmpty.visibility = View.VISIBLE
             }
         }
     }
 }
+'''
+
+path = "app/src/main/java/com/maen/almustashar/SearchActivity.kt"
+with open(path, "w", encoding="utf-8") as f:
+    f.write(code.strip() + "\n")
+
+print("✅ تم تصحيح كود SearchActivity.kt بالكامل وضبط الأقواس وبناء الكلاس بصورة سليمة.")

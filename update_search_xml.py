@@ -1,0 +1,211 @@
+xml_content = '''<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#F8FAFC"
+    android:layoutDirection="rtl">
+
+    <!-- شريط علوي -->
+    <androidx.appcompat.widget.Toolbar
+        android:id="@+id/searchToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="#0F2042"
+        app:title="البحث القانوني المزدوج"
+        app:titleTextColor="#FFFFFF" />
+
+    <!-- حقل البحث بالأعلى -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#FFFFFF"
+        android:padding="8dp"
+        android:elevation="3dp">
+
+        <EditText
+            android:id="@+id/etSearch"
+            android:layout_width="0dp"
+            android:layout_height="48dp"
+            android:layout_weight="1"
+            android:background="@android:drawable/editbox_background_normal"
+            android:hint="أدخل رقم المادة، الموضوع، أو كلمة بحث في الوثائق..."
+            android:paddingHorizontal="12dp"
+            android:textColor="#0F2042"
+            android:textColorHint="#94A3B8"
+            android:textSize="13sp"
+            android:imeOptions="actionSearch"
+            android:inputType="text" />
+
+        <Button
+            android:id="@+id/btnDoSearch"
+            android:layout_width="wrap_content"
+            android:layout_height="48dp"
+            android:layout_marginStart="8dp"
+            android:backgroundTint="#0F2042"
+            android:text="بحث 🔍"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+
+    <!-- شريط تبديل مسار البحث الهجين (Firestore vs Google Drive) -->
+    <RadioGroup
+        android:id="@+id/rgSearchMode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="2dp"
+        android:gravity="center">
+
+        <RadioButton
+            android:id="@+id/rbModeFirestore"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:checked="true"
+            android:text="📜 مواد القوانين (Firestore)"
+            android:textColor="#0F2042"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <RadioButton
+            android:id="@+id/rbModeDrive"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="📂 وثائق ومراجع PDF (Drive)"
+            android:textColor="#0F2042"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </RadioGroup>
+
+    <!-- اختيار نطاق القانون (يظهر فقط مع Firestore) -->
+    <Spinner
+        android:id="@+id/spinnerLaw"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_marginHorizontal="8dp"
+        android:layout_marginTop="4dp"
+        android:background="#FFFFFF" />
+
+    <!-- مؤشر التحميل -->
+    <ProgressBar
+        android:id="@+id/searchProgressBar"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="16dp"
+        android:visibility="gone" />
+
+    <!-- نص الفراغ والتوجيه -->
+    <TextView
+        android:id="@+id/tvEmpty"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="32dp"
+        android:gravity="center"
+        android:paddingHorizontal="24dp"
+        android:text="اختر نمط البحث وأدخل الكلمات المفتاحية للاستعراض السريع أو البحث في أرشيف Drive."
+        android:textColor="#64748B"
+        android:textSize="13sp" />
+
+    <!-- المسار 1: عرض نتيجة Firestore المادة الفردية -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scrollResults"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <androidx.cardview.widget.CardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="2dp"
+                app:cardBackgroundColor="#FFFFFF"
+                android:layout_marginBottom="12dp">
+
+                <TextView
+                    android:id="@+id/tvSearchResult"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="16dp"
+                    android:textColor="#1E293B"
+                    android:textSize="15sp"
+                    android:lineSpacingExtra="6dp"
+                    android:textIsSelectable="true" />
+            </androidx.cardview.widget.CardView>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- المسار 2: عرض نتائج وثائق Google Drive السحابية -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rvDriveResults"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="8dp"
+        android:visibility="gone" />
+
+    <!-- شريط الإجراءات لمادة Firestore -->
+    <LinearLayout
+        android:id="@+id/searchActions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:background="#FFFFFF"
+        android:elevation="8dp"
+        android:padding="12dp"
+        android:visibility="gone">
+
+        <Button
+            android:id="@+id/btnCopyArticle"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="6dp"
+            android:backgroundTint="#0F2042"
+            android:text="📋 نسخ المادة"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/btnShareArticle"
+            android:layout_width="0dp"
+            android:layout_height="46dp"
+            android:layout_weight="1"
+            android:backgroundTint="#D97706"
+            android:text="📤 مشاركة"
+            android:textColor="#FFFFFF" />
+
+        <Button
+            android:id="@+id/btnOpenPdf"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:minHeight="48dp"
+            android:layout_weight="1"
+            android:backgroundTint="#0284C7"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:text="📄 الأصل PDF"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+
+</LinearLayout>'''
+
+with open("app/src/main/res/layout/activity_search.xml", "w", encoding="utf-8") as f:
+    f.write(xml_content.strip() + "\n")
+
+import xml.etree.ElementTree as ET
+ET.parse("app/src/main/res/layout/activity_search.xml")
+print("✅ 1. تم تحديث activity_search.xml بنجاح مع فحص XML سليم 100%.")
