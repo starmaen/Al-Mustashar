@@ -24,15 +24,7 @@ import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.google.gson.JsonParser
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.TimeUnit
 
 class SearchActivity : AppCompatActivity() {
 
@@ -53,11 +45,6 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var rbDrive: RadioButton
     private lateinit var rvDriveResults: RecyclerView
     private lateinit var driveAdapter: DriveLawAdapter
-
-    private val httpClient = OkHttpClient.Builder()
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .build()
 
     private data class LawChoice(val id: String?, val title: String) {
         override fun toString(): String = title
@@ -97,7 +84,7 @@ class SearchActivity : AppCompatActivity() {
                 spinnerLaw.visibility = View.GONE
                 scrollResults.visibility = View.GONE
                 searchActions.visibility = View.GONE
-                etSearch.hint = "ابحث بالنص الكامل داخل وثائق ومراجع Drive..."
+                etSearch.hint = "ابحث بالاسم عن نص أو مرجع في أرشيف Drive..."
             } else {
                 spinnerLaw.visibility = View.VISIBLE
                 rvDriveResults.visibility = View.GONE
@@ -147,10 +134,10 @@ class SearchActivity : AppCompatActivity() {
                     val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     startActivity(browserIntent)
                 } catch (e: Exception) {
-                    Toast.makeText(this, "تعذر فتح رابط المستند: ${e.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "تعذر فتح المستند: ${e.message}", Toast.LENGTH_SHORT).show()
                 }
             } else {
-                Toast.makeText(this, "المستند الأصلي غير مرفق لهذه المادة", Toast.LENGTH_SHORT).show()
+                openDriveFolderFallback()
             }
         }
     }
@@ -213,7 +200,7 @@ class SearchActivity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 progressBar.visibility = View.GONE
-                tvEmpty.text = "تعذر إتمام البحث المهيكل: ${e.localizedMessage}"
+                tvEmpty.text = "تعذر إتمام البحث: ${e.localizedMessage}"
                 tvEmpty.visibility = View.VISIBLE
             }
         }
@@ -221,18 +208,15 @@ class SearchActivity : AppCompatActivity() {
 
     private fun searchDriveCloud(query: String) {
         progressBar.visibility = View.GONE
+        tvEmpty.text = "جاري تحويلك إلى أرشيف Drive للبحث عن:\n\"$query\""
         tvEmpty.visibility = View.VISIBLE
-        searchActions.visibility = View.VISIBLE
-        rvDriveResults.visibility = View.GONE
 
-        tvEmpty.text = "جاري فتح البحث في أرشيف Drive عن: \"$query\""
-        
-        btnOpenPdf.text = "🔍 ابحث عن '$query' في مجلد القوانين"
+        searchActions.visibility = View.VISIBLE
+        btnOpenPdf.text = "📂 فتح مجلد القوانين في Drive"
         btnOpenPdf.setOnClickListener {
             openDriveFolderSearch(query)
         }
 
-        // فتح البحث تلقائياً في Drive
         openDriveFolderSearch(query)
     }
 
@@ -241,13 +225,18 @@ class SearchActivity : AppCompatActivity() {
             val folderId = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
             val encodedQuery = java.net.URLEncoder.encode("parent:'$folderId' $query", "UTF-8")
             val driveUri = Uri.parse("https://drive.google.com/drive/u/0/search?q=$encodedQuery")
-            
-            val intent = Intent(Intent.ACTION_VIEW, driveUri)
-            startActivity(intent)
-        } catch (e: Exception) {
-            val fallbackUri = Uri.parse("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3")
-            startActivity(Intent(Intent.ACTION_VIEW, fallbackUri))
+            startActivity(Intent(Intent.ACTION_VIEW, driveUri))
+        } catch (_: Exception) {
+            openDriveFolderFallback()
         }
     }
+
+    private fun openDriveFolderFallback() {
+        try {
+            val folderUri = Uri.parse("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3")
+            startActivity(Intent(Intent.ACTION_VIEW, folderUri))
+        } catch (e: Exception) {
+            Toast.makeText(this, "تعذر فتح رابط Drive", Toast.LENGTH_SHORT).show()
+        }
     }
 }
