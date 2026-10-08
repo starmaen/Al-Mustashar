@@ -70,15 +70,18 @@ class LegalDraftingActivity : AppCompatActivity() {
             val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, types)
             spType.adapter = adapter
 
-            // استلام بيانات القضية الممررة بأمان
+                        // استلام بيانات القضية الممررة بدقة وتحديد صفة الموكل
             intent?.let {
                 val title = it.getStringExtra("case_title") ?: ""
                 val basis = it.getStringExtra("case_basis") ?: ""
                 val court = it.getStringExtra("case_court") ?: ""
-                val parties = it.getStringExtra("case_parties") ?: ""
+                val cName = it.getStringExtra("client_name") ?: ""
+                val cRole = it.getStringExtra("client_role") ?: "مدعٍ"
+                val opp = it.getStringExtra("opponent_name") ?: ""
+                
                 if (court.isNotBlank()) etTarget.setText(court)
-                if (title.isNotBlank() || parties.isNotBlank()) {
-                    etParties.setText("الدعوى: $title | أساس: $basis | الأطراف: $parties")
+                if (cName.isNotBlank() || title.isNotBlank()) {
+                    etParties.setText("الموكل: $cName (صفته: $cRole) | الخصم: $opp | الدعوى: $title (أساس: $basis)")
                 }
             }
 

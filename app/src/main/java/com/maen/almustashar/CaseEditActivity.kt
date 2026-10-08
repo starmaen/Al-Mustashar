@@ -119,12 +119,15 @@ class CaseEditActivity : AppCompatActivity() {
         btnDelete.setOnClickListener { delete() }
         
                 btnDraftForCase.setOnClickListener {
-            try {
+                        try {
                 val i = Intent(this, LegalDraftingActivity::class.java)
                 i.putExtra("case_title", etTitle.text.toString())
                 i.putExtra("case_basis", etBasisNumber.text.toString() + "/" + etCaseYear.text.toString())
                 i.putExtra("case_court", etCourt.text.toString() + " (" + etChamber.text.toString() + ")")
-                i.putExtra("case_parties", etClient.text.toString() + " ضد " + etOpponentName.text.toString())
+                i.putExtra("client_name", etClient.text.toString())
+                i.putExtra("client_role", etClientRole.text.toString())
+                i.putExtra("opponent_name", etOpponentName.text.toString())
+                i.putExtra("case_parties", etClient.text.toString() + " (" + etClientRole.text.toString() + ") ضد " + etOpponentName.text.toString())
                 startActivity(i)
             } catch (e: Exception) {
                 android.widget.Toast.makeText(this, "تعذر فتح الشاشة: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
