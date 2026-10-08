@@ -84,11 +84,16 @@ class SearchActivity : AppCompatActivity() {
                 spinnerLaw.visibility = View.GONE
                 scrollResults.visibility = View.GONE
                 searchActions.visibility = View.GONE
-                etSearch.hint = "ابحث بالاسم عن نص أو مرجع في أرشيف Drive..."
+                tvEmpty.visibility = View.GONE
+                rvDriveResults.visibility = View.GONE
+                etSearch.hint = "ابحث بالاسم عن ملف أو قانون في مراجع Drive..."
             } else {
                 spinnerLaw.visibility = View.VISIBLE
                 rvDriveResults.visibility = View.GONE
-                etSearch.hint = "مثال: المادة 117 أصول جزائية، أو 221 مدنية..."
+                tvEmpty.visibility = View.GONE
+                scrollResults.visibility = View.GONE
+                searchActions.visibility = View.GONE
+                etSearch.hint = "مثال: الماده 60، أو قانون العاملين..."
             }
         }
 
@@ -128,17 +133,8 @@ class SearchActivity : AppCompatActivity() {
         }
 
         btnOpenPdf.setOnClickListener {
-            val url = currentPdfUrl
-            if (!url.isNullOrBlank()) {
-                try {
-                    val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                    startActivity(browserIntent)
-                } catch (e: Exception) {
-                    Toast.makeText(this, "تعذر فتح المستند: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            } else {
-                openDriveFolderFallback()
-            }
+            val target = currentPdfUrl ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(target)))
         }
     }
 
@@ -176,7 +172,7 @@ class SearchActivity : AppCompatActivity() {
         rvDriveResults.visibility = View.GONE
 
         if (rbDrive.isChecked) {
-            searchDriveCloud(query)
+            searchDriveDynamic(query)
         } else {
             searchFirestoreLaws(query)
         }
@@ -194,6 +190,11 @@ class SearchActivity : AppCompatActivity() {
                     Linkify.addLinks(tvSearchResult, Linkify.WEB_URLS)
                     scrollResults.visibility = View.VISIBLE
                     searchActions.visibility = View.VISIBLE
+
+                    val driveUrlRegex = Regex("https://drive\\.google\\.com/[^\\s]+")
+                    val match = driveUrlRegex.find(result)
+                    currentPdfUrl = match?.value ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+                    btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
                 } else {
                     tvEmpty.text = result
                     tvEmpty.visibility = View.VISIBLE
@@ -206,37 +207,53 @@ class SearchActivity : AppCompatActivity() {
         }
     }
 
-    private fun searchDriveCloud(query: String) {
-        progressBar.visibility = View.GONE
-        tvEmpty.text = "جاري تحويلك إلى أرشيف Drive للبحث عن:\n\"$query\""
-        tvEmpty.visibility = View.VISIBLE
+    private fun searchDriveDynamic(query: String) {
+        lifecycleScope.launch {
+            try {
+                if (cachedLaws.isEmpty()) {
+                    cachedLaws = LawsRepository.loadLawsList()
+                }
 
-        searchActions.visibility = View.VISIBLE
-        btnOpenPdf.text = "📂 فتح مجلد القوانين في Drive"
-        btnOpenPdf.setOnClickListener {
-            openDriveFolderSearch(query)
-        }
+                fun normalize(s: String) = s.lowercase()
+                    .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+                    .replace("ة", "ه").replace("ى", "ي")
+                    .replace("السوري", "")
+                    .replace(Regex("[^a-zA-Z0-9\\u0621-\\u064A]"), "")
 
-        openDriveFolderSearch(query)
-    }
+                val nq = normalize(query)
+                val matchedFiles = cachedLaws.filter { law ->
+                    val nl = normalize(law.name)
+                    nl.contains(nq) || nq.contains(nl)
+                }.map { law ->
+                    DriveLawFile(
+                        id = law.id,
+                        name = law.name,
+                        mimeType = "application/pdf",
+                        webViewLink = law.drivePdfUrl ?: "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3",
+                        webContentLink = law.drivePdfUrl
+                    )
+                }
 
-    private fun openDriveFolderSearch(query: String) {
-        try {
-            val folderId = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
-            val encodedQuery = java.net.URLEncoder.encode("parent:'$folderId' $query", "UTF-8")
-            val driveUri = Uri.parse("https://drive.google.com/drive/u/0/search?q=$encodedQuery")
-            startActivity(Intent(Intent.ACTION_VIEW, driveUri))
-        } catch (_: Exception) {
-            openDriveFolderFallback()
-        }
-    }
+                progressBar.visibility = View.GONE
 
-    private fun openDriveFolderFallback() {
-        try {
-            val folderUri = Uri.parse("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3")
-            startActivity(Intent(Intent.ACTION_VIEW, folderUri))
-        } catch (e: Exception) {
-            Toast.makeText(this, "تعذر فتح رابط Drive", Toast.LENGTH_SHORT).show()
+                if (matchedFiles.isNotEmpty()) {
+                    driveAdapter.submitList(matchedFiles)
+                    rvDriveResults.visibility = View.VISIBLE
+                } else {
+                    tvEmpty.text = "لم يتم العثور على وثائق مطابقة لـ: \"$query\"\nيمكنك تصفح مجلد Drive الكامل مباشرة بالأسفل."
+                    tvEmpty.visibility = View.VISIBLE
+
+                    searchActions.visibility = View.VISIBLE
+                    btnOpenPdf.text = "📂 فتح مجلد القوانين في Drive"
+                    btnOpenPdf.setOnClickListener {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3")))
+                    }
+                }
+            } catch (e: Exception) {
+                progressBar.visibility = View.GONE
+                tvEmpty.text = "تعذر البحث في مراجع Drive: ${e.localizedMessage}"
+                tvEmpty.visibility = View.VISIBLE
+            }
         }
     }
 }
