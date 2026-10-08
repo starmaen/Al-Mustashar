@@ -6,10 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.text.method.LinkMovementMethod
 import android.text.util.Linkify
 import android.view.View
-import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -223,11 +221,9 @@ class SearchActivity : AppCompatActivity() {
 
     private fun searchDriveCloud(query: String) {
         lifecycleScope.launch {
-            var errorDetail = ""
+            var statusMsg = ""
             val filesList = withContext(Dispatchers.IO) {
                 try {
-                    val folderId = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
-                    // 1. محاولة استدعاء الدالة السحابية
                     val url = "https://us-central1-al-mustashar-7f6b7.cloudfunctions.net/searchDriveLaws"
                     val jsonBody = "{\"query\": \"$query\"}".toRequestBody("application/json".toMediaType())
                     val request = Request.Builder().url(url).post(jsonBody).build()
@@ -252,10 +248,10 @@ class SearchActivity : AppCompatActivity() {
                         }
                         return@withContext list
                     } else {
-                        errorDetail = "كود الخادم: ${resp.code}"
+                        statusMsg = "رمز الاستجابة: " + resp.code.toString()
                     }
                 } catch (e: Exception) {
-                    errorDetail = e.localizedMessage ?: "فشل الاتصال"
+                    statusMsg = e.localizedMessage ?: "خطأ بالاتصال"
                 }
                 emptyList<DriveLawFile>()
             }
@@ -265,20 +261,16 @@ class SearchActivity : AppCompatActivity() {
                 driveAdapter.submitList(filesList)
                 rvDriveResults.visibility = View.VISIBLE
             } else {
-                tvEmpty.text = "لم يتم العثور على نتائج في Drive ($errorDetail)
-
-يمكنك تصفح مجلد القوانين السحابي مباشرة."
+                tvEmpty.text = "لم يتم العثور على وثائق مطابقة (" + statusMsg + ")"
                 tvEmpty.visibility = View.VISIBLE
-                
-                // زر فوري لفتح مجلد القوانين الأصلي في Drive مباشرة
+
                 searchActions.visibility = View.VISIBLE
-                btnOpenPdf.text = "📂 فتح مجلد القوانين على Drive"
+                btnOpenPdf.text = "فتح أرشيف Drive مباشرة"
                 btnOpenPdf.setOnClickListener {
-                    val driveIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"))
-                    startActivity(driveIntent)
+                    val folderUrl = "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(folderUrl)))
                 }
             }
         }
-    }
     }
 }
