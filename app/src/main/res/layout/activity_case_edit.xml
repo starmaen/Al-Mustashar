@@ -364,12 +364,23 @@
             android:orientation="vertical"
             android:layout_marginTop="8dp" />
 
-        <!-- أزرار الإجراءات -->
+        <!-- أزرار الإجراءات والمذكرات الذكية -->
+        <Button
+            android:id="@+id/btnDraftForCase"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="16dp"
+            android:text="✍️ صياغة مذكرة أو استدعاء ذكي لهذه القضية"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:backgroundTint="#1976D2"
+            android:visibility="gone" />
+
         <Button
             android:id="@+id/btnDecisions"
             android:layout_width="match_parent"
-            android:layout_height="54dp"
-            android:layout_marginTop="20dp"
+            android:layout_height="50dp"
+            android:layout_marginTop="8dp"
             android:text="⚖️ قرارات وأحكام الدعوى"
             android:textColor="#FFFFFF"
             android:textStyle="bold"
@@ -390,8 +401,8 @@
         <Button
             android:id="@+id/btnDelete"
             android:layout_width="match_parent"
-            android:layout_height="54dp"
-            android:layout_marginTop="10dp"
+            android:layout_height="50dp"
+            android:layout_marginTop="8dp"
             android:text="حذف الدعوى نهائياً"
             android:textColor="#FFFFFF"
             android:backgroundTint="#D32F2F"

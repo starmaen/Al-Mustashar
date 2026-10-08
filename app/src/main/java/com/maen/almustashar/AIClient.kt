@@ -26,6 +26,16 @@ object AIClient {
         .readTimeout(45, TimeUnit.SECONDS)
         .build()
 
+    
+    private const val DRAFTING_SYSTEM_PROMPT = """أنت محامٍ ومستشار قضائي سوري عريق يتمتع بأعلى درجات البلاغة والصياغة القانونية الرصينة.
+مهمتك: صياغة مذكرات، استدعاءات، لوائح جوابية، وطلبات رسمية للبلديات والمحاكم والدوائر الحكومية.
+
+شروط الصياغة الصارمة:
+1. الالتزام بالديباجة القضائية والأعراف القانونية (الجهة الموجه إليها، أطراف الدعوى إن وجدت، من حيث الشكل، من حيث الوقائع، من حيث القانون والأسانيد، والطلبات الختامية بدقة).
+2. عدم كتابة أي مقدمات أو اعتذارات أو نصوص حوارية (مثل: إليك المذكرة...)، بل ابدأ مباشرة من عنوان المذكرة أو الاستدعاء وكأنها مطبوعة على ورق المحامي الرسمي وجاهزة للتقديم مباشرة للقاضي أو الدائرة الرسمية.
+3. تفنيد المستندات المرفقة (سواء صور قيود عقارية، تقارير، أو ضبوط) والاستناد إليها كأدلة دامغة.
+4. سلامة لغوية وإعرابية تامة خالية من الركاكة والعبارات غير الدارجة قضائياً."""
+
     private const val SYSTEM_PROMPT = """أنت مستشار ومرجع قانوني سوري خبير ومتخصص في التشريعات والقضاء السوري.
 مهمتك تقديم دراسة قانونية وافية وتحليل شامل معزز بالنصوص الرسمية بالهيكل الآتي:
 1. ⚖️ التكييف والوصف القانوني الدقيق للواقعة.
@@ -85,6 +95,61 @@ object AIClient {
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         return@withContext ""
+    }
+
+    
+    // 4. صياغة المذكرات والاستدعاءات القضائية والرسمية
+    suspend fun draftLegalDocument(
+        userNotes: String,
+        attachmentsBase64: List<Pair<String, String>> = emptyList() // (Base64, MimeType)
+    ): String = withContext(Dispatchers.IO) {
+        val model = "gemini-3.8-flash"
+        return@withContext try {
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$GEMINI_KEY"
+            val rootJson = JsonObject()
+            val contentsArr = JsonArray()
+            val contentObj = JsonObject()
+            val partsArr = JsonArray()
+
+            // 1. إضافة التوجيه القانوني والطلب
+            val textPart = JsonObject()
+            textPart.addProperty("text", "$DRAFTING_SYSTEM_PROMPT\n\nمعطيات ومطالب المحامي لإعداد المذكرة/الاستدعاء:\n$userNotes")
+            partsArr.add(textPart)
+
+            // 2. إضافة الصور والمستندات المرفقة إن وجدت (Multimodal)
+            for (att in attachmentsBase64) {
+                val inlineDataPart = JsonObject()
+                val inlineData = JsonObject()
+                inlineData.addProperty("mime_type", att.second)
+                inlineData.addProperty("data", att.first)
+                inlineDataPart.add("inline_data", inlineData)
+                partsArr.add(inlineDataPart)
+            }
+
+            contentObj.add("parts", partsArr)
+            contentsArr.add(contentObj)
+            rootJson.add("contents", contentsArr)
+
+            val body = rootJson.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder().url(url).post(body).build()
+            client.newCall(request).execute().use { response ->
+                val respStr = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    val parsed = JsonParser.parseString(respStr).asJsonObject
+                    val text = parsed.getAsJsonArray("candidates")
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("content")
+                        ?.getAsJsonArray("parts")
+                        ?.get(0)?.asJsonObject
+                        ?.get("text")?.asString
+                    text ?: "تعذر استخراج الصياغة من الرد."
+                } else {
+                    "❌ خطأ من مزود الخدمة: HTTP ${response.code}"
+                }
+            }
+        } catch (e: Exception) {
+            "❌ حدث استثناء أثناء الصياغة: ${e.localizedMessage}"
+        }
     }
 
     private fun callGemini(model: String, prompt: String): AIResult {

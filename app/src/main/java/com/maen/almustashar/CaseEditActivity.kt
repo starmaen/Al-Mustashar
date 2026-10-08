@@ -50,6 +50,7 @@ class CaseEditActivity : AppCompatActivity() {
     private lateinit var tvEditTitle: TextView
     private lateinit var btnDelete: Button
     private lateinit var btnDecisions: Button
+    private lateinit var btnDraftForCase: Button
     private lateinit var btnAddDocument: Button
     private lateinit var layoutDocumentsList: LinearLayout
 
@@ -91,6 +92,7 @@ class CaseEditActivity : AppCompatActivity() {
         tvEditTitle = findViewById(R.id.tvEditTitle)
         btnDelete = findViewById(R.id.btnDelete)
         btnDecisions = findViewById(R.id.btnDecisions)
+        btnDraftForCase = findViewById(R.id.btnDraftForCase)
         btnAddDocument = findViewById(R.id.btnAddDocument)
         layoutDocumentsList = findViewById(R.id.layoutDocumentsList)
 
@@ -107,11 +109,22 @@ class CaseEditActivity : AppCompatActivity() {
             tvEditTitle.text = "⚖️ تعديل ملف الدعوى"
             btnDelete.visibility = View.VISIBLE
             btnDecisions.visibility = View.VISIBLE
+            btnDraftForCase.visibility = View.VISIBLE
             load()
         }
 
         findViewById<Button>(R.id.btnSave).setOnClickListener { save() }
         btnDelete.setOnClickListener { delete() }
+        
+        btnDraftForCase.setOnClickListener {
+            val i = Intent(this, LegalDraftingActivity::class.java)
+            i.putExtra("case_title", etTitle.text.toString())
+            i.putExtra("case_basis", etBasisNumber.text.toString() + "/" + etCaseYear.text.toString())
+            i.putExtra("case_court", etCourt.text.toString() + " (" + etChamber.text.toString() + ")")
+            i.putExtra("case_parties", etClient.text.toString() + " ضد " + etOpponentName.text.toString())
+            startActivity(i)
+        }
+    
         btnDecisions.setOnClickListener {
             if (caseId != null) {
                 val i = Intent(this, DecisionsActivity::class.java)
