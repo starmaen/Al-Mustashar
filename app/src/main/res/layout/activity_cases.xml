@@ -1,59 +1,125 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout
+<androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#F5F5F5">
+    android:background="#F4F6F9">
 
-    <TextView
-        android:id="@+id/tvTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:layout_marginStart="16dp"
-        android:text="أرشيف الدعاوى"
-        android:textColor="#1A237E"
-        android:textSize="24sp"
-        android:textStyle="bold"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/tvEmpty"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="لا توجد دعاوى بعد"
-        android:textColor="#9E9E9E"
-        android:textSize="16sp"
-        android:visibility="gone"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        <!-- شريط الرأس والبحث الفوري -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="#0F2042"
+            android:padding="14dp">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerCases"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:layout_marginTop="16dp"
-        android:layout_marginBottom="80dp"
-        android:paddingStart="8dp"
-        android:paddingEnd="8dp"
-        app:layout_constraintTop_toBottomOf="@id/tvTitle"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="⚖️ أرشيف الدعاوى ومكتب المحامي"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:gravity="right" />
+
+            <EditText
+                android:id="@+id/etSearchCases"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="10dp"
+                android:background="@android:drawable/edit_text"
+                android:hint="🔍 ابحث برقم الأساس، اسم الموكل، الخصم، أو المحكمة..."
+                android:textSize="14sp"
+                android:paddingStart="12dp"
+                android:paddingEnd="12dp"
+                android:textColor="#0F2042"
+                android:gravity="right|center_vertical" />
+
+            <TextView
+                
+            <!-- شريط خيارات التخزين والنسخ الاحتياطي (الذاكرة الداخلية / الميموري / درايف) -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <Button
+                    android:id="@+id/btnExportBackup"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:text="💾 تصدير (SD/درايف)"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:padding="0dp"
+                    app:strokeColor="#C5A059" />
+
+                <Button
+                    android:id="@+id/btnImportBackup"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="📥 استيراد نسخة"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:padding="0dp"
+                    app:strokeColor="#C5A059" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvCasesCount"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="إجمالي الدعاوى المسجلة: 0"
+                android:textColor="#C5A059"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:gravity="right" />
+        </LinearLayout>
+
+        <!-- حالة عدم وجود بيانات -->
+        <TextView
+            android:id="@+id/tvEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="لا توجد دعاوى مسجلة حتى الآن.
+اضغط (+) لإضافة دعوى جديدة."
+            android:textColor="#9E9E9E"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+        <!-- قائمة البطاقات التفاعلية -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerCases"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:paddingTop="6dp"
+            android:paddingBottom="80dp"
+            android:clipToPadding="false" />
+
+    </LinearLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/fabAdd"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="24dp"
-        android:src="@android:drawable/ic_input_add"
-        app:backgroundTint="#FFB800"
+        android:layout_gravity="bottom|start"
+        android:layout_margin="20dp"
+        app:backgroundTint="#C5A059"
         app:tint="#FFFFFF"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        android:contentDescription="إضافة دعوى جديدة"
+        app:srcCompat="@android:drawable/ic_input_add" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>
