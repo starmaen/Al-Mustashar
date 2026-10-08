@@ -65,6 +65,10 @@
         <activity
             android:name=".DecisionEditActivity"
             android:exported="false" />
+    
+        <activity
+            android:name=".LegalDraftingActivity"
+            android:exported="false" />
     </application>
 
 </manifest>
