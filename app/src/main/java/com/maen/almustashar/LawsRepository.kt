@@ -103,28 +103,33 @@ object LawsRepository {
         val query = rawQuery.trim()
         val laws = loadLawsList()
 
-        // مطابقة القانون بالاسم تلقائياً
+        // 1. التعرف التلقائي على القانون المذكور في نص البحث
         var effectiveLawId = targetLawId
         if (effectiveLawId == null && query.isNotEmpty()) {
             val matchedLaw = laws.find { law ->
-                query.contains(law.name, ignoreCase = true) ||
-                law.name.contains(query.replace("كامل", "").replace("كاملا", "").trim(), ignoreCase = true)
+                val cleanLaw = law.name.replace("السوري", "").trim()
+                val cleanQ = query.replace("السوري", "").replace("كامل", "").replace("كاملا", "").trim()
+                cleanQ.contains(cleanLaw, ignoreCase = true) || cleanLaw.contains(cleanQ, ignoreCase = true)
             }
             if (matchedLaw != null) {
                 effectiveLawId = matchedLaw.id
             }
         }
 
-        // 1. عرض القانون كاملاً إذا:
-        // - تم اختيار قانون والبحث فارغ
-        // - أو تم كتابة كلمة كامل/كاملا
-        // - أو كتب المستخدم اسم القانون مباشرة (مثل: القانون المدني) دون أرقام أو كلمات تخصصية
+        // 2. حالة طلب القانون كاملاً:
+        // إذا كان البحث فارغاً وتم اختيار قانون من القائمة
+        // أو إذا كتب المستخدم اسم القانون كاملاً (مثل: "القانون المدني") دون أرقام أو كلمات سياقية إضافية
+        // أو إذا وردت كلمة كامل/كاملا
         val hasDigits = query.any { it.isDigit() }
-        val isExplicitLawNameOnly = effectiveLawId != null && !hasDigits &&
+        val isExplicitLawDump = effectiveLawId != null && !hasDigits &&
             (query.isEmpty() || query.contains("كامل") || query.contains("كاملا") ||
-             laws.find { it.id == effectiveLawId }?.name?.let { query.replace(" ", "").contains(it.replace(" ", "")) } == true)
+             laws.find { it.id == effectiveLawId }?.name?.let {
+                 val n1 = it.replace(" ", "").replace("السوري", "")
+                 val n2 = query.replace(" ", "").replace("السوري", "")
+                 n1.contains(n2) || n2.contains(n1)
+             } == true)
 
-        if (effectiveLawId != null && isExplicitLawNameOnly) {
+        if (effectiveLawId != null && isExplicitLawDump) {
             val allArticles = loadAllArticles(laws).filter { it.lawId == effectiveLawId }
                 .sortedBy { it.number.toIntOrNull() ?: 9999 }
             if (allArticles.isNotEmpty()) {
@@ -134,17 +139,17 @@ object LawsRepository {
             }
         }
 
-        // 2. البحث برقم المادة
+        // 3. البحث برقم المادة
         val digits = query.filter { it.isDigit() }
         if (digits.isNotEmpty() && (query.length <= 5 || query.contains("مادة") || query.contains("المادة"))) {
             val res = fetchByNumber(digits, effectiveLawId, laws)
             if (!res.isNullOrBlank()) return res
         }
 
-        // 3. البحث الموضوعي / السياقي
+        // 4. البحث السياقي والموضوعي (في النصوص والكلمات المفتاحية)
         val cleanTerms = query.split(" ")
             .map { it.trim() }
-            .filter { it.length > 1 && !it.all { ch -> ch.isDigit() } && it !in listOf("قانون", "القانون", "كامل", "كاملا") }
+            .filter { it.length > 1 && !it.all { ch -> ch.isDigit() } && it !in listOf("قانون", "القانون", "كامل", "كاملا", "السوري") }
 
         val allArticles = loadAllArticles(laws)
         val pool = if (effectiveLawId != null) allArticles.filter { it.lawId == effectiveLawId } else allArticles

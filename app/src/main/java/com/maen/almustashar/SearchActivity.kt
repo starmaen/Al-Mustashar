@@ -115,11 +115,10 @@ class SearchActivity : AppCompatActivity() {
             }
         }
 
-                                findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
+                                        findViewById<Button>(R.id.btnOpenPdf).setOnClickListener {
             val text = tvSearchResult.text.toString()
             var rawTarget: String? = null
 
-            // أ) فحص الرابط المباشر
             val marker = "https://drive.google.com/"
             val sIdx = text.indexOf(marker)
             if (sIdx != -1) {
@@ -128,7 +127,6 @@ class SearchActivity : AppCompatActivity() {
                 rawTarget = if (eIdx != -1) sub.substring(0, eIdx) else sub
             }
 
-            // ب) البحث بالقانون المختار أو المكتشف
             if (rawTarget.isNullOrBlank()) {
                 val selectedId = (spinnerLaw.selectedItem as? LawChoice)?.id
                 if (!selectedId.isNullOrBlank()) {
@@ -149,7 +147,7 @@ class SearchActivity : AppCompatActivity() {
 
             val folderPreviewUrl = "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3?usp=sharing"
 
-            val finalUrl = when {
+            val targetUrl = when {
                 rawTarget.isNullOrBlank() -> folderPreviewUrl
                 rawTarget.contains("/view") -> rawTarget.replace("/view", "/preview")
                 rawTarget.startsWith("http") -> rawTarget
@@ -157,14 +155,19 @@ class SearchActivity : AppCompatActivity() {
             }
 
             try {
-                // فتح الرابط عبر المتصفح فقط لعزل تطبيق Google Drive تماماً وعدم طلب أي حساب
-                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(finalUrl.trim())).apply {
+                // إجبار الفتح في المتصفح فقط لمنع تطبيق Google Drive من اعتراض الرابط وطلب حسابات
+                val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl.trim())).apply {
                     addCategory(Intent.CATEGORY_BROWSABLE)
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    selector = Intent(Intent.ACTION_VIEW, Uri.parse("https://"))
                 }
                 startActivity(browserIntent)
-            } catch (e: Exception) {
-                Toast.makeText(this, "تعذر فتح المستند: " + e.message, Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                try {
+                    val fallbackIntent = Intent(Intent.ACTION_VIEW, Uri.parse(targetUrl.trim()))
+                    startActivity(fallbackIntent)
+                } catch (e: Exception) {
+                    Toast.makeText(this, "تعذر فتح المستند: " + e.message, Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
