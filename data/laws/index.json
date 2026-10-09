@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-10-09T20:20:17.931219",
+  "last_updated": "2026-10-09T20:36:08.982254",
   "total_laws": 9,
   "laws": [
     {
@@ -26,7 +26,7 @@
       "year": "2011",
       "type": "معدل",
       "file": "قانون-العقوبات-السوري-بالمرسوم-رقم-1-2011.json",
-      "articles_count": 14,
+      "articles_count": 10,
       "extraction_method": "Tesseract"
     },
     {
@@ -44,7 +44,7 @@
       "year": "1949",
       "type": "أساسي",
       "file": "قانون-العقوبات-السوري-رقم-148-1949.json",
-      "articles_count": 184,
+      "articles_count": 170,
       "extraction_method": "Tesseract"
     },
     {
@@ -62,7 +62,7 @@
       "year": "1950",
       "type": "أساسي",
       "file": "قانون-المحاكمات-الجزائيه-رقم-112-1950.json",
-      "articles_count": 440,
+      "articles_count": 439,
       "extraction_method": "Tesseract"
     },
     {
