@@ -31,7 +31,7 @@ jobs:
 
       - name: تثبيت مكتبات بايثون
         run: |
-          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib pytesseract pdf2image
+          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib pytesseract pdf2image PyMuPDF
 
       - name: تشغيل معالج القوانين
         env:
