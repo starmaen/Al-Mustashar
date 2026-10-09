@@ -268,18 +268,19 @@ class SearchActivity : AppCompatActivity() {
     }
 
     private fun encodeUrl(url: String): String {
-        val parts = url.split("/")
-        val result = StringBuilder()
-        for ((i, part) in parts.withIndex()) {
-            if (i > 0) result.append("/")
-            if (part.isEmpty()) continue
-            try {
-                result.append(java.net.URLEncoder.encode(part, "UTF-8").replace("+", "%20"))
-            } catch (e: Exception) {
-                result.append(part)
+        val sb = StringBuilder()
+        for (ch in url) {
+            val code = ch.code
+            if (code in 0..127) {
+                sb.append(ch)
+            } else {
+                val bytes = ch.toString().toByteArray(Charsets.UTF_8)
+                for (b in bytes) {
+                    sb.append("%").append(String.format("%02X", b.toInt() and 0xFF))
+                }
             }
         }
-        return result.toString()
+        return sb.toString()
     }
 
     private fun fetchJson(ep: String): org.json.JSONObject? {
