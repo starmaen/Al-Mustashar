@@ -217,43 +217,44 @@ class SearchActivity : AppCompatActivity() {
     }
 
     // كاش خاص بمسار Drive فقط
-                            private var cachedLawsIndex: org.json.JSONObject? = null
+                                private var cachedLawsIndex: org.json.JSONObject? = null
     private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, org.json.JSONObject>()
 
     private fun normalizeArabic(s: String): String {
         if (s.isEmpty()) return ""
-        val digits = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669"
-        val western = "0123456789"
         var r = s
-        for (i in digits.indices) r = r.replace(digits[i], western[i])
-        r = r
-            .replace(Regex("[\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF]"), "")
-            .replace('\u0622', '\u0627').replace('\u0623', '\u0627').replace('\u0625', '\u0627')
+            .replace(Regex("[\\u200B-\\u200F\\u202A-\\u202E\\u2066-\\u2069\\uFEFF\\u061C]"), "")
+            .replace(Regex("[\\u0600-\\u0605\\u06DD\\u070F]"), "")
+        val digits = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669"
+        for (i in digits.indices) r = r.replace(digits[i], "0123456789"[i])
+        return r
+            .replace('\u0622', '\u0627').replace('\u0623', '\u0627').replace('\u0625', '\u0627').replace('\u0671', '\u0627')
             .replace('\u0629', '\u0647')
             .replace('\u0649', '\u064A')
             .replace('\u0624', '\u0648').replace('\u0626', '\u064A')
-            .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
+            .replace(Regex("[\\u064B-\\u065F\\u0670\\u0640]"), "")
             .replace(Regex("[\\u060C\\u061B\\u061F.,;:!?\\(\\)\\[\\]\\{\\}\"'\u00AB\u00BB\u2013\u2014\\-]"), " ")
             .replace(Regex("\\s+"), " ")
             .trim()
-        return r
     }
 
-    private fun stripAl(word: String): String {
-        if (word.length >= 5 && word.startsWith("\u0627\u0644") && word != "\u0627\u0644\u0644\u0647") {
-            return word.substring(2)
+    private fun stripAl(w: String): String {
+        if (w.length < 4) return w
+        val prefixes = arrayOf("\u0648\u0627\u0644", "\u0641\u0627\u0644", "\u0628\u0627\u0644", "\u0643\u0627\u0644", "\u0644\u0644", "\u0627\u0644")
+        for (p in prefixes) {
+            if (w.startsWith(p) && w.length > p.length + 1) return w.substring(p.length)
         }
-        return word
+        return w
     }
 
-    private fun normalizeTextWithAl(text: String): String {
-        return normalizeArabic(text).split(" ").joinToString(" ") { stripAl(it) }
+    private fun normalizeText(s: String): String {
+        return normalizeArabic(s).split(" ").joinToString(" ") { stripAl(it) }
     }
 
-    private fun normalizeQueryWithAl(query: String): List<String> {
-        return normalizeArabic(query).split(" ")
+    private fun normalizeQueryWords(q: String): List<String> {
+        return normalizeArabic(q).split(" ")
             .map { stripAl(it) }
-            .filter { it.length >= 3 }
+            .filter { it.length >= 3 && !it.all { c -> c.isDigit() } }
     }
 
     private fun cleanArticleText(text: String, num: Int): String {
@@ -264,6 +265,46 @@ class SearchActivity : AppCompatActivity() {
         )
         for (p in patterns) t = p.replace(t, "")
         return t.trim()
+    }
+
+    private fun encodeUrl(url: String): String {
+        val parts = url.split("/")
+        val result = StringBuilder()
+        for ((i, part) in parts.withIndex()) {
+            if (i > 0) result.append("/")
+            if (part.isEmpty()) continue
+            try {
+                result.append(java.net.URLEncoder.encode(part, "UTF-8").replace("+", "%20"))
+            } catch (e: Exception) {
+                result.append(part)
+            }
+        }
+        return result.toString()
+    }
+
+    private fun fetchJson(ep: String): org.json.JSONObject? {
+        val mirrors = listOf(
+            "https://starmaen.github.io/Al-Mustashar/data/laws/",
+            "https://cdn.jsdelivr.net/gh/starmaen/Al-Mustashar@main/data/laws/"
+        )
+        for (base in mirrors) {
+            try {
+                val full = base + ep
+                val encoded = encodeUrl(full)
+                val conn = java.net.URL(encoded).openConnection() as java.net.HttpURLConnection
+                conn.connectTimeout = 12000
+                conn.readTimeout = 12000
+                conn.useCaches = false
+                conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                if (conn.responseCode == 200) {
+                    val text = conn.inputStream.bufferedReader().readText()
+                    return org.json.JSONObject(text)
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        return null
     }
 
     private fun searchDriveFiles(query: String) {
@@ -280,35 +321,16 @@ class SearchActivity : AppCompatActivity() {
 
         Thread {
             val result: String = try {
-                val mirrors = listOf(
-                    "https://starmaen.github.io/Al-Mustashar/data/laws/",
-                    "https://cdn.jsdelivr.net/gh/starmaen/Al-Mustashar@main/data/laws/"
-                )
-                fun fetchJson(ep: String): org.json.JSONObject? {
-                    for (base in mirrors) {
-                        try {
-                            val conn = java.net.URL(base + ep).openConnection() as java.net.HttpURLConnection
-                            conn.connectTimeout = 10000
-                            conn.readTimeout = 10000
-                            conn.useCaches = false
-                            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
-                            if (conn.responseCode == 200)
-                                return org.json.JSONObject(conn.inputStream.bufferedReader().readText())
-                        } catch (e: Exception) { }
-                    }
-                    return null
-                }
-
                 if (cachedLawsIndex == null) cachedLawsIndex = fetchJson("index.json")
                 val index = cachedLawsIndex
                 if (index == null) {
                     "\u0641\u0634\u0644 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a"
                 } else {
                     val laws = index.optJSONArray("laws") ?: org.json.JSONArray()
-                    val qNorm = normalizeArabic(trimmed)
+                    val q = normalizeArabic(trimmed)
                     val sb = java.lang.StringBuilder()
 
-                    if (qNorm == "\u0642\u0627\u0646\u0648\u0646" || qNorm == "\u0627\u0644\u0642\u0627\u0646\u0648\u0646" || qNorm == "\u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646" || qNorm == "\u0642\u0648\u0627\u0646\u064a\u0646") {
+                    if (q == "\u0642\u0627\u0646\u0648\u0646" || q == "\u0627\u0644\u0642\u0627\u0646\u0648\u0646" || q == "\u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646" || q == "\u0642\u0648\u0627\u0646\u064a\u0646") {
                         sb.append("\ud83d\udcda \u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646 \u0627\u0644\u0645\u062a\u0627\u062d\u0629 (").append(laws.length()).append("):\n\n")
                         for (i in 0 until laws.length()) {
                             val l = laws.getJSONObject(i)
@@ -321,71 +343,77 @@ class SearchActivity : AppCompatActivity() {
                     } else {
                         val numRegex = Regex("(?:\\u0627\\u0644\\u0645\\u0627\\u062f\\u0647|\\u0627\\u0644\\u0645\\u0627\\u062f\\u0629|\\u0645\\u0627\\u062f\\u0647|\\u0645\\u0627\\u062f\\u0629|\\u0631\\u0642\\u0645)\\s*\\(?\\s*(\\d+)\\s*\\)?")
                         val numOnly = Regex("^(\\d+)$")
-                        var targetNum = numRegex.find(qNorm)?.groupValues?.get(1)?.toIntOrNull()
-                        if (targetNum == null) targetNum = numOnly.find(qNorm)?.groupValues?.get(1)?.toIntOrNull()
+                        var targetNum = numRegex.find(q)?.groupValues?.get(1)?.toIntOrNull()
+                        if (targetNum == null) targetNum = numOnly.find(q)?.groupValues?.get(1)?.toIntOrNull()
 
-                        val fromLawRegex = Regex("(?:\\u0645\\u0646|\\u0641\\u064a|\\u062d\\u0633\\u0628|\\u0648\\u0641\\u0642)\\s+(?:\\u0642\\u0627\\u0646\\u0648\\u0646|\\u0627\\u0644\\u0642\\u0627\\u0646\\u0648\\u0646)\\s+(.+)")
-                        val startLawRegex = Regex("^(?:\\u0642\\u0627\\u0646\\u0648\\u0646|\\u0627\\u0644\\u0642\\u0627\\u0646\\u0648\\u0646)\\s+(.+)")
+                        var textQ = q.replace(numRegex, " ").replace(Regex("\\s+"), " ").trim()
+                        if (targetNum != null && (textQ.isEmpty() || textQ == q)) textQ = ""
 
-                        var lawQuery: String? = null
-                        var keyword: String = ""
-
-                        val mFrom = fromLawRegex.find(qNorm)
-                        val mStart = startLawRegex.find(qNorm)
-
-                        if (mFrom != null) {
-                            lawQuery = mFrom.groupValues[1].trim()
-                            keyword = qNorm.substring(0, mFrom.range.first).replace(numRegex, " ").trim()
-                        } else if (mStart != null) {
-                            lawQuery = mStart.groupValues[1].trim()
-                            keyword = ""
-                        } else {
-                            keyword = qNorm.replace(numRegex, " ").replace(numOnly, " ").trim()
-                        }
-
-                        val keywordTerms = if (keyword.isNotEmpty()) normalizeQueryWithAl(keyword) else emptyList()
-                        val lawTerms = if (lawQuery != null) normalizeQueryWithAl(lawQuery) else emptyList()
-
-                        var count = 0
-
-                        val candidates = mutableListOf<org.json.JSONObject>()
-                        for (i in 0 until laws.length()) {
-                            val law = laws.getJSONObject(i)
-                            if (lawTerms.isNotEmpty()) {
-                                val normName = normalizeTextWithAl(law.optString("name"))
-                                if (lawTerms.all { normName.contains(it) }) candidates.add(law)
-                            } else {
-                                candidates.add(law)
+                        var specificLawId: String? = null
+                        val lawRefRegex = Regex("(?:\\u0645\\u0646|\\u0641\\u064a)\\s+(?:\\u0642\\u0627\\u0646\\u0648\\u0646|\\u0627\\u0644\\u0642\\u0627\\u0646\\u0648\\u0646)\\s+(.+)")
+                        val lawRefMatch = lawRefRegex.find(textQ)
+                        if (lawRefMatch != null) {
+                            val lawNameQ = lawRefMatch.groupValues[1].trim()
+                            textQ = textQ.substring(0, lawRefMatch.range.first).trim()
+                            val lawWords = normalizeQueryWords(lawNameQ)
+                            for (i in 0 until laws.length()) {
+                                val l = laws.getJSONObject(i)
+                                val normName = normalizeText(l.optString("name"))
+                                if (lawWords.isNotEmpty() && lawWords.all { normName.contains(it) }) {
+                                    specificLawId = l.optString("id")
+                                    break
+                                }
                             }
-                        }
-
-                        for (law in candidates) {
-                            val lawJson = cachedLawsMap[law.optString("id")] ?: run {
-                                val j = fetchJson(law.optString("file"))
-                                if (j != null) cachedLawsMap[law.optString("id")] = j
-                                j
-                            } ?: continue
-                            val arts = lawJson.optJSONArray("articles") ?: continue
-
-                            if (lawTerms.isNotEmpty() && targetNum != null && keywordTerms.isEmpty()) {
-                                for (j in 0 until arts.length()) {
-                                    val art = arts.getJSONObject(j)
-                                    if (art.optInt("number") == targetNum) {
-                                        count++
-                                        sb.append("\ud83d\udcdc ").append(law.optString("name")).append("\n")
-                                        sb.append("\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
-                                        sb.append(cleanArticleText(art.optString("text"), art.optInt("number")))
+                        } else {
+                            val startLawMatch = Regex("^(?:\\u0642\\u0627\\u0646\\u0648\\u0646|\\u0627\\u0644\\u0642\\u0627\\u0646\\u0648\\u0646)\\s+(.+)").find(textQ)
+                            if (startLawMatch != null) {
+                                val lawNameQ = startLawMatch.groupValues[1].trim()
+                                val lawWords = normalizeQueryWords(lawNameQ)
+                                for (i in 0 until laws.length()) {
+                                    val l = laws.getJSONObject(i)
+                                    val normName = normalizeText(l.optString("name"))
+                                    if (lawWords.isNotEmpty() && lawWords.all { normName.contains(it) }) {
+                                        specificLawId = l.optString("id")
+                                        textQ = ""
                                         break
                                     }
                                 }
                             }
-                            else if (lawTerms.isNotEmpty() && targetNum == null && keywordTerms.isEmpty()) {
-                                sb.append("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n")
-                                sb.append("\ud83d\udcdc ").append(law.optString("name"))
-                                val yr = law.optString("year")
-                                if (yr.isNotEmpty() && yr != "\u063a\u064a\u0631-\u0645\u062d\u062f\u062f") sb.append(" (").append(yr).append(")")
+                        }
+
+                        val searchWords = if (textQ.isNotEmpty()) normalizeQueryWords(textQ) else emptyList()
+
+                        val lawsToSearch = mutableListOf<org.json.JSONObject>()
+                        for (i in 0 until laws.length()) {
+                            val l = laws.getJSONObject(i)
+                            if (specificLawId != null) {
+                                if (l.optString("id") == specificLawId) lawsToSearch.add(l)
+                            } else {
+                                lawsToSearch.add(l)
+                            }
+                        }
+
+                        var count = 0
+                        for (law in lawsToSearch) {
+                            val lawId = law.optString("id")
+                            val fileName = law.optString("file")
+                            val lawName = law.optString("name")
+                            val lawYear = law.optString("year")
+
+                            var lawJson = cachedLawsMap[lawId]
+                            if (lawJson == null) {
+                                lawJson = fetchJson(fileName)
+                                if (lawJson != null) cachedLawsMap[lawId] = lawJson
+                            }
+                            if (lawJson == null) continue
+                            val arts = lawJson.optJSONArray("articles") ?: continue
+
+                            if (specificLawId != null && targetNum == null && searchWords.isEmpty()) {
+                                sb.append("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n")
+                                sb.append("\ud83d\udcdc ").append(lawName)
+                                if (lawYear.isNotEmpty() && lawYear != "\u063a\u064a\u0631-\u0645\u062d\u062f\u062f") sb.append(" (").append(lawYear).append(")")
                                 sb.append("\n").append(law.optString("type")).append(" | \u0627\u0644\u0645\u0648\u0627\u062f: ").append(arts.length()).append("\n")
-                                sb.append("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n")
+                                sb.append("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n")
                                 for (j in 0 until arts.length()) {
                                     val art = arts.getJSONObject(j)
                                     val num = art.optInt("number")
@@ -393,35 +421,30 @@ class SearchActivity : AppCompatActivity() {
                                     sb.append(cleanArticleText(art.optString("text"), num)).append("\n\n")
                                     count++
                                 }
+                                continue
                             }
-                            else if (targetNum != null && keywordTerms.isEmpty()) {
-                                for (j in 0 until arts.length()) {
-                                    val art = arts.getJSONObject(j)
-                                    if (art.optInt("number") == targetNum) {
-                                        count++
-                                        sb.append("\ud83d\udcdc ").append(law.optString("name"))
-                                        val yr = law.optString("year")
-                                        if (yr.isNotEmpty() && yr != "\u063a\u064a\u0631-\u0645\u062d\u062f\u062f") sb.append(" (").append(yr).append(")")
-                                        sb.append("\n\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
-                                        sb.append(cleanArticleText(art.optString("text"), art.optInt("number"))).append("\n")
-                                        sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
-                                    }
+
+                            for (j in 0 until arts.length()) {
+                                val art = arts.getJSONObject(j)
+                                val artNum = art.optInt("number")
+                                val artText = art.optString("text")
+
+                                var matches = false
+                                if (targetNum != null && searchWords.isEmpty()) {
+                                    matches = (artNum == targetNum)
+                                } else if (searchWords.isNotEmpty()) {
+                                    val normText = normalizeText(artText)
+                                    matches = searchWords.all { normText.contains(it) }
                                 }
-                            }
-                            else if (keywordTerms.isNotEmpty()) {
-                                for (j in 0 until arts.length()) {
-                                    val art = arts.getJSONObject(j)
-                                    val normText = normalizeTextWithAl(art.optString("text"))
-                                    if (keywordTerms.all { normText.contains(it) }) {
-                                        count++
-                                        sb.append("\ud83d\udcdc ").append(law.optString("name"))
-                                        val yr = law.optString("year")
-                                        if (yr.isNotEmpty() && yr != "\u063a\u064a\u0631-\u0645\u062d\u062f\u062f") sb.append(" (").append(yr).append(")")
-                                        sb.append("\n\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
-                                        sb.append(cleanArticleText(art.optString("text"), art.optInt("number"))).append("\n")
-                                        sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
-                                        if (count >= 50) break
-                                    }
+
+                                if (matches) {
+                                    count++
+                                    sb.append("\ud83d\udcdc ").append(lawName)
+                                    if (lawYear.isNotEmpty() && lawYear != "\u063a\u064a\u0631-\u0645\u062d\u062f\u062f") sb.append(" (").append(lawYear).append(")")
+                                    sb.append("\n\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(artNum).append("\n")
+                                    sb.append(cleanArticleText(artText, artNum)).append("\n")
+                                    sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
+                                    if (count >= 50) break
                                 }
                             }
                             if (count >= 50) break
@@ -448,6 +471,7 @@ class SearchActivity : AppCompatActivity() {
             }
         }.start()
     }
+
 
 
 
