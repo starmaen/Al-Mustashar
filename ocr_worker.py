@@ -81,6 +81,24 @@ def normalize_num(s):
     return s.translate(str.maketrans('٠١٢٣٤٥٦٧٨٩', '0123456789')) if s else None
 
 
+
+def fix_arabic_errors(text):
+    """إصلاح الأخطاء الشائعة في Tesseract للعربية"""
+    if not text:
+        return text
+    text = re.sub(r'األ', 'الأ', text)
+    text = re.sub(r'اإل', 'الإ', text)
+    text = re.sub(r'اآل', 'الآ', text)
+    text = re.sub(r'\bال\s+(ي|ت|ن)(\S+)', r'لا \1\2', text)
+    text = re.sub(r'\sال\s', ' لا ', text)
+    text = re.sub(r'\bالي\b', 'إلى', text)
+    text = re.sub(r'\bاذا\b', 'إذا', text)
+    text = re.sub(r'اال', 'الا', text)
+    text = re.sub(r'اا', 'ا', text)
+    text = re.sub(r'[ \t]+', ' ', text)
+    return text
+
+
 def parse_articles(text):
     articles = []
     pattern = re.compile(
@@ -114,6 +132,7 @@ def parse_articles(text):
 
 
 def is_text_good(text, articles):
+    """يكشف النص العربي المشوّه بفحص الكلمات الشائعة"""
     if not text or len(articles) < 5:
         return False
     arabic = len(re.findall(r'[\u0600-\u06FF]', text))
@@ -124,6 +143,16 @@ def is_text_good(text, articles):
         avg = sum(len(a['text']) for a in articles) / len(articles)
         if avg < 50:
             return False
+    common_words = [
+        'من', 'في', 'على', 'إلى', 'الذي', 'التي', 'هذا', 'هذه', 'ذلك',
+        'المادة', 'القانون', 'أو', 'أن', 'لا', 'ما', 'هو', 'هي', 'كل', 'أي',
+        'كان', 'يكون', 'بين', 'عند', 'بعد', 'قبل', 'حسب', 'وفق', 'إذا'
+    ]
+    sample = text[:20000]
+    words_found = sum(1 for w in common_words if re.search(r'\b' + w + r'\b', sample))
+    if words_found < 6:
+        print(f"    كلمات شائعة موجودة: {words_found}/21 → النص مشوّه")
+        return False
     return True
 
 
@@ -159,7 +188,7 @@ def extract_tesseract(pdf_bytes):
             except Exception as pe:
                 print(f"    خطأ صفحة {p}: {pe}")
                 continue
-        return full
+        return fix_arabic_errors(full)
     except Exception as e:
         print(f"    Tesseract فشل: {e}")
         return ""

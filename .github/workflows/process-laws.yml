@@ -27,7 +27,17 @@ jobs:
       - name: تثبيت أدوات النظام
         run: |
           sudo apt-get update
-          sudo apt-get install -y tesseract-ocr tesseract-ocr-ara poppler-utils
+          sudo apt-get install -y tesseract-ocr poppler-utils
+
+      - name: تحميل نموذج tessdata_best للعربية
+        run: |
+          sudo mkdir -p /usr/share/tesseract-ocr/5/tessdata
+          cd /tmp
+          wget -q https://github.com/tesseract-ocr/tessdata_best/raw/main/ara.traineddata
+          wget -q https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata
+          sudo cp ara.traineddata /usr/share/tesseract-ocr/5/tessdata/
+          sudo cp eng.traineddata /usr/share/tesseract-ocr/5/tessdata/
+          echo "TESSDATA_PREFIX=/usr/share/tesseract-ocr/5/tessdata" >> $GITHUB_ENV
 
       - name: تثبيت مكتبات بايثون
         run: |
