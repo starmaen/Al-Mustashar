@@ -271,9 +271,7 @@ class SearchActivity : AppCompatActivity() {
         Thread {
             val result: String = try {
                 val mirrors = listOf(
-                    "https://raw.githubusercontent.com/starmaen/Al-Mustashar/main/data/laws/",
-                    "https://github.com/starmaen/Al-Mustashar/raw/refs/heads/main/data/laws/",
-                    "https://cdn.statically.io/gh/starmaen/Al-Mustashar/main/data/laws/",
+                    "https://starmaen.github.io/Al-Mustashar/data/laws/",
                     "https://cdn.jsdelivr.net/gh/starmaen/Al-Mustashar@main/data/laws/"
                 )
                 fun fetchJson(ep: String, bust: Boolean = true): org.json.JSONObject? {
