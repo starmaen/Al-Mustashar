@@ -200,18 +200,32 @@ def main():
         except Exception:
             num_pages = 1
 
-        text = extract_text_pymupdf(pdf_bytes)
-        method = "PyMuPDF"
+        # جرّب PyMuPDF أولاً
+        text_pymupdf = extract_text_pymupdf(pdf_bytes)
+        articles_pymupdf = parse_articles(text_pymupdf)
+        print(f"  PyMuPDF: {len(articles_pymupdf)} مادة")
 
-        if not has_good_text_layer(text, num_pages):
-            print(f"  الطبقة النصية ضعيفة، جاري OCR...")
-            text = extract_text_ocr(pdf_bytes)
+        # جرّب Tesseract
+        print(f"  جاري OCR بـ Tesseract...")
+        try:
+            text_ocr = extract_text_ocr(pdf_bytes)
+            articles_ocr = parse_articles(text_ocr)
+            print(f"  Tesseract: {len(articles_ocr)} مادة")
+        except Exception as e:
+            print(f"  Tesseract فشل: {e}")
+            articles_ocr = []
+
+        # اختر الطريقة التي أنتجت مواد أكثر
+        if len(articles_ocr) > len(articles_pymupdf):
+            text = text_ocr
+            articles = articles_ocr
             method = "Tesseract"
+        else:
+            text = text_pymupdf
+            articles = articles_pymupdf
+            method = "PyMuPDF"
 
-        print(f"  الطريقة: {method} | طول النص: {len(text)} حرف")
-
-        articles = parse_articles(text)
-        print(f"  عدد المواد: {len(articles)}")
+        print(f"  الطريقة المختارة: {method} ({len(articles)} مادة)")
         if articles:
             print(f"  النطاق: {articles[0]['number']} إلى {articles[-1]['number']}")
 
