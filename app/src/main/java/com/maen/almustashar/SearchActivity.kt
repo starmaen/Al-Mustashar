@@ -228,34 +228,37 @@ class SearchActivity : AppCompatActivity() {
         private var cachedLawsIndex: JSONObject? = null
     private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, JSONObject>()
 
+    private var cachedLawsIndex: org.json.JSONObject? = null
+    private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, org.json.JSONObject>()
+
     private fun searchDriveFiles(query: String) {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) {
-            Toast.makeText(this, "يرجى إدخال نص البحث", Toast.LENGTH_SHORT).show()
+            android.widget.Toast.makeText(this, "يرجى إدخال نص البحث", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
 
-        progressBar.visibility = View.VISIBLE
-        tvEmpty.visibility = View.GONE
-        scrollResults.visibility = View.GONE
-        rvDriveResults.visibility = View.GONE
-        searchActions.visibility = View.GONE
+        progressBar.visibility = android.view.View.VISIBLE
+        tvEmpty.visibility = android.view.View.GONE
+        scrollResults.visibility = android.view.View.GONE
+        rvDriveResults.visibility = android.view.View.GONE
+        searchActions.visibility = android.view.View.GONE
 
-        lifecycleScope.launch {
-            val resultsText = withContext(Dispatchers.IO) {
+        androidx.lifecycle.lifecycleScope.launch {
+            val resultsText = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     val baseUrl = "https://raw.githubusercontent.com/starmaen/Al-Mustashar/main/data/laws/"
 
-                    fun fetchJson(endpoint: String): JSONObject? {
+                    fun fetchJson(endpoint: String): org.json.JSONObject? {
                         return try {
-                            val url = URL(baseUrl + endpoint)
-                            val conn = url.openConnection() as HttpURLConnection
+                            val url = java.net.URL(baseUrl + endpoint)
+                            val conn = url.openConnection() as java.net.HttpURLConnection
                             conn.connectTimeout = 7000
                             conn.readTimeout = 7000
                             conn.useCaches = false
                             if (conn.responseCode == 200) {
                                 val t = conn.inputStream.bufferedReader().readText()
-                                JSONObject(t)
+                                org.json.JSONObject(t)
                             } else null
                         } catch (e: Exception) {
                             null
@@ -267,10 +270,9 @@ class SearchActivity : AppCompatActivity() {
                     }
                     val index = cachedLawsIndex ?: return@withContext "تعذر الاتصال بقاعدة بيانات القوانين، تحقق من الاتصال بالإنترنت."
 
-                    val lawsArray = index.optJSONArray("laws") ?: JSONArray()
-                    val sb = StringBuilder()
+                    val lawsArray = index.optJSONArray("laws") ?: org.json.JSONArray()
+                    val sb = java.lang.StringBuilder()
 
-                    // الحالة 4: كتابة كلمة "قانون" أو "القوانين"
                     if (trimmed == "قانون" || trimmed == "القوانين") {
                         sb.append("📚 قائمة القوانين المتاحة:
 
@@ -313,7 +315,7 @@ class SearchActivity : AppCompatActivity() {
                         }
                         if (lawJson == null) continue
 
-                        val articles = lawJson.optJSONArray("articles") ?: JSONArray()
+                        val articles = lawJson.optJSONArray("articles") ?: org.json.JSONArray()
                         val isLawNameMatch = lawName.contains(trimmed) && targetNum == null && trimmed.length > 3
 
                         for (j in 0 until articles.length()) {
@@ -345,23 +347,23 @@ class SearchActivity : AppCompatActivity() {
                     }
 
                     if (foundMatches == 0) {
-                        "لا توجد نتائج مطابقة لـ \"$trimmed\""
+                        "لا توجد نتائج مطابقة لـ \"" + trimmed + "\""
                     } else {
                         sb.toString().trim()
                     }
                 } catch (e: Exception) {
-                    "حدث خطأ أثناء معالجة البحث: ${e.localizedMessage}"
+                    "حدث خطأ أثناء معالجة البحث: " + e.localizedMessage
                 }
             }
 
-            progressBar.visibility = View.GONE
+            progressBar.visibility = android.view.View.GONE
             if (resultsText.isNotEmpty() && !resultsText.startsWith("لا توجد نتائج")) {
                 tvSearchResult.text = resultsText
-                scrollResults.visibility = View.VISIBLE
-                searchActions.visibility = View.VISIBLE
+                scrollResults.visibility = android.view.View.VISIBLE
+                searchActions.visibility = android.view.View.VISIBLE
             } else {
                 tvEmpty.text = resultsText
-                tvEmpty.visibility = View.VISIBLE
+                tvEmpty.visibility = android.view.View.VISIBLE
             }
         }
     }
