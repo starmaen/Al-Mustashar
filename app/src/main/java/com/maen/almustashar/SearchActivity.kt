@@ -1,3 +1,4 @@
+import org.json.JSONArray
 package com.maen.almustashar
 
 import android.content.ClipData
@@ -216,102 +217,138 @@ class SearchActivity : AppCompatActivity() {
         }
     }
 
+    // كاش خاص بمسار Drive فقط
+    private var cachedLawsIndex: JSONObject? = null
+    private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, JSONObject>()
+
     private fun searchDriveFiles(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) {
+            Toast.makeText(this, "يرجى إدخال نص البحث", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        binding.progressBar.visibility = View.VISIBLE
+
         lifecycleScope.launch {
-            try {
-                // 1. محاولة البحث الموازي في السيرفر المحلي لمواد الـ PDF
-                var localResultText = ""
-                var localPdfUrl: String? = null
-                
-                withContext(Dispatchers.IO) {
-                    try {
-                        val encoded = URLEncoder.encode(query, "UTF-8")
-                        val url = URL("http://127.0.0.1:3000/api/search?q=" + encoded)
-                        val conn = url.openConnection() as HttpURLConnection
-                        conn.connectTimeout = 1500
-                        conn.readTimeout = 2000
-                        if (conn.responseCode == 200) {
-                            val text = conn.inputStream.bufferedReader().readText()
-                            val json = JSONObject(text)
-                            val results = json.optJSONArray("results")
-                            if (results != null && results.length() > 0) {
-                                val sb = StringBuilder()
-                                for (i in 0 until results.length()) {
-                                    val item = results.getJSONObject(i)
-                                    val law = item.optString("law")
-                                    val art = item.optString("article")
-                                    val artText = item.optString("text")
-                                    if (localPdfUrl == null) {
-                                        localPdfUrl = item.optString("previewUrl")
-                                    }
-                                    sb.append("📜 ").append(law).append(" - المادة (").append(art).append(")\n")
-                                    sb.append(artText).append("\n\n-------------------\n\n")
-                                }
-                                localResultText = sb.toString().trim()
+            val resultsText = withContext(Dispatchers.IO) {
+                try {
+                    val baseUrl = "https://raw.githubusercontent.com/starmaen/Al-Mustashar/main/data/laws/"
+                    
+                    fun fetchJson(endpoint: String): JSONObject? {
+                        return try {
+                            val url = URL(baseUrl + endpoint)
+                            val conn = url.openConnection() as HttpURLConnection
+                            conn.connectTimeout = 7000
+                            conn.readTimeout = 7000
+                            conn.useCaches = false
+                            if (conn.responseCode == 200) {
+                                val text = conn.inputStream.bufferedReader().readText()
+                                JSONObject(text)
+                            } else null
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+
+                    if (cachedLawsIndex == null) {
+                        cachedLawsIndex = fetchJson("index.json")
+                    }
+                    val index = cachedLawsIndex ?: return@withContext "تعذر الاتصال بقاعدة بيانات القوانين، تحقق من الاتصال بالإنترنت."
+
+                    val lawsArray = index.optJSONArray("laws") ?: JSONArray()
+                    val sb = StringBuilder()
+
+                    // الحالة 4: عند كتابة كلمة "قانون" أو "القوانين"
+                    if (trimmed == "قانون" || trimmed == "القوانين") {
+                        sb.append("📚 قائمة القوانين المتاحة:
+
+")
+                        for (i in 0 until lawsArray.length()) {
+                            val l = lawsArray.getJSONObject(i)
+                            val name = l.optString("name")
+                            val year = l.optString("year")
+                            val type = l.optString("type")
+                            val count = l.optInt("articles_count")
+                            sb.append("• ").append(name)
+                            if (year.isNotEmpty()) sb.append(" (").append(year).append(")")
+                            sb.append("
+  النوع: ").append(type).append(" | عدد المواد: ").append(count)
+                            sb.append("
+
+")
+                        }
+                        return@withContext sb.toString().trim()
+                    }
+
+                    val numRegex = Regex("^(?:المادة\s*)?(\d+)$")
+                    val numMatch = numRegex.find(trimmed)
+                    val targetNum = numMatch?.groupValues?.get(1)?.toIntOrNull()
+
+                    var foundMatches = 0
+
+                    for (i in 0 until lawsArray.length()) {
+                        val entry = lawsArray.getJSONObject(i)
+                        val lawId = entry.optString("id")
+                        val fileName = entry.optString("file")
+                        val lawName = entry.optString("name")
+
+                        var lawJson = cachedLawsMap[lawId]
+                        if (lawJson == null) {
+                            lawJson = fetchJson(fileName)
+                            if (lawJson != null) {
+                                cachedLawsMap[lawId] = lawJson
                             }
                         }
-                    } catch (_: Exception) {}
-                }
+                        if (lawJson == null) continue
 
-                if (localResultText.isNotEmpty()) {
-                    progressBar.visibility = View.GONE
-                    tvSearchResult.text = localResultText
-                    Linkify.addLinks(tvSearchResult, Linkify.WEB_URLS)
-                    scrollResults.visibility = View.VISIBLE
-                    searchActions.visibility = View.VISIBLE
-                    currentPdfUrl = localPdfUrl ?: defaultDriveFolder
-                    btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
-                    return@launch
-                }
+                        val articles = lawJson.optJSONArray("articles") ?: JSONArray()
+                        val isLawNameMatch = lawName.contains(trimmed) && targetNum == null && trimmed.length > 3
 
-                // 2. إذا لم يعثر السيرفر المحلي على نص أو كان مغلقاً، يفحص أسماء الملفات
-                if (cachedLaws.isEmpty()) {
-                    cachedLaws = LawsRepository.loadLawsList()
-                }
+                        for (j in 0 until articles.length()) {
+                            val art = articles.getJSONObject(j)
+                            val artNum = art.optInt("number")
+                            val artText = art.optString("text")
 
-                fun normalize(s: String) = s.lowercase()
-                    .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-                    .replace("ة", "ه").replace("ى", "ي")
-                    .replace("السوري", "")
-                    .replace(Regex("[^a-zA-Z0-9\\u0621-\\u064A]"), "")
+                            var match = false
+                            if (targetNum != null) {
+                                match = (artNum == targetNum)
+                            } else if (isLawNameMatch) {
+                                match = true
+                            } else {
+                                match = artText.contains(trimmed)
+                            }
 
-                val nq = normalize(query)
-                val matchedFiles = cachedLaws.filter { law ->
-                    val nl = normalize(law.name)
-                    nl.contains(nq) || nq.contains(nl)
-                }.map { law ->
-                    DriveLawFile(
-                        id = law.id,
-                        name = law.name,
-                        mimeType = "application/pdf",
-                        webViewLink = law.drivePdfUrl ?: defaultDriveFolder,
-                        webContentLink = law.drivePdfUrl
-                    )
-                }
+                            if (match) {
+                                foundMatches++
+                                sb.append("📜 ").append(lawName)
+                                sb.append(" - المادة (").append(artNum).append(")
+")
+                                sb.append(artText.trim()).append("
 
-                progressBar.visibility = View.GONE
+-------------------
 
-                if (matchedFiles.isNotEmpty()) {
-                    driveAdapter.submitList(matchedFiles)
-                    rvDriveResults.visibility = View.VISIBLE
-                } else {
-                    tvEmpty.text = "لم يتم العثور على نتائج تطابق: \"$query\"\nيمكنك فتح أرشيف Drive العام مباشرة:"
-                    tvEmpty.visibility = View.VISIBLE
-
-                    searchActions.visibility = View.VISIBLE
-                    btnOpenPdf.text = "📂 فتح مجلد الأرشيف في المتصفح"
-                    btnOpenPdf.setOnClickListener {
-                        openDirectInBrowserOnly(defaultDriveFolder)
+")
+                            }
+                        }
                     }
+
+                    if (foundMatches == 0) {
+                        "لا توجد نتائج مطابقة لـ \"$trimmed\""
+                    } else {
+                        sb.toString().trim()
+                    }
+                } catch (e: Exception) {
+                    "حدث خطأ أثناء معالجة البحث: ${e.localizedMessage}"
                 }
-            } catch (e: Exception) {
-                progressBar.visibility = View.GONE
-                tvEmpty.text = "تعذر إتمام البحث: ${e.localizedMessage}"
-                tvEmpty.visibility = View.VISIBLE
             }
+
+            binding.progressBar.visibility = View.GONE
+            binding.tvResult.text = resultsText
+            binding.tvResult.visibility = View.VISIBLE
+            binding.recyclerViewResults.visibility = View.GONE
         }
     }
-
     private fun openDirectInBrowserOnly(url: String) {
         var target = url
         if (target.contains("/view")) {
