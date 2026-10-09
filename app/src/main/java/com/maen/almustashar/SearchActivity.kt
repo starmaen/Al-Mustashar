@@ -1,5 +1,12 @@
-import org.json.JSONArray
 package com.maen.almustashar
+
+import org.json.JSONArray
+import org.json.JSONObject
+import java.net.URL
+import java.net.HttpURLConnection
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
 
 import android.content.ClipData
 import android.content.ClipboardManager
@@ -218,7 +225,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     // كاش خاص بمسار Drive فقط
-    private var cachedLawsIndex: JSONObject? = null
+        private var cachedLawsIndex: JSONObject? = null
     private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, JSONObject>()
 
     private fun searchDriveFiles(query: String) {
@@ -228,13 +235,17 @@ class SearchActivity : AppCompatActivity() {
             return
         }
 
-        binding.progressBar.visibility = View.VISIBLE
+        progressBar.visibility = View.VISIBLE
+        tvEmpty.visibility = View.GONE
+        scrollResults.visibility = View.GONE
+        rvDriveResults.visibility = View.GONE
+        searchActions.visibility = View.GONE
 
         lifecycleScope.launch {
             val resultsText = withContext(Dispatchers.IO) {
                 try {
                     val baseUrl = "https://raw.githubusercontent.com/starmaen/Al-Mustashar/main/data/laws/"
-                    
+
                     fun fetchJson(endpoint: String): JSONObject? {
                         return try {
                             val url = URL(baseUrl + endpoint)
@@ -243,8 +254,8 @@ class SearchActivity : AppCompatActivity() {
                             conn.readTimeout = 7000
                             conn.useCaches = false
                             if (conn.responseCode == 200) {
-                                val text = conn.inputStream.bufferedReader().readText()
-                                JSONObject(text)
+                                val t = conn.inputStream.bufferedReader().readText()
+                                JSONObject(t)
                             } else null
                         } catch (e: Exception) {
                             null
@@ -259,7 +270,7 @@ class SearchActivity : AppCompatActivity() {
                     val lawsArray = index.optJSONArray("laws") ?: JSONArray()
                     val sb = StringBuilder()
 
-                    // الحالة 4: عند كتابة كلمة "قانون" أو "القوانين"
+                    // الحالة 4: كتابة كلمة "قانون" أو "القوانين"
                     if (trimmed == "قانون" || trimmed == "القوانين") {
                         sb.append("📚 قائمة القوانين المتاحة:
 
@@ -343,10 +354,15 @@ class SearchActivity : AppCompatActivity() {
                 }
             }
 
-            binding.progressBar.visibility = View.GONE
-            binding.tvResult.text = resultsText
-            binding.tvResult.visibility = View.VISIBLE
-            binding.recyclerViewResults.visibility = View.GONE
+            progressBar.visibility = View.GONE
+            if (resultsText.isNotEmpty() && !resultsText.startsWith("لا توجد نتائج")) {
+                tvSearchResult.text = resultsText
+                scrollResults.visibility = View.VISIBLE
+                searchActions.visibility = View.VISIBLE
+            } else {
+                tvEmpty.text = resultsText
+                tvEmpty.visibility = View.VISIBLE
+            }
         }
     }
     private fun openDirectInBrowserOnly(url: String) {
