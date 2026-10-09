@@ -11,7 +11,6 @@ import fitz
 
 SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 OUTPUT_DIR = 'data/laws'
-MIN_TEXT_LENGTH_PER_PAGE = 50
 
 
 def clean_filename(filename):
@@ -27,7 +26,6 @@ def parse_filename(filename):
     parts = name.split()
     if len(parts) < 2:
         return None
-
     first = parts[0].strip()
     type_map = {
         'اساسي': 'أساسي', 'أساسي': 'أساسي', 'الأساسي': 'أساسي', 'الاساسي': 'أساسي',
@@ -42,7 +40,6 @@ def parse_filename(filename):
 
     full_text = ' '.join(law_name_parts)
     year = None
-
     year_match = re.search(r'(?:لعام|عام|سنة|لسنة|سنه|الصادر\s+عام)\s*(\d{4})', full_text)
     if year_match:
         year = year_match.group(1)
@@ -55,10 +52,8 @@ def parse_filename(filename):
                 year = law_name_parts[i]
                 law_name_parts = law_name_parts[:i] + law_name_parts[i+1:]
                 break
-
     if not year:
         year = 'غير-محدد'
-
     law_name = ' '.join(law_name_parts).strip()
     law_name = re.sub(r'\s+', ' ', law_name)
     return {'type': law_type, 'name': law_name, 'year': year}
@@ -68,37 +63,6 @@ def make_id(law_name, year):
     clean = re.sub(r'\s+', '-', law_name.strip())
     clean = re.sub(r'[\\/:*?"<>|]', '', clean)
     return f"{clean}-{year}"
-
-
-def extract_text_pymupdf(pdf_bytes):
-    try:
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        full_text = ""
-        for page in doc:
-            full_text += page.get_text("text") + "\n"
-        doc.close()
-        return full_text
-    except Exception as e:
-        print(f"  PyMuPDF فشل: {e}")
-        return ""
-
-
-def has_good_text_layer(text, num_pages):
-    if not text or not num_pages:
-        return False
-    avg_per_page = len(text.strip()) / num_pages
-    return avg_per_page >= MIN_TEXT_LENGTH_PER_PAGE
-
-
-def extract_text_ocr(pdf_bytes):
-    from pdf2image import convert_from_bytes
-    import pytesseract
-    images = convert_from_bytes(pdf_bytes, dpi=300)
-    full_text = ""
-    for img in images:
-        page_text = pytesseract.image_to_string(img, lang='ara+eng', config='--psm 6')
-        full_text += page_text + "\n"
-    return full_text
 
 
 def normalize_num(num_str):
@@ -111,46 +75,93 @@ def parse_articles(text):
     articles = []
     pattern = re.compile(
         r'(?:المادة|المادّة|مادة|مادّة)\s*'
-        r'[\(\[/\s]*'
+        r'[\(\[/\s\u200B-\u200F]*'
         r'([٠-٩\d]{1,4})'
-        r'[\)\]/\s]*',
+        r'[\)\]/\s\u200B-\u200F]*',
         re.MULTILINE
     )
-
     matches = list(pattern.finditer(text))
     if not matches:
         return articles
-
     seen = set()
     for i, match in enumerate(matches):
         raw_num = normalize_num(match.group(1))
         try:
             article_num = int(raw_num)
-        except ValueError:
+        except (ValueError, TypeError):
             continue
-
         if article_num < 1 or article_num > 2000:
             continue
         if article_num in seen:
             continue
-
         start = match.end()
         end = matches[i + 1].start() if i + 1 < len(matches) else len(text)
         body = text[start:end].strip()
         body = re.sub(r'\n{3,}', '\n\n', body)
         body = re.sub(r'[ \t]+', ' ', body)
-
-        if len(body) < 5:
+        if len(body) < 10:
             continue
-
         seen.add(article_num)
         articles.append({
             'number': article_num,
             'text': f"المادة {article_num}\n\n{body}"
         })
-
     articles.sort(key=lambda x: x['number'])
     return articles
+
+
+def is_text_good(text, articles):
+    """يفحص هل النص المستخرج عربي نظيف أم مشوّه"""
+    if not text or len(articles) < 5:
+        return False
+    # فحص نسبة الأحرف العربية
+    arabic_chars = len(re.findall(r'[\u0600-\u06FF]', text))
+    total_chars = len(re.sub(r'\s', '', text))
+    if total_chars == 0:
+        return False
+    arabic_ratio = arabic_chars / total_chars
+    # إذا كانت نسبة العربية أقل من 60%، النص مشوّه
+    if arabic_ratio < 0.6:
+        return False
+    # فحص متوسط طول المادة
+    if articles:
+        avg_len = sum(len(a['text']) for a in articles) / len(articles)
+        if avg_len < 50:
+            return False
+    return True
+
+
+def extract_pymupdf(pdf_bytes):
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        full_text = ""
+        for page in doc:
+            full_text += page.get_text("text") + "\n"
+        doc.close()
+        return full_text
+    except Exception as e:
+        print(f"  PyMuPDF فشل: {e}")
+        return ""
+
+
+def extract_tesseract(pdf_bytes):
+    try:
+        from pdf2image import convert_from_bytes
+        import pytesseract
+        # دقة أعلى + معالجة مسبقة
+        images = convert_from_bytes(pdf_bytes, dpi=400)
+        full_text = ""
+        for idx, img in enumerate(images):
+            # تحويل لتدرج رمادي
+            img = img.convert('L')
+            page_text = pytesseract.image_to_string(
+                img, lang='ara', config='--psm 6 --oem 1'
+            )
+            full_text += page_text + "\n"
+        return full_text
+    except Exception as e:
+        print(f"  Tesseract فشل: {e}")
+        return ""
 
 
 def main():
@@ -193,39 +204,35 @@ def main():
             _, done = downloader.next_chunk()
         pdf_bytes = pdf_buffer.getvalue()
 
+        # تحديد السنة
         try:
-            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-            num_pages = len(doc)
-            doc.close()
-        except Exception:
-            num_pages = 1
+            year_int = int(parsed['year'])
+        except (ValueError, TypeError):
+            year_int = 9999
 
-        # جرّب PyMuPDF أولاً
-        text_pymupdf = extract_text_pymupdf(pdf_bytes)
-        articles_pymupdf = parse_articles(text_pymupdf)
-        print(f"  PyMuPDF: {len(articles_pymupdf)} مادة")
+        method = "PyMuPDF"
+        articles = []
 
-        # جرّب Tesseract
-        print(f"  جاري OCR بـ Tesseract...")
-        try:
-            text_ocr = extract_text_ocr(pdf_bytes)
-            articles_ocr = parse_articles(text_ocr)
-            print(f"  Tesseract: {len(articles_ocr)} مادة")
-        except Exception as e:
-            print(f"  Tesseract فشل: {e}")
-            articles_ocr = []
-
-        # اختر الطريقة التي أنتجت مواد أكثر
-        if len(articles_ocr) > len(articles_pymupdf):
-            text = text_ocr
-            articles = articles_ocr
+        # القوانين القديمة (قبل 2000) → Tesseract مباشرة
+        if year_int < 2000:
+            print(f"  قانون قديم ({year_int}) → Tesseract")
+            text = extract_tesseract(pdf_bytes)
             method = "Tesseract"
+            articles = parse_articles(text)
         else:
-            text = text_pymupdf
-            articles = articles_pymupdf
-            method = "PyMuPDF"
+            # القوانين الحديثة → PyMuPDF أولاً
+            text = extract_pymupdf(pdf_bytes)
+            articles = parse_articles(text)
+            print(f"  PyMuPDF: {len(articles)} مادة")
 
-        print(f"  الطريقة المختارة: {method} ({len(articles)} مادة)")
+            # إذا فشل أو النص مشوّه → Tesseract
+            if not is_text_good(text, articles):
+                print(f"  النص مشوّه أو ناقص → Tesseract")
+                text = extract_tesseract(pdf_bytes)
+                method = "Tesseract"
+                articles = parse_articles(text)
+
+        print(f"  الطريقة النهائية: {method} | عدد المواد: {len(articles)}")
         if articles:
             print(f"  النطاق: {articles[0]['number']} إلى {articles[-1]['number']}")
 
@@ -250,7 +257,8 @@ def main():
             'year': parsed['year'],
             'type': parsed['type'],
             'file': f"{law_id}.json",
-            'articles_count': len(articles)
+            'articles_count': len(articles),
+            'extraction_method': method
         })
 
     index_data = {
