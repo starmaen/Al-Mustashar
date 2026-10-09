@@ -4,6 +4,10 @@ on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/process-laws.yml'
+      - 'ocr_worker.py'
 
 permissions:
   contents: write
