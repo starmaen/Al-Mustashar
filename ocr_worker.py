@@ -145,19 +145,40 @@ def extract_pymupdf(pdf_bytes):
 
 
 def extract_tesseract(pdf_bytes):
+    """معالجة صفحة صفحة لتقليل استهلاك الذاكرة"""
     try:
-        from pdf2image import convert_from_bytes
+        from pdf2image import convert_from_bytes, pdfinfo_from_bytes
         import pytesseract
-        # دقة أعلى + معالجة مسبقة
-        images = convert_from_bytes(pdf_bytes, dpi=400)
+
+        info = pdfinfo_from_bytes(pdf_bytes)
+        num_pages = info.get('Pages', 1)
+        print(f"    عدد الصفحات: {num_pages}")
+
         full_text = ""
-        for idx, img in enumerate(images):
-            # تحويل لتدرج رمادي
-            img = img.convert('L')
-            page_text = pytesseract.image_to_string(
-                img, lang='ara', config='--psm 6 --oem 1'
-            )
-            full_text += page_text + "\n"
+        for page_num in range(1, num_pages + 1):
+            try:
+                # معالجة صفحة واحدة فقط في الذاكرة
+                images = convert_from_bytes(
+                    pdf_bytes, dpi=200,
+                    first_page=page_num, last_page=page_num,
+                    fmt='jpeg', thread_count=1
+                )
+                if not images:
+                    continue
+                img = images[0].convert('L')
+                page_text = pytesseract.image_to_string(
+                    img, lang='ara', config='--psm 6 --oem 1'
+                )
+                full_text += page_text + "\n"
+                # تنظيف الذاكرة
+                del images
+                del img
+                if page_num % 20 == 0:
+                    print(f"    عالجت {page_num}/{num_pages} صفحة")
+            except Exception as pe:
+                print(f"    خطأ في الصفحة {page_num}: {pe}")
+                continue
+
         return full_text
     except Exception as e:
         print(f"  Tesseract فشل: {e}")
