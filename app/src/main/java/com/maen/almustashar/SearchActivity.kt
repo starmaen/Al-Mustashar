@@ -217,8 +217,9 @@ class SearchActivity : AppCompatActivity() {
     }
 
     // كاش خاص بمسار Drive فقط
-                    private var cachedLawsIndex: org.json.JSONObject? = null
+                        private var cachedLawsIndex: org.json.JSONObject? = null
     private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, org.json.JSONObject>()
+    private var cacheTimestamp: Long = 0
 
     private fun normalizeArabic(s: String): String {
         val digits = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669"
@@ -246,12 +247,21 @@ class SearchActivity : AppCompatActivity() {
         return t.trim()
     }
 
+    private fun clearLawsCache() {
+        cachedLawsIndex = null
+        cachedLawsMap.clear()
+        cacheTimestamp = 0
+    }
+
     private fun searchDriveFiles(query: String) {
         val trimmed = query.trim()
         if (trimmed.isEmpty()) {
             android.widget.Toast.makeText(this, "\u064a\u0631\u062c\u0649 \u0625\u062f\u062e\u0627\u0644 \u0646\u0635 \u0627\u0644\u0628\u062d\u062b", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
+        val now = System.currentTimeMillis()
+        if (now - cacheTimestamp > 10 * 60 * 1000) clearLawsCache()
+        cacheTimestamp = now
         progressBar.visibility = android.view.View.VISIBLE
         tvEmpty.visibility = android.view.View.GONE
         scrollResults.visibility = android.view.View.GONE
@@ -265,14 +275,16 @@ class SearchActivity : AppCompatActivity() {
                     "https://cdn.statically.io/gh/starmaen/Al-Mustashar/main/data/laws/",
                     "https://raw.githubusercontent.com/starmaen/Al-Mustashar/main/data/laws/"
                 )
-                fun fetchJson(ep: String): org.json.JSONObject? {
+                fun fetchJson(ep: String, bust: Boolean = true): org.json.JSONObject? {
                     for (base in mirrors) {
                         try {
-                            val conn = java.net.URL(base + ep).openConnection() as java.net.HttpURLConnection
+                            val urlStr = if (bust) base + ep + "?t=" + System.currentTimeMillis() else base + ep
+                            val conn = java.net.URL(urlStr).openConnection() as java.net.HttpURLConnection
                             conn.connectTimeout = 15000
                             conn.readTimeout = 15000
                             conn.useCaches = false
                             conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                            conn.setRequestProperty("Cache-Control", "no-cache")
                             if (conn.responseCode == 200)
                                 return org.json.JSONObject(conn.inputStream.bufferedReader().readText())
                         } catch (e: Exception) { }
@@ -288,14 +300,13 @@ class SearchActivity : AppCompatActivity() {
                     val laws = index.optJSONArray("laws") ?: org.json.JSONArray()
                     val q = normalizeArabic(trimmed)
                     val sb = java.lang.StringBuilder()
-
                     val stopwords = setOf(
-                        "\u0642\u0627\u0646\u0648\u0646","\u0627\u0644\u0642\u0627\u0646\u0648\u0646","\u0627\u0644\u0645\u0627\u062f\u0647","\u0627\u0644\u0645\u0627\u062f\u0629",
-                        "\u0645\u0627\u062f\u0647","\u0645\u0627\u062f\u0629","\u0631\u0642\u0645","\u0645\u0646","\u0641\u064a","\u0639\u0644\u0649",
-                        "\u0627\u0644\u0649","\u0639\u0646","\u0627\u0648","\u0648","\u0647\u0630\u0627","\u0647\u0630\u0647"
+                        "\u0642\u0627\u0646\u0648\u0646","\u0627\u0644\u0642\u0627\u0646\u0648\u0646","\u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646",
+                        "\u0627\u0644\u0645\u0627\u062f\u0647","\u0627\u0644\u0645\u0627\u062f\u0629","\u0645\u0627\u062f\u0647","\u0645\u0627\u062f\u0629","\u0631\u0642\u0645",
+                        "\u0645\u0646","\u0641\u064a","\u0639\u0644\u0649","\u0627\u0644\u0649","\u0639\u0646","\u0627\u0648","\u0648","\u0647\u0630\u0627","\u0647\u0630\u0647",
+                        "\u0643\u0627\u0645\u0644","\u0643\u0627\u0645\u0644\u0647","\u0643\u0644","\u062c\u0645\u064a\u0639","\u0643\u0644\u0647\u0627","\u0645\u062a\u0627\u062d","\u0645\u062a\u0627\u062d\u0647"
                     )
 
-                    // قائمة القوانين
                     if (q == "\u0642\u0627\u0646\u0648\u0646" || q == "\u0627\u0644\u0642\u0627\u0646\u0648\u0646" || q == "\u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646") {
                         sb.append("\ud83d\udcda \u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646 \u0627\u0644\u0645\u062a\u0627\u062d\u0629 (").append(laws.length()).append("):\n\n")
                         for (i in 0 until laws.length()) {
@@ -307,28 +318,26 @@ class SearchActivity : AppCompatActivity() {
                         }
                         sb.toString().trim()
                     } else {
-                        // استخراج الكلمات المهمة من الاستعلام
                         val queryWords = q.split(" ").map { it.trim() }
                             .filter { it.length >= 3 && it !in stopwords && !it.all { c -> c.isDigit() } }
-
-                        // استخراج رقم المادة
                         val numMatch = Regex("\\d+").find(q)
                         val targetNum = numMatch?.value?.toIntOrNull()
 
-                        // البحث عن قانون يطابق الاستعلام
                         var matchedLaw: org.json.JSONObject? = null
+                        var bestScore = 0
                         for (i in 0 until laws.length()) {
                             val law = laws.getJSONObject(i)
                             val lawNameNorm = normalizeArabic(law.optString("name"))
-                            if (queryWords.isNotEmpty() && queryWords.all { lawNameNorm.contains(it) }) {
+                            var score = 0
+                            for (w in queryWords) if (lawNameNorm.contains(w)) score++
+                            if (queryWords.isNotEmpty() && score.toFloat() / queryWords.size >= 0.6f && score > bestScore) {
                                 matchedLaw = law
-                                break
+                                bestScore = score
                             }
                         }
 
                         var count = 0
 
-                        // الحالة 1: قانون محدد + رقم → المادة فقط
                         if (matchedLaw != null && targetNum != null) {
                             val lawJson = cachedLawsMap[matchedLaw.optString("id")] ?: run {
                                 val j = fetchJson(matchedLaw.optString("file"))
@@ -348,9 +357,7 @@ class SearchActivity : AppCompatActivity() {
                                     }
                                 }
                             }
-                        }
-                        // الحالة 2: قانون محدد فقط → كل المواد
-                        else if (matchedLaw != null) {
+                        } else if (matchedLaw != null) {
                             val lawJson = cachedLawsMap[matchedLaw.optString("id")] ?: run {
                                 val j = fetchJson(matchedLaw.optString("file"))
                                 if (j != null) cachedLawsMap[matchedLaw.optString("id")] = j
@@ -358,12 +365,12 @@ class SearchActivity : AppCompatActivity() {
                             }
                             if (lawJson != null) {
                                 val arts = lawJson.optJSONArray("articles") ?: org.json.JSONArray()
-                                sb.append("\u2550\u2550\u2550\u2550\u2550\n")
+                                sb.append("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n")
                                 sb.append("\ud83d\udcdc ").append(matchedLaw.optString("name"))
                                 val yr = matchedLaw.optString("year")
                                 if (yr.isNotEmpty()) sb.append(" (").append(yr).append(")")
                                 sb.append("\n").append(matchedLaw.optString("type")).append(" | \u0627\u0644\u0645\u0648\u0627\u062f: ").append(arts.length()).append("\n")
-                                sb.append("\u2550\u2550\u2550\u2550\u2550\n\n")
+                                sb.append("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n")
                                 for (j in 0 until arts.length()) {
                                     val art = arts.getJSONObject(j)
                                     val num = art.optInt("number")
@@ -372,9 +379,7 @@ class SearchActivity : AppCompatActivity() {
                                     count++
                                 }
                             }
-                        }
-                        // الحالة 3: رقم فقط → بحث بالرقم في كل القوانين
-                        else if (targetNum != null) {
+                        } else if (targetNum != null) {
                             for (i in 0 until laws.length()) {
                                 val law = laws.getJSONObject(i)
                                 val lawId = law.optString("id")
@@ -393,13 +398,11 @@ class SearchActivity : AppCompatActivity() {
                                         if (yr.isNotEmpty()) sb.append(" (").append(yr).append(")")
                                         sb.append("\n\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
                                         sb.append(cleanArticleText(art.optString("text"), art.optInt("number"))).append("\n")
-                                        sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
+                                        sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
                                     }
                                 }
                             }
-                        }
-                        // الحالة 4: بحث نصي بكلمة
-                        else if (queryWords.isNotEmpty()) {
+                        } else if (queryWords.isNotEmpty()) {
                             for (i in 0 until laws.length()) {
                                 val law = laws.getJSONObject(i)
                                 val lawId = law.optString("id")
@@ -417,7 +420,7 @@ class SearchActivity : AppCompatActivity() {
                                         sb.append("\ud83d\udcdc ").append(law.optString("name")).append("\n")
                                         sb.append("\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
                                         sb.append(cleanArticleText(art.optString("text"), art.optInt("number"))).append("\n")
-                                        sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
+                                        sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
                                         if (count >= 30) break
                                     }
                                 }
@@ -449,6 +452,7 @@ class SearchActivity : AppCompatActivity() {
             }
         }.start()
     }
+
 
 
 
