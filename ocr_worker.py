@@ -2,6 +2,7 @@ import os
 import json
 import re
 import io
+import shutil
 from datetime import datetime
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -13,19 +14,65 @@ SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 OUTPUT_DIR = 'data/laws'
 
 
+def clean_filename(filename):
+    name = filename
+    name = re.sub(r'(\.pdf|\.PDF)+$', '', name)
+    name = re.sub(r'[_\-]?(نسخة|copie|copy|final|نهائي|الجديد|جديد)\s*', ' ', name, flags=re.IGNORECASE)
+    name = re.sub(r'\s+', ' ', name).strip()
+    return name
+
+
 def parse_filename(filename):
-    name = filename.replace('.pdf', '').strip()
+    name = clean_filename(filename)
     parts = name.split()
-    if len(parts) < 3:
+    if len(parts) < 2:
         return None
-    law_type = parts[0]
-    year = parts[-1]
-    law_name = ' '.join(parts[1:-1])
+
+    first = parts[0].strip()
+    type_map = {
+        'اساسي': 'أساسي', 'أساسي': 'أساسي', 'الأساسي': 'أساسي', 'الاساسي': 'أساسي',
+        'معدل': 'معدل', 'تعديل': 'معدل', 'التعديل': 'معدل', 'معدّل': 'معدل'
+    }
+    law_type = None
+    for key, val in type_map.items():
+        if first == key:
+            law_type = val
+            break
+
+    if law_type:
+        law_name_parts = parts[1:]
+    else:
+        law_type = 'أساسي'
+        law_name_parts = parts
+
+    full_text = ' '.join(law_name_parts)
+    year = None
+
+    year_match = re.search(r'(?:لعام|عام|سنة|لسنة|سنه|لعام|الصادر\s+عام)\s*(\d{4})', full_text)
+    if year_match:
+        year = year_match.group(1)
+        before = full_text[:year_match.start()].strip()
+        after = full_text[year_match.end():].strip()
+        law_name_parts = (before + ' ' + after).split()
+    else:
+        for i in range(len(law_name_parts) - 1, -1, -1):
+            if re.match(r'^\d{4}$', law_name_parts[i]):
+                year = law_name_parts[i]
+                law_name_parts = law_name_parts[:i] + law_name_parts[i+1:]
+                break
+
+    if not year:
+        year = 'غير-محدد'
+
+    law_name = ' '.join(law_name_parts).strip()
+    law_name = re.sub(r'\s+', ' ', law_name)
+
     return {'type': law_type, 'name': law_name, 'year': year}
 
 
 def make_id(law_name, year):
     clean = re.sub(r'\s+', '-', law_name.strip())
+    clean = re.sub(r'[\\/:*?"<>|]', '', clean)
     return f"{clean}-{year}"
 
 
@@ -64,6 +111,8 @@ def main():
     drive = build('drive', 'v3', credentials=creds)
     folder_id = os.environ['GDRIVE_FOLDER_ID']
 
+    if os.path.exists(OUTPUT_DIR):
+        shutil.rmtree(OUTPUT_DIR)
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     results = drive.files().list(
@@ -85,6 +134,8 @@ def main():
         if not parsed:
             print("  تجاهل: اسم الملف لا يتبع الصيغة")
             continue
+
+        print(f"  النوع: {parsed['type']} | الاسم: {parsed['name']} | السنة: {parsed['year']}")
 
         request = drive.files().get_media(fileId=file['id'])
         pdf_buffer = io.BytesIO()
