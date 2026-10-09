@@ -1,13 +1,5 @@
 package com.maen.almustashar
 
-import org.json.JSONArray
-import org.json.JSONObject
-import java.net.URL
-import java.net.HttpURLConnection
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-
-
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -225,9 +217,6 @@ class SearchActivity : AppCompatActivity() {
     }
 
     // كاش خاص بمسار Drive فقط
-        private var cachedLawsIndex: JSONObject? = null
-    private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, JSONObject>()
-
     private var cachedLawsIndex: org.json.JSONObject? = null
     private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, org.json.JSONObject>()
 
@@ -248,7 +237,6 @@ class SearchActivity : AppCompatActivity() {
             val resultsText = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     val baseUrl = "https://raw.githubusercontent.com/starmaen/Al-Mustashar/main/data/laws/"
-
                     fun fetchJson(endpoint: String): org.json.JSONObject? {
                         return try {
                             val url = java.net.URL(baseUrl + endpoint)
@@ -268,38 +256,29 @@ class SearchActivity : AppCompatActivity() {
                     if (cachedLawsIndex == null) {
                         cachedLawsIndex = fetchJson("index.json")
                     }
-                    val index = cachedLawsIndex ?: return@withContext "تعذر الاتصال بقاعدة بيانات القوانين، تحقق من الاتصال بالإنترنت."
+                    val index = cachedLawsIndex ?: return@withContext "فشل الاتصال بقاعدة بيانات القوانين"
 
                     val lawsArray = index.optJSONArray("laws") ?: org.json.JSONArray()
                     val sb = java.lang.StringBuilder()
 
-                    if (trimmed == "قانون" || trimmed == "القوانين") {
-                        sb.append("📚 قائمة القوانين المتاحة:
-
-")
+                    val isListQuery = (trimmed == "\u0642\u0627\u0646\u0648\u0646" || trimmed == "\u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646")
+                    if (isListQuery) {
+                        sb.append("\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646 \u0627\u0644\u0645\u062a\u0627\u062d\u0629:\n\n")
                         for (i in 0 until lawsArray.length()) {
                             val l = lawsArray.getJSONObject(i)
-                            val name = l.optString("name")
-                            val year = l.optString("year")
-                            val type = l.optString("type")
-                            val count = l.optInt("articles_count")
-                            sb.append("• ").append(name)
-                            if (year.isNotEmpty()) sb.append(" (").append(year).append(")")
-                            sb.append("
-  النوع: ").append(type).append(" | عدد المواد: ").append(count)
-                            sb.append("
-
-")
+                            sb.append("- ").append(l.optString("name"))
+                            val yr = l.optString("year")
+                            if (yr.isNotEmpty()) sb.append(" (").append(yr).append(")")
+                            sb.append("\n  \u0639\u062f\u062f \u0627\u0644\u0645\u0648\u0627\u062f: ").append(l.optInt("articles_count"))
+                            sb.append("\n\n")
                         }
                         return@withContext sb.toString().trim()
                     }
 
-                    val numRegex = Regex("^(?:المادة\s*)?(\d+)$")
-                    val numMatch = numRegex.find(trimmed)
-                    val targetNum = numMatch?.groupValues?.get(1)?.toIntOrNull()
+                    val digitsOnly = trimmed.filter { it.isDigit() }
+                    val targetNum = if (trimmed.startsWith("\u0627\u0644\u0645\u0627\u062f\u0629") || digitsOnly == trimmed) digitsOnly.toIntOrNull() else null
 
                     var foundMatches = 0
-
                     for (i in 0 until lawsArray.length()) {
                         val entry = lawsArray.getJSONObject(i)
                         val lawId = entry.optString("id")
@@ -309,55 +288,44 @@ class SearchActivity : AppCompatActivity() {
                         var lawJson = cachedLawsMap[lawId]
                         if (lawJson == null) {
                             lawJson = fetchJson(fileName)
-                            if (lawJson != null) {
-                                cachedLawsMap[lawId] = lawJson
-                            }
+                            if (lawJson != null) cachedLawsMap[lawId] = lawJson
                         }
                         if (lawJson == null) continue
 
                         val articles = lawJson.optJSONArray("articles") ?: org.json.JSONArray()
-                        val isLawNameMatch = lawName.contains(trimmed) && targetNum == null && trimmed.length > 3
+                        val isLawNameMatch = (targetNum == null && lawName.contains(trimmed) && trimmed.length > 2)
 
                         for (j in 0 until articles.length()) {
                             val art = articles.getJSONObject(j)
                             val artNum = art.optInt("number")
                             val artText = art.optString("text")
 
-                            var match = false
-                            if (targetNum != null) {
-                                match = (artNum == targetNum)
-                            } else if (isLawNameMatch) {
-                                match = true
-                            } else {
-                                match = artText.contains(trimmed)
+                            val match = when {
+                                targetNum != null -> (artNum == targetNum)
+                                isLawNameMatch -> true
+                                else -> artText.contains(trimmed)
                             }
 
                             if (match) {
                                 foundMatches++
-                                sb.append("📜 ").append(lawName)
-                                sb.append(" - المادة (").append(artNum).append(")
-")
-                                sb.append(artText.trim()).append("
-
--------------------
-
-")
+                                sb.append(lawName).append(" - \u0627\u0644\u0645\u0627\u062f\u0629 (").append(artNum).append(")\n")
+                                sb.append(artText.trim()).append("\n\n-------------------\n\n")
                             }
                         }
                     }
 
                     if (foundMatches == 0) {
-                        "لا توجد نتائج مطابقة لـ \"" + trimmed + "\""
+                        "لا توجد نتائج مطابقة لـ $trimmed"
                     } else {
                         sb.toString().trim()
                     }
                 } catch (e: Exception) {
-                    "حدث خطأ أثناء معالجة البحث: " + e.localizedMessage
+                    "خطأ: ${e.localizedMessage}"
                 }
             }
 
             progressBar.visibility = android.view.View.GONE
-            if (resultsText.isNotEmpty() && !resultsText.startsWith("لا توجد نتائج")) {
+            if (resultsText.isNotEmpty() && !resultsText.startsWith("لا توجد")) {
                 tvSearchResult.text = resultsText
                 scrollResults.visibility = android.view.View.VISIBLE
                 searchActions.visibility = android.view.View.VISIBLE
