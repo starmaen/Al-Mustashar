@@ -217,7 +217,7 @@ class SearchActivity : AppCompatActivity() {
     }
 
     // كاش خاص بمسار Drive فقط
-                private var cachedLawsIndex: org.json.JSONObject? = null
+                    private var cachedLawsIndex: org.json.JSONObject? = null
     private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, org.json.JSONObject>()
 
     private fun normalizeArabic(s: String): String {
@@ -283,18 +283,20 @@ class SearchActivity : AppCompatActivity() {
                 if (cachedLawsIndex == null) cachedLawsIndex = fetchJson("index.json")
                 val index = cachedLawsIndex
                 if (index == null) {
-                    "\u0641\u0634\u0644 \u0627\u0644\u0627\u062a\u0635\u0627\u0644 \u0628\u0642\u0627\u0639\u062f\u0629 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a"
+                    "\u0641\u0634\u0644 \u0627\u0644\u0627\u062a\u0635\u0627\u0644"
                 } else {
                     val laws = index.optJSONArray("laws") ?: org.json.JSONArray()
-                    val normQ = normalizeArabic(trimmed)
-                    val stopwords = setOf("\u0645\u0646","\u0641\u064a","\u0639\u0644\u0649","\u0627\u0644\u0649","\u0639\u0646","\u0627\u0648","\u0648","\u0642\u0627\u0646\u0648\u0646","\u0627\u0644\u0642\u0627\u0646\u0648\u0646","\u0627\u0644\u0645\u0627\u062f\u0647","\u0627\u0644\u0645\u0627\u062f\u0629","\u0645\u0627\u062f\u0647","\u0645\u0627\u062f\u0629","\u0631\u0642\u0645","\u0647\u0630\u0627","\u0647\u0630\u0647")
-                    val targetNum = Regex("\\d+").find(normQ)?.value?.toIntOrNull()
-                    val words = normQ.split(" ").map { it.trim() }.filter { it.length > 1 && it !in stopwords && !it.all { c -> c.isDigit() } }
-
+                    val q = normalizeArabic(trimmed)
                     val sb = java.lang.StringBuilder()
-                    var count = 0
 
-                    if (normQ == "\u0642\u0627\u0646\u0648\u0646" || normQ == "\u0627\u0644\u0642\u0627\u0646\u0648\u0646" || normQ == "\u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646") {
+                    val stopwords = setOf(
+                        "\u0642\u0627\u0646\u0648\u0646","\u0627\u0644\u0642\u0627\u0646\u0648\u0646","\u0627\u0644\u0645\u0627\u062f\u0647","\u0627\u0644\u0645\u0627\u062f\u0629",
+                        "\u0645\u0627\u062f\u0647","\u0645\u0627\u062f\u0629","\u0631\u0642\u0645","\u0645\u0646","\u0641\u064a","\u0639\u0644\u0649",
+                        "\u0627\u0644\u0649","\u0639\u0646","\u0627\u0648","\u0648","\u0647\u0630\u0627","\u0647\u0630\u0647"
+                    )
+
+                    // قائمة القوانين
+                    if (q == "\u0642\u0627\u0646\u0648\u0646" || q == "\u0627\u0644\u0642\u0627\u0646\u0648\u0646" || q == "\u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646") {
                         sb.append("\ud83d\udcda \u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646 \u0627\u0644\u0645\u062a\u0627\u062d\u0629 (").append(laws.length()).append("):\n\n")
                         for (i in 0 until laws.length()) {
                             val l = laws.getJSONObject(i)
@@ -303,58 +305,132 @@ class SearchActivity : AppCompatActivity() {
                             if (yr.isNotEmpty() && yr != "\u063a\u064a\u0631-\u0645\u062d\u062f\u062f") sb.append(" \u2014 ").append(yr)
                             sb.append("\n   [").append(l.optString("type")).append("] | \u0627\u0644\u0645\u0648\u0627\u062f: ").append(l.optInt("articles_count")).append("\n\n")
                         }
+                        sb.toString().trim()
                     } else {
-                        val lawNameWords = words.filter { w ->
-                            (0 until laws.length()).any { normalizeArabic(laws.getJSONObject(it).optString("name")).contains(w) }
-                        }
-                        val keywordWords = words.filter { it !in lawNameWords }
+                        // استخراج الكلمات المهمة من الاستعلام
+                        val queryWords = q.split(" ").map { it.trim() }
+                            .filter { it.length >= 3 && it !in stopwords && !it.all { c -> c.isDigit() } }
 
+                        // استخراج رقم المادة
+                        val numMatch = Regex("\\d+").find(q)
+                        val targetNum = numMatch?.value?.toIntOrNull()
+
+                        // البحث عن قانون يطابق الاستعلام
+                        var matchedLaw: org.json.JSONObject? = null
                         for (i in 0 until laws.length()) {
                             val law = laws.getJSONObject(i)
-                            val lawName = law.optString("name")
-                            val lawYear = law.optString("year")
-                            val normLawName = normalizeArabic(lawName)
+                            val lawNameNorm = normalizeArabic(law.optString("name"))
+                            if (queryWords.isNotEmpty() && queryWords.all { lawNameNorm.contains(it) }) {
+                                matchedLaw = law
+                                break
+                            }
+                        }
 
-                            if (lawNameWords.isNotEmpty() && !lawNameWords.all { normLawName.contains(it) }) continue
+                        var count = 0
 
-                            val lawJson = cachedLawsMap[law.optString("id")] ?: run {
-                                val j = fetchJson(law.optString("file"))
-                                if (j != null) cachedLawsMap[law.optString("id")] = j
+                        // الحالة 1: قانون محدد + رقم → المادة فقط
+                        if (matchedLaw != null && targetNum != null) {
+                            val lawJson = cachedLawsMap[matchedLaw.optString("id")] ?: run {
+                                val j = fetchJson(matchedLaw.optString("file"))
+                                if (j != null) cachedLawsMap[matchedLaw.optString("id")] = j
                                 j
-                            } ?: continue
-
-                            val arts = lawJson.optJSONArray("articles") ?: continue
-
-                            for (j in 0 until arts.length()) {
-                                val art = arts.getJSONObject(j)
-                                val num = art.optInt("number")
-                                val txt = art.optString("text")
-                                val normTxt = normalizeArabic(txt)
-
-                                var match = false
-                                if (keywordWords.isEmpty() && targetNum != null) {
-                                    match = (num == targetNum)
-                                } else if (keywordWords.isNotEmpty()) {
-                                    match = keywordWords.all { normTxt.contains(it) }
-                                } else if (keywordWords.isEmpty() && targetNum == null && lawNameWords.isNotEmpty()) {
-                                    match = true
-                                }
-
-                                if (match) {
-                                    count++
-                                    sb.append("\ud83d\udcdc ").append(lawName)
-                                    if (lawYear.isNotEmpty() && lawYear != "\u063a\u064a\u0631-\u0645\u062d\u062f\u062f") sb.append(" (").append(lawYear).append(")")
-                                    sb.append("\n\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(num).append("\n")
-                                    sb.append(cleanArticleText(txt, num)).append("\n")
-                                    sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
-                                    if (count >= 40) break
+                            }
+                            if (lawJson != null) {
+                                val arts = lawJson.optJSONArray("articles") ?: org.json.JSONArray()
+                                for (j in 0 until arts.length()) {
+                                    val art = arts.getJSONObject(j)
+                                    if (art.optInt("number") == targetNum) {
+                                        count++
+                                        sb.append("\ud83d\udcdc ").append(matchedLaw.optString("name")).append("\n")
+                                        sb.append("\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
+                                        sb.append(cleanArticleText(art.optString("text"), art.optInt("number")))
+                                        break
+                                    }
                                 }
                             }
-                            if (count >= 40) break
                         }
-                        if (count == 0) sb.append("\u0644\u0627 \u062a\u0648\u062c\u062f \u0646\u062a\u0627\u0626\u062c \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0640 \"").append(trimmed).append("\"")
+                        // الحالة 2: قانون محدد فقط → كل المواد
+                        else if (matchedLaw != null) {
+                            val lawJson = cachedLawsMap[matchedLaw.optString("id")] ?: run {
+                                val j = fetchJson(matchedLaw.optString("file"))
+                                if (j != null) cachedLawsMap[matchedLaw.optString("id")] = j
+                                j
+                            }
+                            if (lawJson != null) {
+                                val arts = lawJson.optJSONArray("articles") ?: org.json.JSONArray()
+                                sb.append("\u2550\u2550\u2550\u2550\u2550\n")
+                                sb.append("\ud83d\udcdc ").append(matchedLaw.optString("name"))
+                                val yr = matchedLaw.optString("year")
+                                if (yr.isNotEmpty()) sb.append(" (").append(yr).append(")")
+                                sb.append("\n").append(matchedLaw.optString("type")).append(" | \u0627\u0644\u0645\u0648\u0627\u062f: ").append(arts.length()).append("\n")
+                                sb.append("\u2550\u2550\u2550\u2550\u2550\n\n")
+                                for (j in 0 until arts.length()) {
+                                    val art = arts.getJSONObject(j)
+                                    val num = art.optInt("number")
+                                    sb.append("\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(num).append("\n")
+                                    sb.append(cleanArticleText(art.optString("text"), num)).append("\n\n")
+                                    count++
+                                }
+                            }
+                        }
+                        // الحالة 3: رقم فقط → بحث بالرقم في كل القوانين
+                        else if (targetNum != null) {
+                            for (i in 0 until laws.length()) {
+                                val law = laws.getJSONObject(i)
+                                val lawId = law.optString("id")
+                                val lawJson = cachedLawsMap[lawId] ?: run {
+                                    val j = fetchJson(law.optString("file"))
+                                    if (j != null) cachedLawsMap[lawId] = j
+                                    j
+                                } ?: continue
+                                val arts = lawJson.optJSONArray("articles") ?: continue
+                                for (j in 0 until arts.length()) {
+                                    val art = arts.getJSONObject(j)
+                                    if (art.optInt("number") == targetNum) {
+                                        count++
+                                        sb.append("\ud83d\udcdc ").append(law.optString("name"))
+                                        val yr = law.optString("year")
+                                        if (yr.isNotEmpty()) sb.append(" (").append(yr).append(")")
+                                        sb.append("\n\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
+                                        sb.append(cleanArticleText(art.optString("text"), art.optInt("number"))).append("\n")
+                                        sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
+                                    }
+                                }
+                            }
+                        }
+                        // الحالة 4: بحث نصي بكلمة
+                        else if (queryWords.isNotEmpty()) {
+                            for (i in 0 until laws.length()) {
+                                val law = laws.getJSONObject(i)
+                                val lawId = law.optString("id")
+                                val lawJson = cachedLawsMap[lawId] ?: run {
+                                    val j = fetchJson(law.optString("file"))
+                                    if (j != null) cachedLawsMap[lawId] = j
+                                    j
+                                } ?: continue
+                                val arts = lawJson.optJSONArray("articles") ?: continue
+                                for (j in 0 until arts.length()) {
+                                    val art = arts.getJSONObject(j)
+                                    val normText = normalizeArabic(art.optString("text"))
+                                    if (queryWords.all { normText.contains(it) }) {
+                                        count++
+                                        sb.append("\ud83d\udcdc ").append(law.optString("name")).append("\n")
+                                        sb.append("\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
+                                        sb.append(cleanArticleText(art.optString("text"), art.optInt("number"))).append("\n")
+                                        sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
+                                        if (count >= 30) break
+                                    }
+                                }
+                                if (count >= 30) break
+                            }
+                        }
+
+                        if (count == 0) {
+                            "\u0644\u0627 \u062a\u0648\u062c\u062f \u0646\u062a\u0627\u0626\u062c \u0644\u0640 \"" + trimmed + "\""
+                        } else {
+                            sb.toString().trim()
+                        }
                     }
-                    sb.toString().trim()
                 }
             } catch (e: Exception) {
                 "\u062e\u0637\u0623: ${e.localizedMessage ?: "\u063a\u064a\u0631 \u0645\u0639\u0631\u0648\u0641"}"
@@ -373,6 +449,7 @@ class SearchActivity : AppCompatActivity() {
             }
         }.start()
     }
+
 
 
 
