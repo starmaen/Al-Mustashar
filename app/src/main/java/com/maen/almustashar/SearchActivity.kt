@@ -235,13 +235,13 @@ class SearchActivity : AppCompatActivity() {
 
         Thread {
             val resultsText = try {
-                val baseUrl = "https://raw.githubusercontent.com/starmaen/Al-Mustashar/main/data/laws/"
+                val baseUrl = "https://cdn.jsdelivr.net/gh/starmaen/Al-Mustashar@main/data/laws/"
                 fun fetchJson(endpoint: String): org.json.JSONObject? {
                     return try {
                         val url = java.net.URL(baseUrl + endpoint)
                         val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.connectTimeout = 7000
-                        conn.readTimeout = 7000
+                        conn.connectTimeout = 15000
+                        conn.readTimeout = 15000
                         conn.useCaches = false
                         if (conn.responseCode == 200) {
                             val t = conn.inputStream.bufferedReader().readText()
