@@ -217,8 +217,22 @@ class SearchActivity : AppCompatActivity() {
     }
 
     // كاش خاص بمسار Drive فقط
-    private var cachedLawsIndex: org.json.JSONObject? = null
+        private var cachedLawsIndex: org.json.JSONObject? = null
     private val cachedLawsMap = java.util.concurrent.ConcurrentHashMap<String, org.json.JSONObject>()
+
+    private fun normalizeArabic(s: String): String {
+        val digits = "\u0660\u0661\u0662\u0663\u0664\u0665\u0666\u0667\u0668\u0669"
+        val western = "0123456789"
+        var r = s
+        for (i in digits.indices) r = r.replace(digits[i], western[i])
+        return r
+            .replace('\u0623', '\u0627').replace('\u0625', '\u0627').replace('\u0622', '\u0627')
+            .replace('\u0629', '\u0647').replace('\u0649', '\u064A')
+            .replace('\u0624', '\u0648').replace('\u0626', '\u064A')
+            .replace(Regex("[\\u064B-\\u065F\\u0670]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+    }
 
     private fun searchDriveFiles(query: String) {
         val trimmed = query.trim()
@@ -226,7 +240,6 @@ class SearchActivity : AppCompatActivity() {
             android.widget.Toast.makeText(this, "يرجى إدخال نص البحث", android.widget.Toast.LENGTH_SHORT).show()
             return
         }
-
         progressBar.visibility = android.view.View.VISIBLE
         tvEmpty.visibility = android.view.View.GONE
         scrollResults.visibility = android.view.View.GONE
@@ -235,56 +248,89 @@ class SearchActivity : AppCompatActivity() {
 
         Thread {
             val resultsText = try {
-                val baseUrl = "https://cdn.jsdelivr.net/gh/starmaen/Al-Mustashar@main/data/laws/"
+                val mirrors = listOf(
+                    "https://cdn.jsdelivr.net/gh/starmaen/Al-Mustashar@main/data/laws/",
+                    "https://cdn.statically.io/gh/starmaen/Al-Mustashar/main/data/laws/",
+                    "https://raw.githubusercontent.com/starmaen/Al-Mustashar/main/data/laws/"
+                )
                 fun fetchJson(endpoint: String): org.json.JSONObject? {
-                    return try {
-                        val url = java.net.URL(baseUrl + endpoint)
-                        val conn = url.openConnection() as java.net.HttpURLConnection
-                        conn.connectTimeout = 15000
-                        conn.readTimeout = 15000
-                        conn.useCaches = false
-                        if (conn.responseCode == 200) {
-                            val t = conn.inputStream.bufferedReader().readText()
-                            org.json.JSONObject(t)
-                        } else null
-                    } catch (e: Exception) {
-                        null
+                    for (base in mirrors) {
+                        try {
+                            val url = java.net.URL(base + endpoint)
+                            val conn = url.openConnection() as java.net.HttpURLConnection
+                            conn.connectTimeout = 15000
+                            conn.readTimeout = 15000
+                            conn.useCaches = false
+                            conn.setRequestProperty("User-Agent", "Mozilla/5.0")
+                            if (conn.responseCode == 200) {
+                                return org.json.JSONObject(conn.inputStream.bufferedReader().readText())
+                            }
+                        } catch (e: Exception) { }
                     }
+                    return null
                 }
 
-                if (cachedLawsIndex == null) {
-                    cachedLawsIndex = fetchJson("index.json")
-                }
+                if (cachedLawsIndex == null) cachedLawsIndex = fetchJson("index.json")
                 val index = cachedLawsIndex
 
                 if (index == null) {
                     "فشل الاتصال بقاعدة بيانات القوانين، تحقق من الاتصال بالإنترنت."
                 } else {
                     val lawsArray = index.optJSONArray("laws") ?: org.json.JSONArray()
+                    val normQuery = normalizeArabic(trimmed)
                     val sb = java.lang.StringBuilder()
+                    var found = 0
 
-                    val isListQuery = (trimmed == "\u0642\u0627\u0646\u0648\u0646" || trimmed == "\u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646")
-                    if (isListQuery) {
-                        sb.append("\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646 \u0627\u0644\u0645\u062a\u0627\u062d\u0629:\n\n")
+                    val artNumRegex = Regex("(?:\\u0627\\u0644\\u0645\\u0627\\u062f\\u0647|\\u0627\\u0644\\u0645\\u0627\\u062f\\u0629|\\u0645\\u0627\\u062f\\u0647|\\u0645\\u0627\\u062f\\u0629|\\u0631\\u0642\\u0645|article)\\s*\\(?\\s*(\\d+)\\s*\\)?")
+                    val numOnlyRegex = Regex("^(\\d+)$")
+                    val articleNum = (artNumRegex.find(normQuery)?.groupValues?.get(1)
+                        ?: numOnlyRegex.find(normQuery)?.groupValues?.get(1))?.toIntOrNull()
+
+                    val targetLawRegex = Regex("(?:\\u0645\\u0646|\\u0641\\u064a|\\u062d\\u0633\\u0628|\\u0648\\u0641\\u0642|\\u0636\\u0645\\u0646)\\s+(?:\\u0642\\u0627\\u0646\\u0648\\u0646|\\u0627\\u0644\\u0642\\u0627\\u0646\\u0648\\u0646)\\s+(.+)")
+                    var targetLaw = targetLawRegex.find(normQuery)?.groupValues?.get(1)?.trim()
+
+                    var keyword = normQuery
+                        .replace(artNumRegex, " ")
+                        .replace(numOnlyRegex, " ")
+                        .replace(targetLawRegex, " ")
+                        .replace(Regex("^(?:\\u0642\\u0627\\u0646\\u0648\\u0646|\\u0627\\u0644\\u0642\\u0627\\u0646\\u0648\\u0646)\\s+"), "")
+                        .replace(Regex("\\s+"), " ")
+                        .trim()
+
+                    val startsWithLawWord = normQuery.startsWith("\u0642\u0627\u0646\u0648\u0646 ") || normQuery.startsWith("\u0627\u0644\u0642\u0627\u0646\u0648\u0646 ")
+                    if (startsWithLawWord && articleNum == null && targetLaw == null && keyword.isNotEmpty() && keyword.length >= 2) {
+                        targetLaw = keyword
+                        keyword = ""
+                    }
+
+                    val isListRequest = normQuery == "\u0642\u0627\u0646\u0648\u0646" || normQuery == "\u0627\u0644\u0642\u0627\u0646\u0648\u0646" || normQuery == "\u0627\u0644\u0642\u0648\u0627\u0646\u064a\\u0646" || normQuery == "\u0643\\u0644 \\u0627\\u0644\\u0642\\u0648\\u0627\\u0646\\u064a\\u0646"
+
+                    if (isListRequest) {
+                        sb.append("\ud83d\udcda \u0627\u0644\u0642\u0648\u0627\u0646\u064a\u0646 \u0627\u0644\u0645\u062a\u0627\u062d\u0629 (").append(lawsArray.length()).append("):\n\n")
                         for (i in 0 until lawsArray.length()) {
                             val l = lawsArray.getJSONObject(i)
-                            sb.append("• ").append(l.optString("name"))
+                            sb.append("\ud83d\udcdc ").append(l.optString("name"))
                             val yr = l.optString("year")
-                            if (yr.isNotEmpty()) sb.append(" (").append(yr).append(")")
-                            sb.append("\n  \u0639\u062f\u062f \u0627\u0644\u0645\u0648\u0627\u062f: ").append(l.optInt("articles_count"))
-                            sb.append("\n\n")
+                            if (yr.isNotEmpty() && yr != "\u063a\u064a\u0631-\\u0645\\u062d\\u062f\\u062f") sb.append(" \u2014 ").append(yr)
+                            sb.append("\n   [").append(l.optString("type")).append("] | \u0627\u0644\u0645\u0648\u0627\u062f: ").append(l.optInt("articles_count")).append("\n\n")
                         }
                         sb.toString().trim()
                     } else {
-                        val digitsOnly = trimmed.filter { it.isDigit() }
-                        val targetNum = if (trimmed.startsWith("\u0627\u0644\u0645\u0627\u062f\u0629") || digitsOnly == trimmed) digitsOnly.toIntOrNull() else null
-
-                        var foundMatches = 0
+                        val normTarget = targetLaw?.let { normalizeArabic(it) }
                         for (i in 0 until lawsArray.length()) {
                             val entry = lawsArray.getJSONObject(i)
                             val lawId = entry.optString("id")
                             val fileName = entry.optString("file")
                             val lawName = entry.optString("name")
+                            val lawYear = entry.optString("year")
+                            val lawType = entry.optString("type")
+                            val normLawName = normalizeArabic(lawName)
+
+                            if (normTarget != null) {
+                                val targetWords = normTarget.split(" ").filter { it.length > 1 }
+                                val matchesTarget = targetWords.isEmpty() || targetWords.all { normLawName.contains(it) }
+                                if (!matchesTarget) continue
+                            }
 
                             var lawJson = cachedLawsMap[lawId]
                             if (lawJson == null) {
@@ -292,43 +338,59 @@ class SearchActivity : AppCompatActivity() {
                                 if (lawJson != null) cachedLawsMap[lawId] = lawJson
                             }
                             if (lawJson == null) continue
+                            val articles = lawJson.optJSONArray("articles") ?: continue
 
-                            val articles = lawJson.optJSONArray("articles") ?: org.json.JSONArray()
-                            val isLawNameMatch = (targetNum == null && lawName.contains(trimmed) && trimmed.length > 2)
+                            if (articleNum == null && keyword.isEmpty() && normTarget != null) {
+                                sb.append("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n")
+                                sb.append("\ud83d\udcdc ").append(lawName)
+                                if (lawYear.isNotEmpty() && lawYear != "\u063a\u064a\u0631-\\u0645\\u062d\\u062f\\u062f") sb.append(" (").append(lawYear).append(")")
+                                sb.append("\n").append(lawType)
+                                sb.append(" | \u0639\u062f\u062f \u0627\u0644\u0645\u0648\u0627\u062f: ").append(articles.length()).append("\n")
+                                sb.append("\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\n\n")
+                                for (j in 0 until articles.length()) {
+                                    val art = articles.getJSONObject(j)
+                                    sb.append("\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(art.optInt("number")).append("\n")
+                                    sb.append(art.optString("text").trim()).append("\n\n")
+                                    found++
+                                }
+                                continue
+                            }
 
                             for (j in 0 until articles.length()) {
                                 val art = articles.getJSONObject(j)
                                 val artNum = art.optInt("number")
                                 val artText = art.optString("text")
+                                val normArtText = normalizeArabic(artText)
 
                                 val match = when {
-                                    targetNum != null -> (artNum == targetNum)
-                                    isLawNameMatch -> true
-                                    else -> artText.contains(trimmed)
+                                    articleNum != null && keyword.isEmpty() -> artNum == articleNum
+                                    articleNum != null && keyword.isNotEmpty() -> artNum == articleNum && normArtText.contains(keyword)
+                                    keyword.isNotEmpty() -> normArtText.contains(keyword)
+                                    else -> false
                                 }
 
                                 if (match) {
-                                    foundMatches++
-                                    sb.append("📜 ").append(lawName).append(" - \u0627\u0644\u0645\u0627\u062f\u0629 (").append(artNum).append(")\n")
-                                    sb.append(artText.trim()).append("\n\n-------------------\n\n")
+                                    found++
+                                    sb.append("\ud83d\udcdc ").append(lawName)
+                                    if (lawYear.isNotEmpty() && lawYear != "\u063a\u064a\u0631-\\u0645\\u062d\\u062f\\u062f") sb.append(" (").append(lawYear).append(")")
+                                    sb.append("\n\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(artNum).append("\n")
+                                    sb.append(artText.trim()).append("\n")
+                                    sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
                                 }
                             }
                         }
-
-                        if (foundMatches == 0) {
-                            "لا توجد نتائج مطابقة لـ \"$trimmed\""
-                        } else {
-                            sb.toString().trim()
-                        }
+                        if (found == 0) "\u0644\u0627 \u062a\u0648\u062c\u062f \u0646\u062a\u0627\u0626\u062c \u0645\u0637\u0627\u0628\u0642\u0629 \u0644\u0640 \"$trimmed\""
+                        else sb.toString().trim()
                     }
                 }
             } catch (e: Exception) {
-                "خطأ: ${e.localizedMessage}"
+                "\u062e\u0637\u0623: ${e.localizedMessage}"
             }
 
             runOnUiThread {
                 progressBar.visibility = android.view.View.GONE
-                if (resultsText.isNotEmpty() && !resultsText.startsWith("لا توجد") && !resultsText.startsWith("فشل")) {
+                val isError = resultsText.isEmpty() || resultsText.startsWith("\u0644\u0627 \u062a\u0648\u062c\u062f") || resultsText.startsWith("\u0641\u0634\u0644") || resultsText.startsWith("\u062e\u0637\u0623")
+                if (!isError) {
                     tvSearchResult.text = resultsText
                     scrollResults.visibility = android.view.View.VISIBLE
                     searchActions.visibility = android.view.View.VISIBLE
@@ -339,6 +401,7 @@ class SearchActivity : AppCompatActivity() {
             }
         }.start()
     }
+
     private fun openDirectInBrowserOnly(url: String) {
         var target = url
         if (target.contains("/view")) {
