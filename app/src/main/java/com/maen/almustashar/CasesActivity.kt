@@ -159,20 +159,33 @@ class CasesActivity : AppCompatActivity() {
             }
     }
 
+    private fun normAr(s: String): String {
+        return s.lowercase()
+            .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
+            .replace("ة", "ه").replace("ى", "ي")
+            .replace(Regex("[^a-zA-Z0-9\u0621-\u064A]"), "")
+    }
+
+    // فهرس الأرشيف: بحث فوري باسم الموكل أو الرقم أو الموضوع (بكل الصيغ) ثم فتح الملف
     private fun filterCases(query: String) {
         displayedCases.clear()
-        if (query.isEmpty()) {
+        if (query.isBlank()) {
             displayedCases.addAll(allCases)
         } else {
-            val q = query.lowercase()
-            for (c in allCases) {
-                if (c.title.lowercase().contains(q) ||
-                    c.basisNumber.contains(q) ||
-                    c.clientName.lowercase().contains(q) ||
-                    c.opponentName.lowercase().contains(q) ||
-                    c.court.lowercase().contains(q) ||
-                    c.nextSessionDate.contains(q)) {
-                    displayedCases.add(c)
+            val terms = query.split(Regex("\\s+")).map { normAr(it) }.filter { it.length > 1 }
+            if (terms.isEmpty()) {
+                displayedCases.addAll(allCases)
+            } else {
+                for (c in allCases) {
+                    val hay = normAr(
+                        listOf(
+                            c.title, c.basisNumber, c.caseYear, c.clientName, c.clientRole,
+                            c.clientPhone, c.opponentName, c.opponentLawyer, c.court,
+                            c.chamber, c.judgeName, c.date, c.nextSessionDate,
+                            c.status, c.summary
+                        ).joinToString(" ")
+                    )
+                    if (terms.all { hay.contains(it) }) displayedCases.add(c)
                 }
             }
         }

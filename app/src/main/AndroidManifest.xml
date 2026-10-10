@@ -55,6 +55,9 @@
             android:name=".GeneralSearchActivity"
             android:exported="false" />
         <activity
+            android:name=".WebSearchActivity"
+            android:exported="false" />
+        <activity
             android:name=".CasesActivity"
             android:exported="false" />
         <activity

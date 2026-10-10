@@ -20,6 +20,11 @@ sealed class AIResult {
 object AIClient {
     // المفاتيح تُحقن من BuildConfig عبر GitHub Secrets — لا توجد مفاتيح نصية هنا.
     // الترتيب: GEMINI أساسي، ثم Muse Spark عبر OpenCode Zen (مجاني)، ثم GROQ، ثم OPENROUTER.
+    // أسماء الموديلات ثابتة هنا (مدروسة ومجربة) — لا Secrets لها لتفادي فخ القيم الفارغة.
+    private const val GEMINI_PRIMARY = "gemini-2.5-flash"
+    private const val GEMINI_FALLBACK = "gemini-2.0-flash"
+    private const val GROQ_MODEL = "llama-3.3-70b-versatile"
+    private const val OR_MODEL = "meta-llama/llama-3.1-8b-instruct:free"
     private fun geminiKey(): String = try { BuildConfig.GEMINI_API_KEY } catch (_: Exception) { "" }
     private fun zenKey(): String = try { BuildConfig.OPENCODE_ZEN_API_KEY } catch (_: Exception) { "" }
     private fun groqKey(): String = try { BuildConfig.GROQ_API_KEY } catch (_: Exception) { "" }
@@ -32,10 +37,11 @@ object AIClient {
 
     private const val SYSTEM_PROMPT = """أنت مستشار ومرجع قانوني سوري خبير ومتخصص في التشريعات والقضاء السوري.
 مهمتك تقديم دراسة قانونية وافية وتحليل شامل معزز بالنصوص الرسمية بالهيكل الآتي:
-1. ⚖️ التكييف والوصف القانوني الدقيق للواقعة.
-2. 📜 السند القانوني النافذ (أرقام المواد ونصوصها الصريحة من القانون السوري ذي الصلة).
-3. 💡 التحليل القانوني وإبداء الرأي والحل أو العقوبة المقررة.
-4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية."""
+1. ⚖️ التكييف والوصف القانوني الدقيق للواقعة (وفق تصنيفات القضاء السوري: مدني/جزائي/شرعي/إداري، مع تحديد المحكمة المختصة ودرجتها).
+2. 📜 السند القانوني النافذ (اسم القانون ورقمه وسنته + أرقام المواد ونصوصها الصريحة من التشريع السوري ذي الصلة، مع ذكر التعديلات إن وجدت).
+3. 💡 التحليل القانوني وإبداء الرأي والحل أو العقوبة المقررة (مع المدد والمواعيد القانونية كالتقادم ومهل الطعن).
+4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية السورية خطوة بخطوة.
+قاعدة ملزمة: إن زُوّدت بمواد مسترجعة من قاعدة قوانين التطبيق فاعتمدها أولاً واستشهد بها حرفياً، ولا تخترع نصوص مواد. وإن لم تكفِ فأجب من معرفتك مع التنبيه أن النص يحتاج مراجعة."""
 
     private const val DRAFTING_SYSTEM_PROMPT = """أنت محامٍ ومستشار قضائي سوري متمرس وخبير في أصول المحاكمات السورية والصياغة القانونية الرصينة.
 مهمتك: صياغة مذكرات قضائية، لوائح جوابية، واستدعاءات رسمية وإدارية للبلديات والمحاكم بدقة لغوية وقانونية متناهية.
@@ -55,16 +61,16 @@ object AIClient {
 
     // 1. الاستشارة القانونية
     suspend fun askLegalQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
-        val res1 = callGemini("gemini-3.8-flash", prompt)
+        val res1 = callGemini(GEMINI_PRIMARY, prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
-        val res2 = callGemini("gemini-3.5-flash-lite", prompt)
+        val res2 = callGemini(GEMINI_FALLBACK, prompt)
         if (res2 is AIResult.Success) return@withContext res2.text
 
         val sparkRes = callMuseSpark(prompt)
         if (sparkRes is AIResult.Success) return@withContext sparkRes.text
 
-        val groqRes = callGroq("llama-3.1-8b-instant", prompt)
+        val groqRes = callGroq(GROQ_MODEL, prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         val orRes = callOpenRouter(prompt)
@@ -82,16 +88,16 @@ object AIClient {
 
     // 2. البحث العام
     suspend fun askGeneralQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
-        val res1 = callGemini("gemini-3.8-flash", prompt)
+        val res1 = callGemini(GEMINI_PRIMARY, prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
-        val res2 = callGemini("gemini-3.5-flash-lite", prompt)
+        val res2 = callGemini(GEMINI_FALLBACK, prompt)
         if (res2 is AIResult.Success) return@withContext res2.text
 
         val sparkRes = callMuseSpark(prompt)
         if (sparkRes is AIResult.Success) return@withContext sparkRes.text
 
-        val groqRes = callGroq("llama-3.1-8b-instant", prompt)
+        val groqRes = callGroq(GROQ_MODEL, prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         val orRes = callOpenRouter(prompt)
@@ -103,16 +109,16 @@ object AIClient {
     // 3. البحث في مواد القوانين
     suspend fun fetchLawArticleFromAI(rawQ: String): String = withContext(Dispatchers.IO) {
         val searchPrompt = "استخرج النص الحرفي والكامل للمادة القانونية التالية من التشريعات السورية بدقة متناهية:\n$rawQ"
-        val res1 = callGemini("gemini-3.8-flash", searchPrompt)
+        val res1 = callGemini(GEMINI_PRIMARY, searchPrompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
-        val res2 = callGemini("gemini-3.5-flash-lite", searchPrompt)
+        val res2 = callGemini(GEMINI_FALLBACK, searchPrompt)
         if (res2 is AIResult.Success) return@withContext res2.text
 
         val sparkRes = callMuseSpark(searchPrompt)
         if (sparkRes is AIResult.Success) return@withContext sparkRes.text
 
-        val groqRes = callGroq("llama-3.1-8b-instant", searchPrompt)
+        val groqRes = callGroq(GROQ_MODEL, searchPrompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         val orRes = callOpenRouter(searchPrompt)
@@ -128,16 +134,16 @@ object AIClient {
     ): String = withContext(Dispatchers.IO) {
         val fullPrompt = DRAFTING_SYSTEM_PROMPT + "\n\nمعطيات ومطالب الصياغة:\n" + userNotes
 
-        val res1 = callGeminiWithParts("gemini-3.8-flash", fullPrompt, attachmentsBase64)
+        val res1 = callGeminiWithParts(GEMINI_PRIMARY, fullPrompt, attachmentsBase64)
         if (res1 is AIResult.Success) return@withContext res1.text
 
-        val res2 = callGeminiWithParts("gemini-3.5-flash-lite", fullPrompt, attachmentsBase64)
+        val res2 = callGeminiWithParts(GEMINI_FALLBACK, fullPrompt, attachmentsBase64)
         if (res2 is AIResult.Success) return@withContext res2.text
 
         val sparkRes = callMuseSpark(fullPrompt)
         if (sparkRes is AIResult.Success) return@withContext sparkRes.text
 
-        val groqRes = callGroq("llama-3.1-8b-instant", fullPrompt)
+        val groqRes = callGroq(GROQ_MODEL, fullPrompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         val orRes = callOpenRouter(fullPrompt)
@@ -204,7 +210,7 @@ object AIClient {
                         AIResult.Error("رد فارغ من مزود الخدمة")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}")
+                    AIResult.Error("HTTP ${response.code}: ${respStr.take(150)}")
                 }
             }
         } catch (e: Exception) {
@@ -252,7 +258,7 @@ object AIClient {
                         AIResult.Error("رد فارغ من Groq")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}")
+                    AIResult.Error("HTTP ${response.code}: ${respStr.take(150)}")
                 }
             }
         } catch (e: Exception) {
@@ -290,7 +296,7 @@ object AIClient {
                         AIResult.Error("رد فارغ من ماوي سبارك")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}")
+                    AIResult.Error("HTTP ${response.code}: ${respStr.take(150)}")
                 }
             }
         } catch (e: Exception) {
@@ -326,7 +332,7 @@ object AIClient {
             if (key.isBlank()) return AIResult.Error("مفتاح البديل الثالث غير مضبوط")
             val url = "https://openrouter.ai/api/v1/chat/completions"
             val rootJson = JsonObject()
-            rootJson.addProperty("model", "meta-llama/llama-3.1-8b-instruct:free")
+            rootJson.addProperty("model", OR_MODEL)
             val messagesArr = JsonArray()
 
             val sysMsg = JsonObject()
@@ -364,7 +370,7 @@ object AIClient {
                         AIResult.Error("رد فارغ من البديل الثالث")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}")
+                    AIResult.Error("HTTP ${response.code}: ${respStr.take(150)}")
                 }
             }
         } catch (e: Exception) {

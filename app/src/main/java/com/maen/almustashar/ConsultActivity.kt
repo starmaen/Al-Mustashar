@@ -37,14 +37,24 @@ class ConsultActivity : AppCompatActivity() {
                     progressBar?.visibility = View.VISIBLE
                     btnAsk.isEnabled = false
 
-                    val prompt = if (conversationHistory.isNotEmpty()) {
-                        "$conversationHistory\n\nسؤال جديد:\n$q"
-                    } else {
-                        q
-                    }
-
                     lifecycleScope.launch {
                         try {
+                            // تأسيس الاستشارة على مواد القوانين المثبتة أولاً (للاستشهاد الدقيق)
+                            val localLaws = try {
+                                LawsRepository.searchRelevantLaws(q).take(3500)
+                            } catch (_: Exception) {
+                                ""
+                            }
+                            val grounded = if (localLaws.isNotBlank() && !localLaws.startsWith("⚠️")) {
+                                "$q\n\n[مواد مسترجعة من قاعدة قوانين التطبيق — اعتمدها أولاً واستشهد بها حرفياً]:\n$localLaws"
+                            } else {
+                                q
+                            }
+                            val prompt = if (conversationHistory.isNotEmpty()) {
+                                "$conversationHistory\n\nسؤال جديد:\n$grounded"
+                            } else {
+                                grounded
+                            }
                             val result = AIClient.askLegalQuestion(prompt, this@ConsultActivity)
                             tvAnswer?.text = result
                             if (!result.startsWith("❌")) {

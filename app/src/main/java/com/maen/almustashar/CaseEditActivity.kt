@@ -77,6 +77,194 @@ class CaseEditActivity : AppCompatActivity() {
         uri?.let { savePickedFile(it) }
     }
 
+    private val exportLauncher = registerForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                contentResolver.openOutputStream(it)?.use { os ->
+                    os.write(singleCaseJson().toByteArray(Charsets.UTF_8))
+                }
+                Toast.makeText(this, "حُفظت نسخة الدعوى على الجهاز/الذاكرة", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(this, "فشل التصدير: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    // خيارات مكان الحفظ: الحساب / الجهاز / Drive — تظهر عند كل حفظ
+    private fun showSaveOptions() {
+        AlertDialog.Builder(this)
+            .setTitle("أين تحفظ ملف الدعوى؟")
+            .setItems(arrayOf("☁️ في حسابي (Firebase — يُحدّث الأرشيف)", "📱 نسخة على الجهاز / الذاكرة الخارجية", "💾 نسخة على Google Drive")) { _, which ->
+                when (which) {
+                    0 -> save()
+                    1 -> exportSingleCase()
+                    2 -> uploadCaseJsonToDrive()
+                }
+            }
+            .show()
+    }
+
+    private fun collectCase(userId: String, timestamp: Long): Case? {
+        val title = etTitle.text?.toString()?.trim() ?: ""
+        if (title.isEmpty()) {
+            Toast.makeText(this, "أدخل موضوع الدعوى", Toast.LENGTH_SHORT).show()
+            return null
+        }
+        return Case(
+            title = title,
+            basisNumber = etBasisNumber.text?.toString()?.trim() ?: "",
+            caseYear = etCaseYear.text?.toString()?.trim() ?: "",
+            court = etCourt.text?.toString()?.trim() ?: "",
+            chamber = etChamber.text?.toString()?.trim() ?: "",
+            judgeName = etJudgeName.text?.toString()?.trim() ?: "",
+            clientName = etClient.text?.toString()?.trim() ?: "",
+            clientRole = etClientRole.text?.toString()?.trim().let { if (it.isNullOrEmpty()) "مدعٍ" else it },
+            clientPhone = etClientPhone.text?.toString()?.trim() ?: "",
+            opponentName = etOpponentName.text?.toString()?.trim() ?: "",
+            opponentLawyer = etOpponentLawyer.text?.toString()?.trim() ?: "",
+            witnesses = etWitnesses.text?.toString()?.trim() ?: "",
+            date = etDate.text?.toString()?.trim() ?: "",
+            nextSessionDate = etNextSessionDate.text?.toString()?.trim() ?: "",
+            lastSessionDecision = etLastSessionDecision.text?.toString()?.trim() ?: "",
+            nextSessionRequired = etNextSessionRequired.text?.toString()?.trim() ?: "",
+            summary = etSummary.text?.toString()?.trim() ?: "",
+            sessions = etSessions.text?.toString()?.trim() ?: "",
+            procedures = etProcedures.text?.toString()?.trim() ?: "",
+            status = etStatus.text?.toString()?.trim().let { if (it.isNullOrEmpty()) "قيد النظر" else it },
+            finalJudgment = etFinalJudgment.text?.toString()?.trim() ?: "",
+            documentsNotes = serializeDocs(),
+            userId = userId,
+            timestamp = timestamp
+        )
+    }
+
+    private fun singleCaseJson(): String {
+        val user = FirebaseAuth.getInstance().currentUser
+        val c = collectCase(user?.uid ?: "", System.currentTimeMillis()) ?: return "{}"
+        return JSONObject().apply {
+            put("version", 1)
+            put("title", c.title)
+            put("basisNumber", c.basisNumber)
+            put("caseYear", c.caseYear)
+            put("court", c.court)
+            put("chamber", c.chamber)
+            put("judgeName", c.judgeName)
+            put("clientName", c.clientName)
+            put("clientRole", c.clientRole)
+            put("clientPhone", c.clientPhone)
+            put("opponentName", c.opponentName)
+            put("opponentLawyer", c.opponentLawyer)
+            put("witnesses", c.witnesses)
+            put("date", c.date)
+            put("nextSessionDate", c.nextSessionDate)
+            put("lastSessionDecision", c.lastSessionDecision)
+            put("nextSessionRequired", c.nextSessionRequired)
+            put("summary", c.summary)
+            put("sessions", c.sessions)
+            put("procedures", c.procedures)
+            put("status", c.status)
+            put("finalJudgment", c.finalJudgment)
+            put("documentsNotes", c.documentsNotes)
+        }.toString(2)
+    }
+
+    private fun exportSingleCase() {
+        if ((etTitle.text?.toString()?.trim() ?: "").isEmpty()) {
+            Toast.makeText(this, "أدخل موضوع الدعوى أولاً", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val name = "daawa_${etBasisNumber.text?.toString()?.trim().ifNullOrBlank("بدون-رقم")}.json"
+        exportLauncher.launch(name)
+    }
+
+    private fun String?.ifNullOrBlank(default: String): String =
+        if (this.isNullOrBlank()) default else this
+
+    // رفع نسخة JSON من الدعوى إلى Drive (نص مباشر — بلا ملف وسيط)
+    private fun uploadCaseJsonToDrive() {
+        if ((etTitle.text?.toString()?.trim() ?: "").isEmpty()) {
+            Toast.makeText(this, "أدخل موضوع الدعوى أولاً", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val account = GoogleSignIn.getLastSignedInAccount(this)
+        if (account == null) {
+            Toast.makeText(this, "سجّل الدخول بحساب Google أولاً", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!GoogleSignIn.hasPermissions(account, driveScope)) {
+            GoogleSignIn.requestPermissions(this, 9002, account, driveScope)
+            Toast.makeText(this, "امنح إذن Drive ثم أعد المحاولة", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, "جارٍ رفع نسخة الدعوى إلى Drive...", Toast.LENGTH_SHORT).show()
+        val json = singleCaseJson()
+        val fileName = "daawa_${etBasisNumber.text?.toString()?.trim().ifNullOrBlank("بدون-رقم")}.json"
+        Thread {
+            try {
+                val token = GoogleAuthUtil.getToken(
+                    this, GoogleSignIn.getLastSignedInAccount(this)!!.account!!,
+                    "oauth2:https://www.googleapis.com/auth/drive.file"
+                )
+                val folderId = driveGetOrCreateFolder(token, "Al-Mustashar Cases")
+                val link = driveUploadText(token, folderId, fileName, json)
+                try {
+                    GoogleAuthUtil.clearToken(this, token)
+                } catch (_: Exception) {
+                }
+                runOnUiThread {
+                    Toast.makeText(
+                        this,
+                        if (link != null) "رُفعت نسخة الدعوى إلى Drive بنجاح" else "فشل رفع النسخة",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "فشل الرفع: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    private fun driveUploadText(token: String, folderId: String, name: String, text: String): String? {
+        val meta = JSONObject().apply {
+            put("name", name)
+            put("parents", org.json.JSONArray().put(folderId))
+        }
+        val body = MultipartBody.Builder()
+            .setType("multipart/related".toMediaType())
+            .addPart(
+                okhttp3.Headers.headersOf("Content-Type", "application/json; charset=UTF-8"),
+                okhttp3.RequestBody.create("application/json".toMediaType(), meta.toString())
+            )
+            .addPart(
+                okhttp3.Headers.headersOf("Content-Type", "application/json; charset=UTF-8"),
+                okhttp3.RequestBody.create("application/json".toMediaType(), text)
+            )
+            .build()
+        val uploaded = driveApi(
+            token,
+            Request.Builder().url("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id")
+                .post(body)
+        ) ?: return null
+        val fileId = try {
+            JSONObject(uploaded).getString("id")
+        } catch (_: Exception) {
+            return null
+        }
+        val info = driveApi(
+            token,
+            Request.Builder().url("https://www.googleapis.com/drive/v3/files/$fileId?fields=id,webViewLink").get()
+        ) ?: return fileId
+        return try {
+            JSONObject(info).optString("webViewLink").ifBlank { fileId }
+        } catch (_: Exception) {
+            fileId
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_case_edit)
@@ -130,7 +318,7 @@ class CaseEditActivity : AppCompatActivity() {
             load()
         }
 
-        findViewById<Button>(R.id.btnSave).setOnClickListener { save() }
+        findViewById<Button>(R.id.btnSave).setOnClickListener { showSaveOptions() }
         btnDelete.setOnClickListener { delete() }
         
                 btnDraftForCase.setOnClickListener {
@@ -541,37 +729,7 @@ class CaseEditActivity : AppCompatActivity() {
             return
         }
         val title = etTitle.text?.toString()?.trim() ?: ""
-        if (title.isEmpty()) {
-            Toast.makeText(this, "أدخل موضوع الدعوى", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val case = Case(
-            title = title,
-            basisNumber = etBasisNumber.text?.toString()?.trim() ?: "",
-            caseYear = etCaseYear.text?.toString()?.trim() ?: "",
-            court = etCourt.text?.toString()?.trim() ?: "",
-            chamber = etChamber.text?.toString()?.trim() ?: "",
-            judgeName = etJudgeName.text?.toString()?.trim() ?: "",
-            clientName = etClient.text?.toString()?.trim() ?: "",
-            clientRole = etClientRole.text?.toString()?.trim().let { if (it.isNullOrEmpty()) "مدعٍ" else it },
-            clientPhone = etClientPhone.text?.toString()?.trim() ?: "",
-            opponentName = etOpponentName.text?.toString()?.trim() ?: "",
-            opponentLawyer = etOpponentLawyer.text?.toString()?.trim() ?: "",
-            witnesses = etWitnesses.text?.toString()?.trim() ?: "",
-            date = etDate.text?.toString()?.trim() ?: "",
-            nextSessionDate = etNextSessionDate.text?.toString()?.trim() ?: "",
-            lastSessionDecision = etLastSessionDecision.text?.toString()?.trim() ?: "",
-            nextSessionRequired = etNextSessionRequired.text?.toString()?.trim() ?: "",
-            summary = etSummary.text?.toString()?.trim() ?: "",
-            sessions = etSessions.text?.toString()?.trim() ?: "",
-            procedures = etProcedures.text?.toString()?.trim() ?: "",
-            status = etStatus.text?.toString()?.trim().let { if (it.isNullOrEmpty()) "قيد النظر" else it },
-            finalJudgment = etFinalJudgment.text?.toString()?.trim() ?: "",
-            documentsNotes = serializeDocs(),
-            userId = user.uid,
-            timestamp = if (caseId != null) 0 else System.currentTimeMillis()
-        )
+        val case = collectCase(user.uid, if (caseId != null) 0 else System.currentTimeMillis()) ?: return
 
         val db = FirebaseFirestore.getInstance().collection("cases")
 
@@ -580,16 +738,24 @@ class CaseEditActivity : AppCompatActivity() {
                 val oldTs = old.getLong("timestamp") ?: System.currentTimeMillis()
                 db.document(caseId!!).set(case.copy(timestamp = oldTs))
                     .addOnSuccessListener {
-                        SessionReminder.schedule(this, caseId!!, title, case.nextSessionDate)
-                        Toast.makeText(this, "تم تحديث ملف الدعوى والمرفقات", Toast.LENGTH_SHORT).show()
+                        val reminded = SessionReminder.schedule(this, caseId!!, title, case.nextSessionDate)
+                        Toast.makeText(
+                            this,
+                            "تم تحديث ملف الدعوى والمرفقات" + if (reminded) " 🔔 التذكير بالجلسة مفعّل (${case.nextSessionDate})" else "",
+                            Toast.LENGTH_LONG
+                        ).show()
                         finish()
                     }
             }
         } else {
             db.add(case)
                 .addOnSuccessListener { ref ->
-                    SessionReminder.schedule(this, ref.id, title, case.nextSessionDate)
-                    Toast.makeText(this, "تم حفظ ملف الدعوى والمرفقات بنجاح", Toast.LENGTH_SHORT).show()
+                    val reminded = SessionReminder.schedule(this, ref.id, title, case.nextSessionDate)
+                    Toast.makeText(
+                        this,
+                        "تم حفظ ملف الدعوى والمرفقات بنجاح" + if (reminded) " 🔔 التذكير بالجلسة مفعّل (${case.nextSessionDate})" else "",
+                        Toast.LENGTH_LONG
+                    ).show()
                     finish()
                 }
                 .addOnFailureListener {

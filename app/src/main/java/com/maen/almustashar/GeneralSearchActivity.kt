@@ -104,12 +104,12 @@ class GeneralSearchActivity : AppCompatActivity() {
                 Toast.makeText(this, "يرجى كتابة نص البحث أولاً", Toast.LENGTH_SHORT).show()
                 return
             }
-            val refinedQuery = "$q القانون السوري"
-            val url = "https://www.google.com/search?q=" + URLEncoder.encode(refinedQuery, "UTF-8")
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-            startActivity(intent)
+            // بحث الويب داخل التطبيق مباشرة (بدل المتصفح الخارجي)
+            val i = Intent(this, WebSearchActivity::class.java)
+            i.putExtra("query", q)
+            startActivity(i)
         } catch (e: Exception) {
-            Toast.makeText(this, "تعذر فتح المتصفح", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "تعذر فتح البحث الداخلي", Toast.LENGTH_SHORT).show()
         }
     }
 

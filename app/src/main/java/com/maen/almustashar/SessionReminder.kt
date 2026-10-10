@@ -18,16 +18,17 @@ object SessionReminder {
     const val EXTRA_TITLE = "case_title"
     const val EXTRA_DATE = "case_date"
 
-    fun schedule(context: Context, caseId: String, title: String, sessionDate: String) {
+    // تعيد true إذا ضُبط منبه فعلياً (لعرض تأكيد للمستخدم)
+    fun schedule(context: Context, caseId: String, title: String, sessionDate: String): Boolean {
         cancel(context, caseId)
-        if (caseId.isBlank() || sessionDate.isBlank()) return
+        if (caseId.isBlank() || sessionDate.isBlank()) return false
         val day = try {
-            SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(sessionDate) ?: return
+            SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(sessionDate) ?: return false
         } catch (_: Exception) {
-            return
+            return false
         }
         val now = System.currentTimeMillis()
-        if (day.time <= now) return // موعد ماضٍ — لا تذكير
+        if (day.time <= now) return false // موعد ماضٍ — لا تذكير
 
         val cal = Calendar.getInstance().apply {
             time = day
@@ -49,9 +50,11 @@ object SessionReminder {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         val am = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        try {
+        return try {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, trigger, pi)
+            true
         } catch (_: Exception) {
+            false
         }
     }
 
