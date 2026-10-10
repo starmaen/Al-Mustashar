@@ -54,17 +54,20 @@ jobs:
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: python ocr_worker.py
 
-      - name: الرفع التلقائي إلى Firestore (بدون عمل يدوي)
-        env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
-          FIREBASE_PROJECT_ID: al-mustashar-7f6b7
-        run: python sync_laws_to_firestore.py
-
-      - name: رفع الملفات المستخرجة إلى المستودع
+      - name: حفظ النواتج في المستودع أولاً (قبل مزامنة Firestore)
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A data/laws/
           git diff --staged --quiet || git commit -m "تحديث القوانين تلقائيًا [skip ci]"
           git push
+
+      - name: الرفع التلقائي إلى Firestore (لا يوقف السير عند فشله)
+        continue-on-error: true
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_PROJECT_ID: al-mustashar-7f6b7
+        run: |
+          if [ -n "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then echo "auth: FIREBASE_SERVICE_ACCOUNT_JSON"; else echo "auth: fallback GDRIVE_SERVICE_ACCOUNT_JSON (يحتاج صلاحية Firestore!)"; fi
+          python sync_laws_to_firestore.py || echo "⚠️ فشلت مزامنة Firestore — أضف Secret بمفتاح خدمة من Firebase Console (إعدادات المشروع ← حسابات الخدمة ← إنشاء مفتاح خاص)"

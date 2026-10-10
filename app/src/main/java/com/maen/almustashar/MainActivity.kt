@@ -102,7 +102,11 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnAbout.setOnClickListener {
-            showAboutDialog()
+            try {
+                startActivity(Intent(this, AboutActivity::class.java))
+            } catch (_: Exception) {
+                showAboutDialog()
+            }
         }
 
         findViewById<View>(R.id.navCases).setOnClickListener {
