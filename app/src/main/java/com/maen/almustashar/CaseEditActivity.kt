@@ -28,7 +28,6 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.util.Calendar
@@ -403,8 +402,13 @@ class CaseEditActivity : AppCompatActivity() {
         } catch (e: UserRecoverableAuthException) {
             runOnUiThread {
                 try {
-                    @Suppress("DEPRECATION")
-                    startActivityForResult(e.intent, 9003)
+                    val authIntent = e.intent
+                    if (authIntent != null) {
+                        @Suppress("DEPRECATION")
+                        startActivityForResult(authIntent, 9003)
+                    } else {
+                        Toast.makeText(this, "تعذر طلب إذن Drive", Toast.LENGTH_SHORT).show()
+                    }
                 } catch (_: Exception) {
                     Toast.makeText(this, "تعذر طلب إذن Drive", Toast.LENGTH_SHORT).show()
                 }
