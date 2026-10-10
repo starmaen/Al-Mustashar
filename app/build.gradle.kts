@@ -33,9 +33,9 @@ android {
             // كلمات المرور من متغيرات البيئة (GitHub Secrets) — لا تُكتب نصاً في الكود
             if (hasKeystore) {
                 storeFile = file(keystorePath)
-                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "almustashar123"
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "AlMustashar#Store2026!"
                 keyAlias = System.getenv("KEY_ALIAS") ?: "al-mustashar"
-                keyPassword = System.getenv("KEY_PASSWORD") ?: "almustashar123"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "AlMustashar#Key2026!"
             }
         }
     }
