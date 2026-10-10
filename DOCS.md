@@ -123,11 +123,25 @@ Workflow الوحيد المعتمد: `.github/workflows/build.yml`، يبني
 - قواعد Firestore يجب أن تبقى محصورة بالمصادقة (`request.auth != null`)
   وبعزل `userId` لأي مجموعة فيها بيانات شخصية.
 
-## 7) ربط Google Drive (الإضافة الأحدث)
+## 7) ربط Google Drive (مجلدان داخل مجلد التطبيق)
 
 **المبدأ:** نصوص القوانين تبقى في Firestore فقط دون أي تغيير. Drive
 يُستخدم حصرًا لملفات PDF الأصلية للقوانين (أرشيف مرجعي) ومرفقات قضايا
 المستخدمين. Firestore يحتفظ فقط بـ `driveFileId` كمؤشر.
+
+### المجلدان المعتمدان:
+
+1. **مجلد القوانين** (البحث القانوني عبر Drive/GitHub فقط):
+   `https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3`
+   - تضع فيه ملف PDF → سكربت GitHub كل 6 ساعات ينقحه لغويًا
+     ويضعه JSON في `data/laws/` → يظهر في البحث (وضع Drive).
+   - المعرّف مضبوط في `ocr_worker.py` عبر Secret ‏`GDRIVE_FOLDER_ID`
+     وفي `functions/index.js` ‏(`LAWS_FOLDER_ID`) وفي `SearchActivity`
+     (وضع Drive).
+2. **مجلد الأرشيف الاحتياطي Secure PDFs** (مرتبط بـ Firebase):
+   `https://drive.google.com/drive/folders/1Dl0H-rKSCTbO5ZMs2U4Ws_t7Lsc55Dr9`
+   - المعرّف مضبوط في `functions/index.js` ‏(`ARCHIVE_FOLDER_ID`)،
+     ودالة `searchDriveLaws` تقبل `scope=archive` للبحث فيه.
 
 ### الإعداد (تم تنفيذه):
 

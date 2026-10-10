@@ -4,7 +4,10 @@ const { google } = require("googleapis");
 
 admin.initializeApp();
 
+// مجلد القوانين (البحث القانوني عبر Drive/GitHub) — داخل مجلد التطبيق
 const LAWS_FOLDER_ID = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3";
+// مجلد الأرشيف الاحتياطي Secure PDFs (مرتبط بـ Firebase)
+const ARCHIVE_FOLDER_ID = "1Dl0H-rKSCTbO5ZMs2U4Ws_t7Lsc55Dr9";
 
 exports.searchDriveLaws = functions.https.onRequest(async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
@@ -19,6 +22,10 @@ exports.searchDriveLaws = functions.https.onRequest(async (req, res) => {
   if (!queryText) {
     return res.status(400).json({ error: "Missing search query parameter" });
   }
+  // scope=laws (افتراضي) أو scope=archive لمجلد الأرشيف الاحتياطي
+  const scope = ((req.body.scope || req.query.scope || "laws").toString().toLowerCase() === "archive")
+    ? "archive" : "laws";
+  const folderId = scope === "archive" ? ARCHIVE_FOLDER_ID : LAWS_FOLDER_ID;
 
   try {
     const auth = new google.auth.GoogleAuth({
@@ -27,7 +34,7 @@ exports.searchDriveLaws = functions.https.onRequest(async (req, res) => {
     const drive = google.drive({ version: "v3", auth });
 
     const sanitizedTerm = queryText.replace(/'/g, "\\'");
-    const driveQuery = `'${LAWS_FOLDER_ID}' in parents and (name contains '${sanitizedTerm}' or fullText contains '${sanitizedTerm}') and trashed = false`;
+    const driveQuery = `'${folderId}' in parents and (name contains '${sanitizedTerm}' or fullText contains '${sanitizedTerm}') and trashed = false`;
 
     const driveRes = await drive.files.list({
       q: driveQuery,
@@ -46,6 +53,7 @@ exports.searchDriveLaws = functions.https.onRequest(async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      scope: scope,
       count: files.length,
       files: files
     });

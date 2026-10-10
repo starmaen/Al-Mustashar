@@ -21,6 +21,7 @@ ocr_old/
 node_modules/
 *.log
 *.tmp
+__pycache__/
 
 
 # IDE
