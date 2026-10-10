@@ -1,30 +1,46 @@
 {
-  "generated_at": "2026-10-10T17:11:36.350229",
-  "total_laws": 11,
+  "generated_at": "2026-10-10T21:12:47.589589",
+  "total_laws": 13,
   "warnings": [],
   "laws": [
+    {
+      "id": "قانون-التنظيم-العمراني-وتخطيط-المدن-رقم-23-2015",
+      "name": "قانون التنظيم العمراني وتخطيط المدن رقم 23",
+      "articles_count": 14,
+      "prev_count": null,
+      "status": "new",
+      "method": "Tesseract"
+    },
+    {
+      "id": "قانون-الضريبة-على-البيوع-العقارية-رقم-15-_-2021",
+      "name": "قانون الضريبة على البيوع العقارية رقم 15 _",
+      "articles_count": 12,
+      "prev_count": null,
+      "status": "new",
+      "method": "Tesseract"
+    },
     {
       "id": "قانون-التجاره-رقم-33-2007",
       "name": "قانون التجاره رقم 33",
       "articles_count": 145,
-      "prev_count": null,
-      "status": "new",
+      "prev_count": 145,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
       "id": "قانون-العقوبات-السوري-رقم-148-1949",
       "name": "قانون العقوبات السوري رقم 148",
       "articles_count": 729,
-      "prev_count": 170,
-      "status": "updated",
+      "prev_count": 729,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
       "id": "القانون-المدني-السوري-رقم-84-1949",
       "name": "القانون المدني السوري رقم 84",
       "articles_count": 223,
-      "prev_count": 219,
-      "status": "updated",
+      "prev_count": 223,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
@@ -47,8 +63,8 @@
       "id": "قانون-العقوبات-السوري-بالمرسوم-رقم-1-2011",
       "name": "قانون العقوبات السوري بالمرسوم رقم 1",
       "articles_count": 11,
-      "prev_count": 10,
-      "status": "updated",
+      "prev_count": 11,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
@@ -63,8 +79,8 @@
       "id": "قانون-العقوبات-السوري-رقم-148-1949",
       "name": "قانون العقوبات السوري رقم 148",
       "articles_count": 729,
-      "prev_count": 170,
-      "status": "updated",
+      "prev_count": 729,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
