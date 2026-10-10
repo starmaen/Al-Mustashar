@@ -30,10 +30,20 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Ensure stable release keystore (auto-created once)
+    - name: Ensure stable release keystore (self-healing)
+      env:
+        KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
       run: |
-        if [ ! -f app/keystore.jks ]; then
-          keytool -genkeypair -keystore app/keystore.jks -alias al-mustashar -keyalg RSA -keysize 2048 -validity 10950 -storepass "AlMustashar#Store2026!" -keypass "AlMustashar#Key2026!" -dname "CN=Al-Mustashar, OU=Legal, O=Maen, L=Damascus, ST=Damascus, C=SY"
+        STOREPASS="${KEYSTORE_PASSWORD:-AlMustashar#Store2026!}"
+        KEYPASS="${KEY_PASSWORD:-AlMustashar#Key2026!}"
+        KEYALIAS="${KEY_ALIAS:-al-mustashar}"
+        valid() { keytool -list -keystore app/keystore.jks -storepass "$STOREPASS" >/dev/null 2>&1; }
+        if [ ! -f app/keystore.jks ] || ! valid; then
+          echo "keystore missing or password mismatch -> regenerating with effective password"
+          rm -f app/keystore.jks
+          keytool -genkeypair -keystore app/keystore.jks -alias "$KEYALIAS" -keyalg RSA -keysize 2048 -validity 10950 -storepass "$STOREPASS" -keypass "$KEYPASS" -dname "CN=Al-Mustashar, OU=Legal, O=Maen, L=Damascus, ST=Damascus, C=SY"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f app/keystore.jks
@@ -41,7 +51,7 @@ jobs:
           git push || true
         fi
         echo "===== بصمة التوقيع (انسخ SHA1 إلى Firebase) ====="
-        keytool -list -v -keystore app/keystore.jks -storepass "AlMustashar#Store2026!" | grep -E "SHA1:|SHA256:" || true
+        keytool -list -v -keystore app/keystore.jks -storepass "$STOREPASS" | grep -E "SHA1:|SHA256:" || true
 
     - name: Build APK
       env:
