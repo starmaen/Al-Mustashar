@@ -23,20 +23,26 @@ android {
         buildConfigField("String", "OPENCODE_ZEN_API_KEY", "\"${System.getenv("OPENCODE_ZEN_API_KEY") ?: ""}\"")
     }
 
+    // إن وُجد ملف التوقيع (محلياً) استخدمه، وإلا ابنِ بتوقيع debug الافتراضي
+    // حتى لا يفشل بناء GitHub Actions بعد إخراج jks من التتبع
+    val keystorePath = System.getenv("KEYSTORE_FILE") ?: "keystore.jks"
+    val hasKeystore = file(keystorePath).exists()
+
     signingConfigs {
         create("release") {
             // كلمات المرور من متغيرات البيئة (GitHub Secrets) — لا تُكتب نصاً في الكود
-            val ksFile = System.getenv("KEYSTORE_FILE") ?: "keystore.jks"
-            storeFile = file(ksFile)
-            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "almustashar123"
-            keyAlias = System.getenv("KEY_ALIAS") ?: "al-mustashar"
-            keyPassword = System.getenv("KEY_PASSWORD") ?: "almustashar123"
+            if (hasKeystore) {
+                storeFile = file(keystorePath)
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "almustashar123"
+                keyAlias = System.getenv("KEY_ALIAS") ?: "al-mustashar"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: "almustashar123"
+            }
         }
     }
 
     buildTypes {
         debug {
-            signingConfig = signingConfigs.getByName("release")
+            if (hasKeystore) signingConfig = signingConfigs.getByName("release")
         }
         release {
             signingConfig = signingConfigs.getByName("release")
