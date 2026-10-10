@@ -13,6 +13,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 class ConsultActivity : AppCompatActivity() {
@@ -23,6 +24,13 @@ class ConsultActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         try {
             setContentView(R.layout.activity_consult)
+
+            lifecycleScope.launch(Dispatchers.IO) {
+                try {
+                    LawsLocalCache.syncIfNeeded(applicationContext)
+                } catch (_: Exception) {
+                }
+            }
 
             val etQuestion = findViewById<EditText>(R.id.etQuestion)
             val btnAsk = findViewById<Button>(R.id.btnAsk)
@@ -39,9 +47,14 @@ class ConsultActivity : AppCompatActivity() {
 
                     lifecycleScope.launch {
                         try {
-                            // تأسيس الاستشارة على مواد القوانين المثبتة أولاً (للاستشهاد الدقيق)
+                            // تأسيس الاستشارة على مواد القوانين (المحلية أولاً) للاستشهاد الدقيق
+                            val pool = try {
+                                LawsLocalCache.loadPool(applicationContext)
+                            } catch (_: Exception) {
+                                null
+                            }
                             val localLaws = try {
-                                LawsRepository.searchRelevantLaws(q).take(3500)
+                                LawsRepository.searchRelevantLaws(q, null, pool?.first, pool?.second).take(2500)
                             } catch (_: Exception) {
                                 ""
                             }
@@ -92,9 +105,32 @@ class ConsultActivity : AppCompatActivity() {
                     startActivity(Intent.createChooser(intent, "مشاركة الرأي القانوني"))
                 }
             }
+
+            findViewById<Button>(R.id.btnPrint)?.setOnClickListener {
+                val txt = tvAnswer?.text?.toString() ?: ""
+                if (txt.isNotEmpty()) printConsultation(txt)
+            }
         } catch (_: Exception) {
             Toast.makeText(this, "حدث خطأ غير متوقع", Toast.LENGTH_SHORT).show()
             finish()
+        }
+    }
+
+    private fun printConsultation(answer: String) {
+        try {
+            val wv = android.webkit.WebView(this)
+            val esc = answer.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            val html = "<html dir=\"rtl\"><head><meta charset=\"utf-8\"></head>" +
+                "<body style=\"font-family:sans-serif;padding:20px;line-height:1.7;\">" +
+                "<h2>استشارة قانونية</h2>" +
+                "<pre style=\"white-space: pre-wrap; font-family: inherit;\">$esc</pre>" +
+                "<hr><p style=\"color:#666;font-size:12px;\">تطبيق المستشار القانوني الذكي</p>" +
+                "</body></html>"
+            wv.loadDataWithBaseURL(null, html, "text/HTML", "UTF-8", null)
+            val pm = getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
+            pm.print("استشارة_قانونية", wv.createPrintDocumentAdapter("استشارة_قانونية"), null)
+        } catch (_: Exception) {
+            Toast.makeText(this, "تعذر الطباعة", Toast.LENGTH_SHORT).show()
         }
     }
 }

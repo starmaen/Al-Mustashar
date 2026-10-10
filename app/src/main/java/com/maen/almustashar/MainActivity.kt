@@ -13,8 +13,11 @@ import android.text.InputType
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.GravityCompat
 import androidx.drawerlayout.widget.DrawerLayout
+import androidx.lifecycle.lifecycleScope
 import com.google.firebase.auth.FirebaseAuth
 import com.maen.almustashar.databinding.ActivityMainBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
@@ -135,6 +138,33 @@ class MainActivity : AppCompatActivity() {
             return
         }
         updateUI()
+        checkNewLaws()
+    }
+
+    // تنبيه القوانين الجديدة المضافة على Drive (مرة واحدة لكل جديد)
+    private fun checkNewLaws() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                LawsLocalCache.syncIfNeeded(applicationContext)
+                val fresh = LawsLocalCache.checkNewRemote(applicationContext)
+                if (!fresh.isNullOrEmpty()) {
+                    runOnUiThread {
+                        try {
+                            AlertDialog.Builder(this@MainActivity)
+                                .setTitle("📚 قوانين جديدة في المكتبة")
+                                .setMessage("أُضيفت حديثاً:\n\n• " + fresh.joinToString("\n• "))
+                                .setPositiveButton("تصفحها") { _, _ ->
+                                    startActivity(Intent(this@MainActivity, SearchActivity::class.java))
+                                }
+                                .setNegativeButton("لاحقاً", null)
+                                .show()
+                        } catch (_: Exception) {
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+            }
+        }
     }
 
     private fun updateUI() {

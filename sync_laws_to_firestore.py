@@ -62,7 +62,7 @@ def main():
 
     law_files = sorted(
         f for f in os.listdir(OUTPUT_DIR)
-        if f.endswith(".json") and f not in ("index.json", "_manifest.json")
+        if f.endswith(".json") and f not in ("index.json", "_manifest.json", "_report.json")
     )
     print(f"ملفات القوانين: {len(law_files)}")
 

@@ -83,6 +83,8 @@ class LegalDraftingActivity : AppCompatActivity() {
                 imagePicker.launch("image/*")
             }
 
+            findViewById<Button>(R.id.btnTemplates)?.setOnClickListener { showTemplates() }
+
             btnGenerate.setOnClickListener {
                 generateAndMergeDraft()
             }
@@ -109,6 +111,23 @@ class LegalDraftingActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, "خطأ في تهيئة الشاشة: ${e.message}", Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun showTemplates() {
+        val names = arrayOf("📝 مذكرة جوابية (رد على الخصم)", "📨 استدعاء رسمي", "⏳ طلب مهلة وإبراز مستندات")
+        val bodies = arrayOf(
+            "الغرض: الرد على مذكرة الخصم ودحض دفوعه.\nالوقائع: [اكتب وقائع الدعوى باختصار].\nدفوع الخصم المطلوب الرد عليها: [انسخها هنا].\nالمطلوب: تفنيد كل دفع بسنده القانوني السوري، ثم طلب رد الدعوى شكلاً وموضوعاً.",
+            "الغرض: استدعاء رسمي إلى [المحكمة/البلدية/الدائرة].\nالموضوع: [اكتبه].\nالوقائع والمستندات المرفقة: [اذكرها].\nالمطلوب: اتخاذ الإجراء اللازم أصولاً.",
+            "الغرض: طلب مهلة.\nالسبب: [الاطلاع على الملف / إبراز حجة حصر إرث / سند تمليك / ...].\nالمطلوب: منح مهلة مناسبة مع قبول الطلب شكلاً."
+        )
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("اختر قالباً (يُدرج في خانة الوقائع)")
+            .setItems(names) { _, which ->
+                val cur = etFacts.text.toString()
+                etFacts.setText(if (cur.isBlank()) bodies[which] else cur + "\n\n" + bodies[which])
+                Toast.makeText(this, "أُدرج القالب — خصصه ثم اضغط الصياغة", Toast.LENGTH_SHORT).show()
+            }
+            .show()
     }
 
     private fun processImageUri(uri: Uri) {

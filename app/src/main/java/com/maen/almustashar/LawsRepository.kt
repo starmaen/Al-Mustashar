@@ -74,9 +74,16 @@ object LawsRepository {
         return null
     }
 
-    suspend fun searchRelevantLaws(rawQuery: String, targetLawId: String? = null): String {
+    // localLaws/localArticles: حوض محلي (تخزين التطبيق) — عند توفره لا يُقرأ Firestore إطلاقاً
+    suspend fun searchRelevantLaws(
+        rawQuery: String,
+        targetLawId: String? = null,
+        localLaws: List<LawMeta>? = null,
+        localArticles: List<ArticleMeta>? = null
+    ): String {
         val query = normDigits(rawQuery.trim())
-        val laws = loadLawsList()
+        val laws = localLaws ?: loadLawsList()
+        val offline = localArticles != null
 
         fun norm(s: String): String {
             return s.lowercase()
@@ -129,14 +136,13 @@ object LawsRepository {
         }
 
         // 2. استخراج رقم المادة: المجاور لكلمة مادة أولاً، ثم الرقم الحر
-        //    (بعد حذف اسم القانون والسنوات حتى لا يُلتقط رقم القانون أو السنة)
         val articleAdjRegex = Regex("(?:الماد[ةه]|ماد[ةه])\\s*\\(?\\s*(\\d{1,4})\\s*\\)?")
         var extractedNumber = articleAdjRegex.find(query)?.groupValues?.get(1)
         if (extractedNumber == null) {
-            val رقمAdj = Regex("رقم\\s*\\(?\\s*(\\d{1,4})\\s*\\)?").find(query)?.groupValues?.get(1)
-            // "رقم" مع كلمة قانون وبدون كلمة مادة = رقم القانون نفسه (84) وليس مادة
-            if (!(رقمAdj != null && hasLawWord && !hasArticleWord)) {
-                extractedNumber = رقمAdj
+            val numAdj = Regex("رقم\\s*\\(?\\s*(\\d{1,4})\\s*\\)?").find(query)?.groupValues?.get(1)
+            // "رقم" مع كلمة قانون وبدون كلمة مادة = رقم القانون نفسه وليس مادة
+            if (!(numAdj != null && hasLawWord && !hasArticleWord)) {
+                extractedNumber = numAdj
             }
         }
         if (extractedNumber == null) {
@@ -146,54 +152,55 @@ object LawsRepository {
             extractedNumber = Regex("(\\d{1,4})").find(tmp)?.value
         }
 
-        // الحالة 1: رقم + اسم قانون محدد
+        // الحوض الكامل (محلي أو Firestore) — يُحمَّل مرة واحدة فقط
+        val poolAll: List<ArticleMeta> = localArticles ?: loadAllArticles(laws)
+
+        // الحالة 1: رقم + قانون محدد
         if (!extractedNumber.isNullOrEmpty() && identifiedLawId != null) {
-            val res = fetchArticleFromLaw(extractedNumber, identifiedLawId, laws)
-            if (!res.isNullOrBlank()) return res
+            if (offline) {
+                val a = poolAll.find { it.lawId == identifiedLawId && it.number == extractedNumber }
+                if (a != null) return formatOutput(a.lawName, a.number, a.text, a.drivePdfUrl)
+            } else {
+                val res = fetchArticleFromLaw(extractedNumber, identifiedLawId, laws)
+                if (!res.isNullOrBlank()) return res
+            }
         }
 
-        // الحالة 2: رقم فقط (جلب المادة من جميع القوانين)
+        // الحالة 2: رقم فقط (كل المواد بهذا الرقم من أي قانون)
         if (!extractedNumber.isNullOrEmpty() && (hasArticleWord || query.length <= 6)) {
-            val res = fetchArticleFromAllLaws(extractedNumber, laws)
-            if (!res.isNullOrBlank()) return res
+            if (offline) {
+                val hits = poolAll.filter { it.number == extractedNumber }
+                if (hits.isNotEmpty()) {
+                    return hits.joinToString("\n\n═══════════════════════\n\n") { a ->
+                        formatOutput(a.lawName, a.number, a.text, a.drivePdfUrl)
+                    }
+                }
+            } else {
+                val res = fetchArticleFromAllLaws(extractedNumber, laws)
+                if (!res.isNullOrBlank()) return res
+            }
         }
 
-        // الحالة 3: عرض القانون كاملاً — فقط عند تطابق قوي على الاسم وبدون رقم مادة
-        //    (كلمات: القانون كذا / القانون كذا كاملاً — بأي ترتيب)
+        // الحالة 3: القانون كاملاً — فقط عند تطابق قوي وبدون رقم مادة
         val isFullLawRequest = identifiedLawId != null && extractedNumber.isNullOrEmpty() &&
             (strongLawMatch || wantsFull || targetLawId != null)
-
         if (identifiedLawId != null && isFullLawRequest) {
-            val allArticles = loadAllArticles(laws).filter { it.lawId == identifiedLawId }
+            val all = poolAll.filter { it.lawId == identifiedLawId }
                 .sortedBy { it.number.toIntOrNull() ?: 9999 }
-            if (allArticles.isNotEmpty()) {
-                return allArticles.joinToString("\n\n───────────────────────\n\n") { a ->
+            if (all.isNotEmpty()) {
+                return all.joinToString("\n\n───────────────────────\n\n") { a ->
                     formatOutput(a.lawName, a.number, a.text, a.drivePdfUrl)
                 }
             }
         }
 
-        // الحالة 4: بحث سياقي وموضوعي
+        // الحالة 4: بحث سياقي وموضوعي (تضييق ثم توسعة تلقائية)
         val cleanTerms = query.split(" ")
             .map { it.trim() }
             .filter { it.length > 1 && !it.all { ch -> ch.isDigit() } && it !in listOf("قانون", "القانون", "كامل", "كاملا", "السوري", "مادة", "المادة", "ماده", "الماده") }
 
-        val allArticles = loadAllArticles(laws)
-        val pool = if (identifiedLawId != null) allArticles.filter { it.lawId == identifiedLawId } else allArticles
-
-        val scored = pool.mapNotNull { art ->
-            val nText = norm(art.text)
-            var score = 0
-            for (term in cleanTerms) {
-                val nt = norm(term)
-                if (nt.isNotEmpty() && nText.contains(nt)) score += 3
-            }
-            if (score > 0) Pair(art, score) else null
-        }.sortedByDescending { it.second }
-
-        // إن كان التضييق بقانون (مطابقة ضعيفة) ولم يعطِ شيئاً — أعد البحث في كل القوانين
-        val finalScored = if (scored.isEmpty() && identifiedLawId != null && !strongLawMatch) {
-            allArticles.mapNotNull { art ->
+        fun scorePool(pool: List<ArticleMeta>): List<Pair<ArticleMeta, Int>> {
+            return pool.mapNotNull { art ->
                 val nText = norm(art.text)
                 var score = 0
                 for (term in cleanTerms) {
@@ -202,13 +209,19 @@ object LawsRepository {
                 }
                 if (score > 0) Pair(art, score) else null
             }.sortedByDescending { it.second }
-        } else scored
+        }
+
+        val pool = if (identifiedLawId != null) poolAll.filter { it.lawId == identifiedLawId } else poolAll
+        var finalScored = scorePool(pool)
+        if (finalScored.isEmpty() && identifiedLawId != null && !strongLawMatch) {
+            finalScored = scorePool(poolAll)
+        }
 
         if (finalScored.isEmpty()) {
             return "⚠️ لم يتم العثور على نص مطابق لهذا البحث."
         }
 
-        return finalScored.take(25).joinToString("\n\n───────────────────────\n\n") { (a, _) ->
+        return finalScored.take(10).joinToString("\n\n───────────────────────\n\n") { (a, _) ->
             formatOutput(a.lawName, a.number, a.text, a.drivePdfUrl)
         }
     }

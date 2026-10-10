@@ -67,6 +67,14 @@ class SearchActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_search)
 
+        // مزامنة صامتة لنصوص القوانين محلياً (سرعة + دون إنترنت)
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                LawsLocalCache.syncIfNeeded(applicationContext)
+            } catch (_: Exception) {
+            }
+        }
+
         etSearch = findViewById(R.id.etSearch)
         spinnerLaw = findViewById(R.id.spinnerLaw)
         btnDoSearch = findViewById(R.id.btnDoSearch)
@@ -191,7 +199,13 @@ class SearchActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 val selectedLawId = (spinnerLaw.selectedItem as? LawChoice)?.id
-                val result = LawsRepository.searchRelevantLaws(query, selectedLawId)
+                // الحوض المحلي أولاً (فوري)، وFirestore احتياطاً داخل المستودع
+                val pool = try {
+                    LawsLocalCache.loadPool(applicationContext)
+                } catch (_: Exception) {
+                    null
+                }
+                val result = LawsRepository.searchRelevantLaws(query, selectedLawId, pool?.first, pool?.second)
                 progressBar.visibility = View.GONE
 
                 if (result.isNotBlank() && !result.startsWith("⚠️")) {

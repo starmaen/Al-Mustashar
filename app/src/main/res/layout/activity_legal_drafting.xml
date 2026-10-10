@@ -89,9 +89,19 @@
             android:gravity="center_vertical">
 
             <Button
+                android:id="@+id/btnTemplates"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="📑 قوالب جاهزة"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:backgroundTint="#5E35B1" />
+
+            <Button
                 android:id="@+id/btnAttachImage"
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
+                android:layout_marginStart="8dp"
                 android:text="📎 إرفاق مستند/سند"
                 android:textColor="#FFFFFF"
                 android:textSize="11sp"

@@ -342,6 +342,57 @@ def main():
             'articles_count': len(articles), 'extraction_method': method
         })
 
+    # بوابة الجودة: مقارنة مع النسخة السابقة من git + كتابة تقرير
+    prev_counts = {}
+    try:
+        import subprocess
+        out = subprocess.run(
+            ['git', 'show', 'HEAD:data/laws/index.json'],
+            capture_output=True, text=True, timeout=30
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            prev = json.loads(out.stdout)
+            for l in prev.get('laws', []):
+                prev_counts[l.get('id')] = l.get('articles_count', 0)
+    except Exception:
+        pass
+
+    report_laws = []
+    gate_warnings = []
+    for l in index_laws:
+        prev = prev_counts.get(l['id'])
+        status = 'new'
+        if prev is not None:
+            if prev == l['articles_count']:
+                status = 'unchanged'
+            elif l['articles_count'] == 0:
+                status = 'EMPTY'
+            elif prev > 20 and l['articles_count'] < prev * 0.7:
+                status = 'DROP'
+            else:
+                status = 'updated'
+        if l['articles_count'] < 5:
+            status = 'TOO_FEW'
+        if status in ('EMPTY', 'DROP', 'TOO_FEW'):
+            gate_warnings.append(f"{l['name']}: {status} (سابقا {prev}، الآن {l['articles_count']})")
+        report_laws.append({
+            'id': l['id'], 'name': l['name'], 'articles_count': l['articles_count'],
+            'prev_count': prev, 'status': status, 'method': l.get('extraction_method', '')
+        })
+    with open(os.path.join(OUTPUT_DIR, '_report.json'), 'w', encoding='utf-8') as rf:
+        json.dump({
+            'generated_at': datetime.utcnow().isoformat(),
+            'total_laws': len(index_laws),
+            'warnings': gate_warnings,
+            'laws': report_laws
+        }, rf, ensure_ascii=False, indent=2)
+    print("\n=== بوابة الجودة ===")
+    if gate_warnings:
+        for w in gate_warnings:
+            print(f"  ⚠️ {w}")
+    else:
+        print("  ✓ كل القوانين سليمة")
+
     save_manifest(new_manifest)
 
     index_data = {
