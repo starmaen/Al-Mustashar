@@ -205,8 +205,22 @@ class SearchActivity : AppCompatActivity() {
                     currentPdfUrl = match?.value ?: defaultDriveFolder
                     btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
                 } else {
-                    tvEmpty.text = result
-                    tvEmpty.visibility = View.VISIBLE
+                    // لم تُعثر على نص في القوانين المثبتة — إحضار ذكي مع تنويه المصدر
+                    val aiText = AIClient.fetchLawArticleFromAI(query)
+                    progressBar.visibility = View.GONE
+                    if (aiText.isNotBlank()) {
+                        tvSearchResult.text = aiText +
+                            "\n\n───────────────────────\n📌 المصدر: إجابة ذكية (Gemini/سبارك) — " +
+                            "لم يُعثر على نص مطابق في القوانين المثبتة بالتطبيق، يُرجى التحقق من الرقم والنص."
+                        Linkify.addLinks(tvSearchResult, Linkify.WEB_URLS)
+                        scrollResults.visibility = View.VISIBLE
+                        searchActions.visibility = View.VISIBLE
+                        currentPdfUrl = defaultDriveFolder
+                        btnOpenPdf.text = "فتح مجلد القوانين على Drive"
+                    } else {
+                        tvEmpty.text = result
+                        tvEmpty.visibility = View.VISIBLE
+                    }
                 }
             } catch (e: Exception) {
                 progressBar.visibility = View.GONE

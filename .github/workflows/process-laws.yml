@@ -41,7 +41,7 @@ jobs:
 
       - name: تثبيت مكتبات بايثون
         run: |
-          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib pytesseract pdf2image PyMuPDF
+          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib pytesseract pdf2image PyMuPDF firebase-admin
 
       - name: تنظيف الملفات القديمة مع حفظ سجل التخطي
         # حذف ملفات القوانين فقط وإبقاء _manifest.json ليعمل تخطي الملفات غير المتغيرة
@@ -53,6 +53,13 @@ jobs:
           GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
           GDRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
         run: python ocr_worker.py
+
+      - name: الرفع التلقائي إلى Firestore (بدون عمل يدوي)
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          GDRIVE_SERVICE_ACCOUNT_JSON: ${{ secrets.GDRIVE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_PROJECT_ID: al-mustashar-7f6b7
+        run: python sync_laws_to_firestore.py
 
       - name: رفع الملفات المستخرجة إلى المستودع
         run: |
