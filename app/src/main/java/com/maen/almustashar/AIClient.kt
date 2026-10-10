@@ -23,8 +23,9 @@ object AIClient {
     // أسماء الموديلات ثابتة هنا (مدروسة ومجربة) — لا Secrets لها لتفادي فخ القيم الفارغة.
     private const val GEMINI_PRIMARY = "gemini-2.5-flash"
     private const val GEMINI_FALLBACK = "gemini-2.0-flash"
-    private const val GROQ_MODEL = "llama-3.3-70b-versatile"
-    private const val OR_MODEL = "meta-llama/llama-3.1-8b-instruct:free"
+    // موديل Groq الأصلي السريع (المثبت تاريخياً في التطبيق) — والاكتشاف يرقّيه تلقائياً إن تقاعد
+    private const val GROQ_MODEL = "llama-3.1-8b-instant"
+    private const val OR_MODEL = "google/gemma-4-31b-it:free"
     private fun geminiKey(): String = try { BuildConfig.GEMINI_API_KEY } catch (_: Exception) { "" }
     private fun zenKey(): String = try { BuildConfig.OPENCODE_ZEN_API_KEY } catch (_: Exception) { "" }
     private fun groqKey(): String = try { BuildConfig.GROQ_API_KEY } catch (_: Exception) { "" }
@@ -61,7 +62,7 @@ object AIClient {
 
     // 1. الاستشارة القانونية
     suspend fun askLegalQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
-        val res1 = callGemini(GEMINI_PRIMARY, prompt)
+        val res1 = callGemini(resolveGemini(), prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
         val res2 = callGemini(GEMINI_FALLBACK, prompt)
@@ -70,7 +71,7 @@ object AIClient {
         val sparkRes = callMuseSpark(prompt)
         if (sparkRes is AIResult.Success) return@withContext sparkRes.text
 
-        val groqRes = callGroq(GROQ_MODEL, prompt)
+        val groqRes = callGroq(resolveGroq(), prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         val orRes = callOpenRouter(prompt)
@@ -88,7 +89,7 @@ object AIClient {
 
     // 2. البحث العام
     suspend fun askGeneralQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
-        val res1 = callGemini(GEMINI_PRIMARY, prompt)
+        val res1 = callGemini(resolveGemini(), prompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
         val res2 = callGemini(GEMINI_FALLBACK, prompt)
@@ -97,7 +98,7 @@ object AIClient {
         val sparkRes = callMuseSpark(prompt)
         if (sparkRes is AIResult.Success) return@withContext sparkRes.text
 
-        val groqRes = callGroq(GROQ_MODEL, prompt)
+        val groqRes = callGroq(resolveGroq(), prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         val orRes = callOpenRouter(prompt)
@@ -109,7 +110,7 @@ object AIClient {
     // 3. البحث في مواد القوانين
     suspend fun fetchLawArticleFromAI(rawQ: String): String = withContext(Dispatchers.IO) {
         val searchPrompt = "استخرج النص الحرفي والكامل للمادة القانونية التالية من التشريعات السورية بدقة متناهية:\n$rawQ"
-        val res1 = callGemini(GEMINI_PRIMARY, searchPrompt)
+        val res1 = callGemini(resolveGemini(), searchPrompt)
         if (res1 is AIResult.Success) return@withContext res1.text
 
         val res2 = callGemini(GEMINI_FALLBACK, searchPrompt)
@@ -118,7 +119,7 @@ object AIClient {
         val sparkRes = callMuseSpark(searchPrompt)
         if (sparkRes is AIResult.Success) return@withContext sparkRes.text
 
-        val groqRes = callGroq(GROQ_MODEL, searchPrompt)
+        val groqRes = callGroq(resolveGroq(), searchPrompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         val orRes = callOpenRouter(searchPrompt)
@@ -134,7 +135,7 @@ object AIClient {
     ): String = withContext(Dispatchers.IO) {
         val fullPrompt = DRAFTING_SYSTEM_PROMPT + "\n\nمعطيات ومطالب الصياغة:\n" + userNotes
 
-        val res1 = callGeminiWithParts(GEMINI_PRIMARY, fullPrompt, attachmentsBase64)
+        val res1 = callGeminiWithParts(resolveGemini(), fullPrompt, attachmentsBase64)
         if (res1 is AIResult.Success) return@withContext res1.text
 
         val res2 = callGeminiWithParts(GEMINI_FALLBACK, fullPrompt, attachmentsBase64)
@@ -143,7 +144,7 @@ object AIClient {
         val sparkRes = callMuseSpark(fullPrompt)
         if (sparkRes is AIResult.Success) return@withContext sparkRes.text
 
-        val groqRes = callGroq(GROQ_MODEL, fullPrompt)
+        val groqRes = callGroq(resolveGroq(), fullPrompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
         val orRes = callOpenRouter(fullPrompt)
@@ -156,6 +157,95 @@ object AIClient {
             groqRes is AIResult.Error -> "❌ فشل البديل: ${groqRes.message}"
             orRes is AIResult.Error -> "❌ فشل البديل الثالث: ${orRes.message}"
             else -> "❌ تعذر إتمام الصياغة، يرجى إعادة المحاولة."
+        }
+    }
+
+    // اكتشاف ذاتي: يسأل كل مزود عن موديلاته المتاحة لمفتاحك ويختار منها (حماية من موت الأسماء)
+    private var geminiResolved: Pair<String, Long>? = null
+    private var groqResolved: Pair<String, Long>? = null
+    private var orResolved: Pair<String, Long>? = null
+
+    private fun errFor(code: Int, body: String): AIResult {
+        return if (body.trimStart().startsWith("<")) {
+            AIResult.Error("HTTP $code: محجوب من الشبكة/البوابة")
+        } else {
+            AIResult.Error("HTTP $code: ${body.take(150)}")
+        }
+    }
+
+    private fun httpGet(url: String, headers: Map<String, String> = emptyMap()): String? {
+        return try {
+            val b = Request.Builder().url(url)
+            headers.forEach { (k, v) -> b.addHeader(k, v) }
+            client.newCall(b.build()).execute().use { r ->
+                val s = r.body?.string().orEmpty()
+                if (r.isSuccessful) s else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun fresh(p: Pair<String, Long>?): String? =
+        if (p != null && System.currentTimeMillis() - p.second < 24 * 3600 * 1000L) p.first else null
+
+    private fun resolveGemini(): String {
+        fresh(geminiResolved)?.let { return it }
+        val key = geminiKey()
+        if (key.isNotBlank()) {
+            val list = httpGet("https://generativelanguage.googleapis.com/v1beta/models?key=$key")
+            pickFromList(list, "models", "name", "models/") { it.contains("flash", true) }?.let {
+                geminiResolved = it to System.currentTimeMillis()
+                return it
+            }
+        }
+        return GEMINI_PRIMARY
+    }
+
+    private fun resolveGroq(): String {
+        fresh(groqResolved)?.let { return it }
+        val key = groqKey()
+        if (key.isNotBlank()) {
+            val list = httpGet(
+                "https://api.groq.com/openai/v1/models",
+                mapOf("Authorization" to "Bearer $key")
+            )
+            pickFromList(list, "data", "id", "") { it.contains("llama", true) || it.contains("gpt-oss", true) }?.let {
+                groqResolved = it to System.currentTimeMillis()
+                return it
+            }
+        }
+        return GROQ_MODEL
+    }
+
+    private fun resolveOR(): String {
+        fresh(orResolved)?.let { return it }
+        val list = httpGet("https://openrouter.ai/api/v1/models")
+        pickFromList(list, "data", "id", "") { it.contains(":free", true) }?.let {
+            orResolved = it to System.currentTimeMillis()
+            return it
+        }
+        return OR_MODEL
+    }
+
+    private fun pickFromList(
+        listJson: String?, arrayKey: String, idKey: String, prefix: String,
+        prefer: (String) -> Boolean
+    ): String? {
+        if (listJson.isNullOrBlank() || listJson.trimStart().startsWith("<")) return null
+        return try {
+            val arr = JsonParser.parseString(listJson).asJsonObject.getAsJsonArray(arrayKey)
+                ?: return null
+            val ids = arr.mapNotNull {
+                try {
+                    it.asJsonObject.get(idKey)?.asString?.removePrefix(prefix)
+                } catch (_: Exception) {
+                    null
+                }
+            }.filter { it.isNotBlank() }
+            ids.firstOrNull(prefer) ?: ids.firstOrNull()
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -210,7 +300,7 @@ object AIClient {
                         AIResult.Error("رد فارغ من مزود الخدمة")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}: ${respStr.take(150)}")
+                    errFor(response.code, respStr)
                 }
             }
         } catch (e: Exception) {
@@ -258,7 +348,7 @@ object AIClient {
                         AIResult.Error("رد فارغ من Groq")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}: ${respStr.take(150)}")
+                    errFor(response.code, respStr)
                 }
             }
         } catch (e: Exception) {
@@ -296,7 +386,7 @@ object AIClient {
                         AIResult.Error("رد فارغ من ماوي سبارك")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}: ${respStr.take(150)}")
+                    errFor(response.code, respStr)
                 }
             }
         } catch (e: Exception) {
@@ -332,7 +422,7 @@ object AIClient {
             if (key.isBlank()) return AIResult.Error("مفتاح البديل الثالث غير مضبوط")
             val url = "https://openrouter.ai/api/v1/chat/completions"
             val rootJson = JsonObject()
-            rootJson.addProperty("model", OR_MODEL)
+            rootJson.addProperty("model", resolveOR())
             val messagesArr = JsonArray()
 
             val sysMsg = JsonObject()
@@ -370,7 +460,7 @@ object AIClient {
                         AIResult.Error("رد فارغ من البديل الثالث")
                     }
                 } else {
-                    AIResult.Error("HTTP ${response.code}: ${respStr.take(150)}")
+                    errFor(response.code, respStr)
                 }
             }
         } catch (e: Exception) {
