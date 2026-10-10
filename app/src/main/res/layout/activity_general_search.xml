@@ -34,7 +34,7 @@
             android:padding="8dp" />
     </LinearLayout>
 
-    <!-- حقل الإدخال وزر البحث بالأعلى -->
+    <!-- حقل الإدخال وخياران على جانبيه: ذكاء اصطناعي أو بحث ويب -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -42,17 +42,56 @@
         android:background="#15284F"
         android:padding="12dp">
 
-        <EditText
-            android:id="@+id/etGeneralQuestion"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:minHeight="48dp"
-            android:background="@android:drawable/editbox_background_normal"
-            android:hint="اكتب استفسارك القانوني العام هنا..."
-            android:textColor="#000000"
-            android:textColorHint="#7F8C8D"
-            android:padding="10dp"
-            android:textSize="14sp" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/btnModeAI"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:text="🤖"
+                android:textSize="20sp"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#00796B" />
+
+            <EditText
+                android:id="@+id/etGeneralQuestion"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:minHeight="48dp"
+                android:layout_marginStart="8dp"
+                android:layout_marginEnd="8dp"
+                android:background="@android:drawable/editbox_background_normal"
+                android:hint="اكتب استفسارك القانوني العام هنا..."
+                android:textColor="#000000"
+                android:textColorHint="#7F8C8D"
+                android:padding="10dp"
+                android:textSize="14sp" />
+
+            <Button
+                android:id="@+id/btnModeWeb"
+                android:layout_width="52dp"
+                android:layout_height="52dp"
+                android:text="🌐"
+                android:textSize="20sp"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#1E293B" />
+
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tvSearchMode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:text="🤖 الوضع: إجابة ذكية"
+            android:textColor="#80CBC4"
+            android:textSize="12sp" />
 
         <Button
             android:id="@+id/btnGeneralSubmit"
@@ -113,7 +152,7 @@
                         android:lineSpacingExtra="5dp"
                         android:textIsSelectable="true" />
 
-                    <!-- أزرار العمليات (نسخ، مشاركة، طباعة، غوغل) -->
+                    <!-- أزرار العمليات (نسخ، مشاركة، طباعة) -->
                     <LinearLayout
                         android:id="@+id/resultActions"
                         android:layout_width="match_parent"
@@ -153,30 +192,10 @@
                             android:textSize="12sp"
                             android:backgroundTint="#0F2042"
                             android:textColor="#FFFFFF" />
-
-                        <Button
-                            android:id="@+id/btnGoogleSearch"
-                            android:layout_width="0dp"
-                            android:layout_height="40dp"
-                            android:layout_weight="1"
-                            android:layout_marginStart="4dp"
-                            android:text="Google"
-                            android:textSize="12sp"
-                            android:backgroundTint="#D97706"
-                            android:textColor="#FFFFFF" />
                     </LinearLayout>
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <Button
-                android:id="@+id/btnFallbackGoogle"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:text="🌐 البحث في Google عن القانون السوري"
-                android:backgroundTint="#1E293B"
-                android:textColor="#38BDF8"
-                android:visibility="gone"
-                android:layout_marginTop="8dp" />
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
 

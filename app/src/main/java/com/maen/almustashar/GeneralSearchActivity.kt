@@ -31,9 +31,11 @@ class GeneralSearchActivity : AppCompatActivity() {
     private lateinit var tvResult: TextView
     private lateinit var cardResult: CardView
     private lateinit var resultActions: LinearLayout
-    private lateinit var btnGoogleSearch: Button
-    private lateinit var btnFallbackGoogle: Button
+    private lateinit var btnModeAI: Button
+    private lateinit var btnModeWeb: Button
+    private lateinit var tvSearchMode: TextView
     private lateinit var scrollResults: NestedScrollView
+    private var isWebMode = false
 
     private val conversationHistory = StringBuilder()
     private var lastQuery: String = ""
@@ -49,9 +51,11 @@ class GeneralSearchActivity : AppCompatActivity() {
             tvResult = findViewById(R.id.tvGeneralResult)
             cardResult = findViewById(R.id.cardGeneralResult)
             resultActions = findViewById(R.id.resultActions)
-            btnGoogleSearch = findViewById(R.id.btnGoogleSearch)
-            btnFallbackGoogle = findViewById(R.id.btnFallbackGoogle)
+            btnModeAI = findViewById(R.id.btnModeAI)
+            btnModeWeb = findViewById(R.id.btnModeWeb)
+            tvSearchMode = findViewById(R.id.tvSearchMode)
             scrollResults = findViewById(R.id.scrollGeneralResults)
+            updateModeUI()
 
             findViewById<TextView>(R.id.btnArchive)?.setOnClickListener {
                 try {
@@ -61,8 +65,14 @@ class GeneralSearchActivity : AppCompatActivity() {
 
             btnSubmit.setOnClickListener { onSearch() }
 
-            btnGoogleSearch.setOnClickListener { openGoogleSearch(lastQuery) }
-            btnFallbackGoogle.setOnClickListener { openGoogleSearch(lastQuery) }
+            btnModeAI.setOnClickListener {
+                isWebMode = false
+                updateModeUI()
+            }
+            btnModeWeb.setOnClickListener {
+                isWebMode = true
+                updateModeUI()
+            }
 
             findViewById<Button>(R.id.btnCopyResult)?.setOnClickListener {
                 val cb = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -85,6 +95,23 @@ class GeneralSearchActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Toast.makeText(this, "تعذر فتح الشاشة", Toast.LENGTH_SHORT).show()
             finish()
+        }
+    }
+
+    private fun updateModeUI() {
+        try {
+            if (isWebMode) {
+                btnModeWeb.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF00796B.toInt())
+                btnModeAI.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF1E293B.toInt())
+                tvSearchMode.text = "🌐 الوضع: بحث ويب داخل التطبيق"
+                btnSubmit.text = "بحث في الويب 🌐"
+            } else {
+                btnModeAI.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF00796B.toInt())
+                btnModeWeb.backgroundTintList = android.content.res.ColorStateList.valueOf(0xFF1E293B.toInt())
+                tvSearchMode.text = "🤖 الوضع: إجابة ذكية"
+                btnSubmit.text = "متابعة البحث 🔍".takeIf { conversationHistory.isNotEmpty() } ?: "بحث شامل 🔍"
+            }
+        } catch (_: Exception) {
         }
     }
 
@@ -121,9 +148,14 @@ class GeneralSearchActivity : AppCompatActivity() {
         }
 
         lastQuery = question
+        if (isWebMode) {
+            progressBar.visibility = View.GONE
+            btnSubmit.isEnabled = true
+            openGoogleSearch(question)
+            return
+        }
         btnSubmit.isEnabled = false
         progressBar.visibility = View.VISIBLE
-        btnFallbackGoogle.visibility = View.GONE
 
         lifecycleScope.launch {
             try {
@@ -148,7 +180,6 @@ class GeneralSearchActivity : AppCompatActivity() {
 
                     tvResult.text = conversationHistory.toString()
                     cardResult.visibility = View.VISIBLE
-                    btnFallbackGoogle.visibility = View.GONE
 
                     scrollResults.post {
                         scrollResults.fullScroll(View.FOCUS_DOWN)
@@ -173,12 +204,12 @@ class GeneralSearchActivity : AppCompatActivity() {
                 } else {
                     tvResult.text = answer.ifEmpty { "تعذر الحصول على رد حالياً." }
                     cardResult.visibility = View.VISIBLE
-                    btnFallbackGoogle.visibility = View.VISIBLE
+                    Toast.makeText(this@GeneralSearchActivity, "فشل الذكاء — جرّب وضع الويب 🌐", Toast.LENGTH_LONG).show()
                 }
             } catch (e: Exception) {
                 tvResult.text = "❌ حدث خطأ: ${e.localizedMessage}"
                 cardResult.visibility = View.VISIBLE
-                btnFallbackGoogle.visibility = View.VISIBLE
+                Toast.makeText(this@GeneralSearchActivity, "حدث خطأ — جرّب وضع الويب 🌐", Toast.LENGTH_LONG).show()
             } finally {
                 progressBar.visibility = View.GONE
                 btnSubmit.isEnabled = true

@@ -145,8 +145,9 @@ class MainActivity : AppCompatActivity() {
     private fun checkNewLaws() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                LawsLocalCache.syncIfNeeded(applicationContext)
+                // الفحص قبل المزامنة: وإلا محت المقارنة ولم يظهر التنبيه أبداً
                 val fresh = LawsLocalCache.checkNewRemote(applicationContext)
+                LawsLocalCache.syncIfNeeded(applicationContext)
                 if (!fresh.isNullOrEmpty()) {
                     runOnUiThread {
                         try {

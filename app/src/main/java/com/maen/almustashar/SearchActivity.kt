@@ -49,6 +49,7 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var btnOpenPdf: Button
 
     private lateinit var rgMode: RadioGroup
+    private lateinit var rbLocal: RadioButton
     private lateinit var rbFirestore: RadioButton
     private lateinit var rbDrive: RadioButton
     private lateinit var rvDriveResults: RecyclerView
@@ -88,6 +89,7 @@ class SearchActivity : AppCompatActivity() {
         btnOpenPdf = findViewById(R.id.btnOpenPdf)
 
         rgMode = findViewById(R.id.rgSearchMode)
+        rbLocal = findViewById(R.id.rbModeLocal)
         rbFirestore = findViewById(R.id.rbModeFirestore)
         rbDrive = findViewById(R.id.rbModeDrive)
         rvDriveResults = findViewById(R.id.rvDriveResults)
@@ -110,7 +112,11 @@ class SearchActivity : AppCompatActivity() {
                 tvEmpty.visibility = View.GONE
                 scrollResults.visibility = View.GONE
                 searchActions.visibility = View.GONE
-                etSearch.hint = "ابحث برقم المادة أو اسم القانون أو الموضوع..."
+                etSearch.hint = if (checkedId == R.id.rbModeLocal) {
+                    "ابحث برقم المادة أو الموضوع... (محلي — فوري ودون إنترنت)"
+                } else {
+                    "ابحث برقم المادة أو اسم القانون أو الموضوع..."
+                }
             }
         }
 
@@ -168,8 +174,16 @@ class SearchActivity : AppCompatActivity() {
                 val adapter = ArrayAdapter(this@SearchActivity, android.R.layout.simple_spinner_dropdown_item, lawChoices)
                 spinnerLaw.adapter = adapter
             } catch (_: Exception) {
-                val fallbackList = listOf(LawChoice(null, "كل القوانين"))
+                // دون إنترنت: أسماء القوانين من النسخة المحلية إن وجدت
+                val localNames = try {
+                    LawsLocalCache.loadPool(applicationContext)?.first
+                } catch (_: Exception) {
+                    null
+                }
+                val fallbackList = mutableListOf(LawChoice(null, "كل القوانين"))
+                localNames?.forEach { fallbackList.add(LawChoice(it.id, it.name)) }
                 val adapter = ArrayAdapter(this@SearchActivity, android.R.layout.simple_spinner_dropdown_item, fallbackList)
+                lawChoices = fallbackList
                 spinnerLaw.adapter = adapter
             }
         }
@@ -190,6 +204,8 @@ class SearchActivity : AppCompatActivity() {
 
         if (rbDrive.isChecked) {
             searchDriveFiles(query)
+        } else if (rbLocal.isChecked) {
+            searchLocalLaws(query)
         } else {
             searchFirestoreLaws(query)
         }
@@ -235,6 +251,54 @@ class SearchActivity : AppCompatActivity() {
                         tvEmpty.text = result
                         tvEmpty.visibility = View.VISIBLE
                     }
+                }
+            } catch (e: Exception) {
+                progressBar.visibility = View.GONE
+                tvEmpty.text = "تعذر إتمام البحث: ${e.localizedMessage}"
+                tvEmpty.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    // المسار المحلي: بحث فوري في نسخة التطبيق دون أي إنترنت (مع مزامنة صامتة عند توفره)
+    private fun searchLocalLaws(query: String) {
+        lifecycleScope.launch {
+            try {
+                var pool = try {
+                    LawsLocalCache.loadPool(applicationContext)
+                } catch (_: Exception) {
+                    null
+                }
+                if (pool == null) {
+                    pool = try {
+                        withContext(Dispatchers.IO) {
+                            LawsLocalCache.syncIfNeeded(applicationContext)
+                        }
+                        LawsLocalCache.loadPool(applicationContext)
+                    } catch (_: Exception) {
+                        null
+                    }
+                }
+                progressBar.visibility = View.GONE
+                if (pool == null) {
+                    tvEmpty.text = "لا نسخة محلية بعد — اتصل بالإنترنت مرة واحدة لتحميل القوانين، أو استخدم وضعي فايربيس ودرايف."
+                    tvEmpty.visibility = View.VISIBLE
+                    return@launch
+                }
+                val selectedLawId = (spinnerLaw.selectedItem as? LawChoice)?.id
+                val result = LawsRepository.searchRelevantLaws(query, selectedLawId, pool.first, pool.second)
+                if (result.isNotBlank() && !result.startsWith("⚠️")) {
+                    tvSearchResult.text = result
+                    Linkify.addLinks(tvSearchResult, Linkify.WEB_URLS)
+                    scrollResults.visibility = View.VISIBLE
+                    searchActions.visibility = View.VISIBLE
+                    val driveUrlRegex = Regex("https://drive\\.google\\.com/[^\\s]+")
+                    val match = driveUrlRegex.find(result)
+                    currentPdfUrl = match?.value ?: defaultDriveFolder
+                    btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
+                } else {
+                    tvEmpty.text = result
+                    tvEmpty.visibility = View.VISIBLE
                 }
             } catch (e: Exception) {
                 progressBar.visibility = View.GONE

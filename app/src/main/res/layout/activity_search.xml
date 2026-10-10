@@ -49,7 +49,7 @@
             android:textColor="#FFFFFF" />
     </LinearLayout>
 
-    <!-- شريط تبديل مسار البحث الهجين (Firestore vs Google Drive) -->
+    <!-- شريط تبديل مسار البحث الثلاثي (محلي vs Firestore vs Drive) -->
     <RadioGroup
         android:id="@+id/rgSearchMode"
         android:layout_width="match_parent"
@@ -61,12 +61,22 @@
         android:gravity="center">
 
         <RadioButton
-            android:id="@+id/rbModeFirestore"
+            android:id="@+id/rbModeLocal"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:checked="true"
-            android:text="📜 مواد القوانين (Firestore)"
+            android:text="📁 محلي"
+            android:textColor="#0F2042"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <RadioButton
+            android:id="@+id/rbModeFirestore"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="🔥 فايربيس"
             android:textColor="#0F2042"
             android:textSize="12sp"
             android:textStyle="bold" />
@@ -76,13 +86,13 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="📂 وثائق ومراجع PDF (Drive)"
+            android:text="💾 درايف"
             android:textColor="#0F2042"
             android:textSize="12sp"
             android:textStyle="bold" />
     </RadioGroup>
 
-    <!-- اختيار نطاق القانون (يظهر فقط مع Firestore) -->
+    <!-- اختيار نطاق القانون (يظهر مع المحلي وفايربيس) -->
     <Spinner
         android:id="@+id/spinnerLaw"
         android:layout_width="match_parent"
