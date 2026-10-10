@@ -16,7 +16,17 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.storage.FirebaseStorage
+import com.google.android.gms.auth.GoogleAuthUtil
+import com.google.android.gms.auth.UserRecoverableAuthException
+import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.common.api.Scope
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -323,14 +333,21 @@ class CaseEditActivity : AppCompatActivity() {
         renderDocumentsList()
     }
 
-    // النسخ السحابي الاختياري للمرفقات إلى Firebase Storage (يبقى المحلي كما هو)
+    // النسخ السحابي إلى Google Drive على مساحة المستخدم الخاصة (لا حدود Firebase)
+    private val driveScope = Scope("https://www.googleapis.com/auth/drive.file")
+    private val driveHttp = OkHttpClient.Builder()
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS)
+        .writeTimeout(120, TimeUnit.SECONDS)
+        .build()
+
     private fun uploadAllToCloud() {
         val user = FirebaseAuth.getInstance().currentUser ?: run {
             Toast.makeText(this, "يجب تسجيل الدخول", Toast.LENGTH_SHORT).show()
             return
         }
         if (caseId == null) {
-            Toast.makeText(this, "احفظ الدعوى أولاً ثم انسخ مرفقاتها سحابياً", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "احفظ الدعوى أولاً ثم انسخ مرفقاتها إلى Drive", Toast.LENGTH_LONG).show()
             return
         }
         val pending = attachedDocs.filter { it.url.isBlank() && File(it.path).exists() }
@@ -338,38 +355,150 @@ class CaseEditActivity : AppCompatActivity() {
             Toast.makeText(this, "لا جديد للرفع (الكل مرفوع أو بلا ملف محلي)", Toast.LENGTH_SHORT).show()
             return
         }
-        Toast.makeText(this, "جارٍ رفع ${pending.size} مرفق...", Toast.LENGTH_SHORT).show()
-        val storage = FirebaseStorage.getInstance().reference
-        var done = 0
-        var failed = 0
-        for (doc in pending) {
-            val safeName = "${System.currentTimeMillis()}_${doc.name.replace(Regex("[^a-zA-Z0-9._\\u0621-\\u064A-]"), "_")}"
-            val ref = storage.child("cases/${user.uid}/$caseId/$safeName")
-            ref.putFile(Uri.fromFile(File(doc.path)))
-                .continueWithTask { ref.downloadUrl }
-                .addOnSuccessListener { uri ->
-                    doc.url = uri.toString()
+        val account = GoogleSignIn.getLastSignedInAccount(this)
+        if (account == null) {
+            Toast.makeText(this, "سجّل الدخول بحساب Google أولاً (شاشة الدخول) لاستخدام مساحتك على Drive", Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!GoogleSignIn.hasPermissions(account, driveScope)) {
+            GoogleSignIn.requestPermissions(this, 9002, account, driveScope)
+            Toast.makeText(this, "امنح إذن Drive ثم أعد الضغط", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, "جارٍ رفع ${pending.size} مرفق إلى Drive...", Toast.LENGTH_SHORT).show()
+        Thread { doDriveUpload(pending.map { it }) }.start()
+    }
+
+    private fun doDriveUpload(pending: List<CaseDoc>) {
+        try {
+            val account = GoogleSignIn.getLastSignedInAccount(this) ?: return
+            val token = GoogleAuthUtil.getToken(
+                this, account.account!!,
+                "oauth2:https://www.googleapis.com/auth/drive.file"
+            )
+            val folderId = driveGetOrCreateFolder(token, "Al-Mustashar Cases")
+            var done = 0
+            var failed = 0
+            for (doc in pending) {
+                val link = driveUploadFile(token, folderId, doc)
+                if (link != null) {
+                    doc.url = link
                     done++
-                    checkCloudDone(done, failed, pending.size)
+                } else failed++
+            }
+            try {
+                GoogleAuthUtil.clearToken(this, token)
+            } catch (_: Exception) {
+            }
+            runOnUiThread {
+                if (done > 0) {
+                    caseId?.let { id ->
+                        FirebaseFirestore.getInstance().collection("cases").document(id)
+                            .update("documentsNotes", serializeDocs())
+                    }
+                    renderDocumentsList()
                 }
-                .addOnFailureListener {
-                    failed++
-                    checkCloudDone(done, failed, pending.size)
+                Toast.makeText(this, "اكتمل الرفع إلى Drive: $done ناجح، $failed فاشل", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: UserRecoverableAuthException) {
+            runOnUiThread {
+                try {
+                    @Suppress("DEPRECATION")
+                    startActivityForResult(e.intent, 9003)
+                } catch (_: Exception) {
+                    Toast.makeText(this, "تعذر طلب إذن Drive", Toast.LENGTH_SHORT).show()
                 }
+            }
+        } catch (e: Exception) {
+            runOnUiThread {
+                Toast.makeText(this, "فشل الرفع: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
-    private fun checkCloudDone(done: Int, failed: Int, total: Int) {
-        if (done + failed < total) return
-        if (done > 0) {
-            // حفظ الروابط مع الدعوى فوراً حتى لا تضيع
-            caseId?.let { id ->
-                FirebaseFirestore.getInstance().collection("cases").document(id)
-                    .update("documentsNotes", serializeDocs())
+    private fun driveApi(token: String, builder: Request.Builder): String? {
+        val resp = driveHttp.newCall(
+            builder.addHeader("Authorization", "Bearer $token").build()
+        ).execute()
+        val body = resp.body?.string().orEmpty()
+        resp.close()
+        return if (resp.isSuccessful) body else null
+    }
+
+    private fun driveGetOrCreateFolder(token: String, name: String): String {
+        val q = java.net.URLEncoder.encode(
+            "mimeType='application/vnd.google-apps.folder' and name='$name' and trashed=false", "UTF-8"
+        )
+        val found = driveApi(
+            token,
+            Request.Builder().url("https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id)&spaces=drive").get()
+        )
+        val id = found?.let {
+            try {
+                JSONObject(it).getJSONArray("files").takeIf { a -> a.length() > 0 }
+                    ?.getJSONObject(0)?.getString("id")
+            } catch (_: Exception) {
+                null
             }
-            renderDocumentsList()
         }
-        Toast.makeText(this, "اكتمل الرفع: $done ناجح، $failed فاشل", Toast.LENGTH_LONG).show()
+        if (id != null) return id
+        val meta = JSONObject().apply {
+            put("name", name)
+            put("mimeType", "application/vnd.google-apps.folder")
+        }
+        val created = driveApi(
+            token,
+            Request.Builder().url("https://www.googleapis.com/drive/v3/files?fields=id")
+                .post(okhttp3.RequestBody.create("application/json".toMediaType(), meta.toString()))
+        ) ?: throw Exception("تعذر إنشاء مجلد Drive")
+        return JSONObject(created).getString("id")
+    }
+
+    private fun driveUploadFile(token: String, folderId: String, doc: CaseDoc): String? {
+        val file = File(doc.path)
+        if (!file.exists()) return null
+        val meta = JSONObject().apply {
+            put("name", doc.name)
+            put("parents", org.json.JSONArray().put(folderId))
+        }
+        val body = MultipartBody.Builder()
+            .setType("multipart/related".toMediaType())
+            .addPart(
+                okhttp3.Headers.headersOf("Content-Type", "application/json; charset=UTF-8"),
+                okhttp3.RequestBody.create("application/json".toMediaType(), meta.toString())
+            )
+            .addPart(
+                okhttp3.Headers.headersOf("Content-Type", doc.type.ifBlank { "application/octet-stream" }),
+                file.asRequestBody(doc.type.ifBlank { "application/octet-stream" }.toMediaType())
+            )
+            .build()
+        val uploaded = driveApi(
+            token,
+            Request.Builder().url("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id")
+                .post(body)
+        ) ?: return null
+        val fileId = try {
+            JSONObject(uploaded).getString("id")
+        } catch (_: Exception) {
+            return null
+        }
+        val info = driveApi(
+            token,
+            Request.Builder().url("https://www.googleapis.com/drive/v3/files/$fileId?fields=id,webViewLink").get()
+        ) ?: return null
+        return try {
+            JSONObject(info).optString("webViewLink").ifBlank { null }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if ((requestCode == 9002 || requestCode == 9003) && resultCode == RESULT_OK) {
+            uploadAllToCloud()
+        }
     }
 
     private fun load() {
