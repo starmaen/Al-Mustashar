@@ -6,6 +6,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -90,11 +91,18 @@ class DecisionEditActivity : AppCompatActivity() {
 
     private fun delete() {
         if (decisionId == null) return
-        FirebaseFirestore.getInstance().collection("decisions").document(decisionId!!)
-            .delete()
-            .addOnSuccessListener {
-                Toast.makeText(this, "تم الحذف", Toast.LENGTH_SHORT).show()
-                finish()
+        AlertDialog.Builder(this)
+            .setTitle("حذف القرار؟")
+            .setMessage("سيُحذف هذا القرار نهائياً من الدعوى.")
+            .setPositiveButton("حذف") { _, _ ->
+                FirebaseFirestore.getInstance().collection("decisions").document(decisionId!!)
+                    .delete()
+                    .addOnSuccessListener {
+                        Toast.makeText(this, "تم الحذف", Toast.LENGTH_SHORT).show()
+                        finish()
+                    }
             }
+            .setNegativeButton("تراجع", null)
+            .show()
     }
 }

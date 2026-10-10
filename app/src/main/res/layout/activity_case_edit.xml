@@ -387,6 +387,16 @@
             android:orientation="vertical"
             android:layout_marginTop="8dp" />
 
+        <Button
+            android:id="@+id/btnCloudBackup"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="☁️ نسخ المرفقات سحابياً (اختياري — للاحتفاظ بها عند تغيير الجهاز)"
+            android:textSize="12sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#5E35B1" />
+
         <!-- أزرار الإجراءات والمذكرات الذكية -->
         <Button
             android:id="@+id/btnDraftForCase"

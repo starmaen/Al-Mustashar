@@ -11,10 +11,12 @@ import android.view.Gravity
 import android.view.View
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.FileProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.storage.FirebaseStorage
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -53,10 +55,11 @@ class CaseEditActivity : AppCompatActivity() {
     private lateinit var btnDecisions: Button
     private lateinit var btnDraftForCase: Button
     private lateinit var btnAddDocument: Button
+    private lateinit var btnCloudBackup: Button
     private lateinit var layoutDocumentsList: LinearLayout
 
-    // قائمة المرفقات المحلية: (Name, FilePath, MimeType)
-    data class CaseDoc(val name: String, val path: String, val type: String)
+    // قائمة المرفقات: (Name, FilePath, MimeType, CloudUrl)
+    data class CaseDoc(val name: String, val path: String, val type: String, var url: String = "")
     private val attachedDocs = mutableListOf<CaseDoc>()
 
     private val filePickerLauncher = registerForActivityResult(
@@ -96,6 +99,7 @@ class CaseEditActivity : AppCompatActivity() {
         btnDecisions = findViewById(R.id.btnDecisions)
         btnDraftForCase = findViewById(R.id.btnDraftForCase)
         btnAddDocument = findViewById(R.id.btnAddDocument)
+        btnCloudBackup = findViewById(R.id.btnCloudBackup)
         layoutDocumentsList = findViewById(R.id.layoutDocumentsList)
 
         etDate.setOnClickListener { showDatePicker(etDate) }
@@ -104,6 +108,8 @@ class CaseEditActivity : AppCompatActivity() {
         btnAddDocument.setOnClickListener {
             filePickerLauncher.launch(arrayOf("*/*"))
         }
+
+        btnCloudBackup.setOnClickListener { uploadAllToCloud() }
 
         caseId = intent.getStringExtra("case_id")
 
@@ -236,8 +242,15 @@ class CaseEditActivity : AppCompatActivity() {
                 setTextColor(android.graphics.Color.parseColor("#D32F2F"))
                 setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 setOnClickListener {
-                    attachedDocs.removeAt(index)
-                    renderDocumentsList()
+                    AlertDialog.Builder(this@CaseEditActivity)
+                        .setTitle("حذف المرفق")
+                        .setMessage("حذف \"${doc.name}\" من القائمة؟ (لا يُحذف من السحابة إن رُفع)")
+                        .setPositiveButton("حذف") { _, _ ->
+                            attachedDocs.removeAt(index)
+                            renderDocumentsList()
+                        }
+                        .setNegativeButton("إلغاء", null)
+                        .show()
                 }
             }
 
@@ -251,7 +264,16 @@ class CaseEditActivity : AppCompatActivity() {
     private fun openDocument(doc: CaseDoc) {
         val file = File(doc.path)
         if (!file.exists()) {
-            Toast.makeText(this, "الملف غير موجود محلياً", Toast.LENGTH_SHORT).show()
+            // الملف المحلي مفقود (جهاز جديد) — جرّب النسخة السحابية
+            if (doc.url.isNotBlank()) {
+                try {
+                    startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(doc.url)))
+                } catch (_: Exception) {
+                    Toast.makeText(this, "تعذر فتح النسخة السحابية", Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Toast.makeText(this, "الملف غير موجود محلياً ولا نسخة سحابية له", Toast.LENGTH_LONG).show()
+            }
             return
         }
         try {
@@ -282,6 +304,7 @@ class CaseEditActivity : AppCompatActivity() {
             obj.put("name", d.name)
             obj.put("path", d.path)
             obj.put("type", d.type)
+            obj.put("url", d.url)
             arr.put(obj)
         }
         return arr.toString()
@@ -294,10 +317,59 @@ class CaseEditActivity : AppCompatActivity() {
             val arr = JSONArray(json)
             for (i in 0 until arr.length()) {
                 val obj = arr.getJSONObject(i)
-                attachedDocs.add(CaseDoc(obj.getString("name"), obj.getString("path"), obj.optString("type", "*/*")))
+                attachedDocs.add(CaseDoc(obj.getString("name"), obj.getString("path"), obj.optString("type", "*/*"), obj.optString("url", "")))
             }
         } catch (_: Exception) {}
         renderDocumentsList()
+    }
+
+    // النسخ السحابي الاختياري للمرفقات إلى Firebase Storage (يبقى المحلي كما هو)
+    private fun uploadAllToCloud() {
+        val user = FirebaseAuth.getInstance().currentUser ?: run {
+            Toast.makeText(this, "يجب تسجيل الدخول", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (caseId == null) {
+            Toast.makeText(this, "احفظ الدعوى أولاً ثم انسخ مرفقاتها سحابياً", Toast.LENGTH_LONG).show()
+            return
+        }
+        val pending = attachedDocs.filter { it.url.isBlank() && File(it.path).exists() }
+        if (pending.isEmpty()) {
+            Toast.makeText(this, "لا جديد للرفع (الكل مرفوع أو بلا ملف محلي)", Toast.LENGTH_SHORT).show()
+            return
+        }
+        Toast.makeText(this, "جارٍ رفع ${pending.size} مرفق...", Toast.LENGTH_SHORT).show()
+        val storage = FirebaseStorage.getInstance().reference
+        var done = 0
+        var failed = 0
+        for (doc in pending) {
+            val safeName = "${System.currentTimeMillis()}_${doc.name.replace(Regex("[^a-zA-Z0-9._\\u0621-\\u064A-]"), "_")}"
+            val ref = storage.child("cases/${user.uid}/$caseId/$safeName")
+            ref.putFile(Uri.fromFile(File(doc.path)))
+                .continueWithTask { ref.downloadUrl }
+                .addOnSuccessListener { uri ->
+                    doc.url = uri.toString()
+                    done++
+                    checkCloudDone(done, failed, pending.size)
+                }
+                .addOnFailureListener {
+                    failed++
+                    checkCloudDone(done, failed, pending.size)
+                }
+        }
+    }
+
+    private fun checkCloudDone(done: Int, failed: Int, total: Int) {
+        if (done + failed < total) return
+        if (done > 0) {
+            // حفظ الروابط مع الدعوى فوراً حتى لا تضيع
+            caseId?.let { id ->
+                FirebaseFirestore.getInstance().collection("cases").document(id)
+                    .update("documentsNotes", serializeDocs())
+            }
+            renderDocumentsList()
+        }
+        Toast.makeText(this, "اكتمل الرفع: $done ناجح، $failed فاشل", Toast.LENGTH_LONG).show()
     }
 
     private fun load() {
@@ -375,13 +447,15 @@ class CaseEditActivity : AppCompatActivity() {
                 val oldTs = old.getLong("timestamp") ?: System.currentTimeMillis()
                 db.document(caseId!!).set(case.copy(timestamp = oldTs))
                     .addOnSuccessListener {
+                        SessionReminder.schedule(this, caseId!!, title, case.nextSessionDate)
                         Toast.makeText(this, "تم تحديث ملف الدعوى والمرفقات", Toast.LENGTH_SHORT).show()
                         finish()
                     }
             }
         } else {
             db.add(case)
-                .addOnSuccessListener {
+                .addOnSuccessListener { ref ->
+                    SessionReminder.schedule(this, ref.id, title, case.nextSessionDate)
                     Toast.makeText(this, "تم حفظ ملف الدعوى والمرفقات بنجاح", Toast.LENGTH_SHORT).show()
                     finish()
                 }
@@ -393,11 +467,19 @@ class CaseEditActivity : AppCompatActivity() {
 
     private fun delete() {
         if (caseId == null) return
-        FirebaseFirestore.getInstance().collection("cases").document(caseId!!)
-            .delete()
-            .addOnSuccessListener {
-                Toast.makeText(this, "تم حذف ملف الدعوى", Toast.LENGTH_SHORT).show()
-                finish()
+        AlertDialog.Builder(this)
+            .setTitle("حذف الدعوى نهائياً؟")
+            .setMessage("سيُحذف ملف الدعوى وقراراتها من حسابك. المرفقات المحلية تبقى على الجهاز. هل أنت متأكد؟")
+            .setPositiveButton("حذف نهائي") { _, _ ->
+                SessionReminder.cancel(this, caseId!!)
+                FirebaseFirestore.getInstance().collection("cases").document(caseId!!)
+                    .delete()
+                    .addOnSuccessListener {
+                        Toast.makeText(this, "تم حذف ملف الدعوى", Toast.LENGTH_SHORT).show()
+                        finish()
+                    }
             }
+            .setNegativeButton("تراجع", null)
+            .show()
     }
 }

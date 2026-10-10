@@ -1,6 +1,8 @@
 package com.maen.almustashar
 
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -26,7 +28,7 @@ class CasesActivity : AppCompatActivity() {
             contentResolver.openOutputStream(it)?.use { os ->
                 val success = CaseBackupManager.exportBackup(this, allCases, os)
                 if (success) {
-                    Toast.makeText(this, "تم تصدير النسخة الاحتياطية بنجاح إلى الذاكرة", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "تم تصدير الدعاوى بنجاح. تنبيه: ملفات المرفقات نفسها غير مشمولة — انسخها سحابياً من داخل كل دعوى", Toast.LENGTH_LONG).show()
                 } else {
                     Toast.makeText(this, "فشل تصدير النسخة الاحتياطية", Toast.LENGTH_SHORT).show()
                 }
@@ -76,6 +78,12 @@ class CasesActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_cases)
+
+        // إذن الإشعارات لتذكير الجلسات (أندرويد 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
+        }
 
         tvEmpty = findViewById(R.id.tvEmpty)
         tvCount = findViewById(R.id.tvCasesCount)
