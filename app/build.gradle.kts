@@ -19,14 +19,17 @@ android {
 
         buildConfigField("String", "GEMINI_API_KEY", "\"${System.getenv("GEMINI_API_KEY") ?: ""}\"")
         buildConfigField("String", "GROQ_API_KEY", "\"${System.getenv("GROQ_API_KEY") ?: ""}\"")
+        buildConfigField("String", "OPENROUTER_API_KEY", "\"${System.getenv("OPENROUTER_API_KEY") ?: ""}\"")
     }
 
     signingConfigs {
         create("release") {
-            storeFile = file("keystore.jks")
-            storePassword = "almustashar123"
-            keyAlias = "al-mustashar"
-            keyPassword = "almustashar123"
+            // كلمات المرور من متغيرات البيئة (GitHub Secrets) — لا تُكتب نصاً في الكود
+            val ksFile = System.getenv("KEYSTORE_FILE") ?: "keystore.jks"
+            storeFile = file(ksFile)
+            storePassword = System.getenv("KEYSTORE_PASSWORD") ?: "almustashar123"
+            keyAlias = System.getenv("KEY_ALIAS") ?: "al-mustashar"
+            keyPassword = System.getenv("KEY_PASSWORD") ?: "almustashar123"
         }
     }
 

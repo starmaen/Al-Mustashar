@@ -18,8 +18,11 @@ sealed class AIResult {
 }
 
 object AIClient {
-    private val GROQ_KEY = StringBuilder("gsk_").append("cvxjbsW6q8CQfCLOrmTg").append("WGdyb0FYEs0DsbD8n1am4ZwEJORizjIM").toString()
-    private val GEMINI_KEY = StringBuilder("AQ.Ab8RN6KmTYMlQDnnJ").append("gx2n4-OCuZYx7sJ6oVOk3TXUHvstG0jJg").toString()
+    // المفاتيح تُحقن من BuildConfig عبر GitHub Secrets — لا توجد مفاتيح نصية هنا.
+    // GEMINI أساسي، GROQ بديل ثانٍ، OPENROUTER بديل ثالث مجاني.
+    private fun geminiKey(): String = try { BuildConfig.GEMINI_API_KEY } catch (_: Exception) { "" }
+    private fun groqKey(): String = try { BuildConfig.GROQ_API_KEY } catch (_: Exception) { "" }
+    private fun openRouterKey(): String = try { BuildConfig.OPENROUTER_API_KEY } catch (_: Exception) { "" }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(60, TimeUnit.SECONDS)
@@ -60,10 +63,14 @@ object AIClient {
         val groqRes = callGroq("llama-3.1-8b-instant", prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
+        val orRes = callOpenRouter(prompt)
+        if (orRes is AIResult.Success) return@withContext orRes.text
+
         return@withContext when {
             res1 is AIResult.Error -> "❌ فشل الاتصال: ${res1.message}"
             res2 is AIResult.Error -> "❌ فشل الاتصال البديل: ${res2.message}"
             groqRes is AIResult.Error -> "❌ فشل اتصال Groq: ${groqRes.message}"
+            orRes is AIResult.Error -> "❌ فشل اتصال البديل الثالث: ${orRes.message}"
             else -> "❌ تعذر إتمام الطلب، يرجى التحقق من اتصال الإنترنت."
         }
     }
@@ -79,6 +86,9 @@ object AIClient {
         val groqRes = callGroq("llama-3.1-8b-instant", prompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
+        val orRes = callOpenRouter(prompt)
+        if (orRes is AIResult.Success) return@withContext orRes.text
+
         return@withContext "❌ تعذر الاتصال بمزود الخدمة."
     }
 
@@ -93,6 +103,9 @@ object AIClient {
 
         val groqRes = callGroq("llama-3.1-8b-instant", searchPrompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
+
+        val orRes = callOpenRouter(searchPrompt)
+        if (orRes is AIResult.Success) return@withContext orRes.text
 
         return@withContext ""
     }
@@ -113,10 +126,14 @@ object AIClient {
         val groqRes = callGroq("llama-3.1-8b-instant", fullPrompt)
         if (groqRes is AIResult.Success) return@withContext groqRes.text
 
+        val orRes = callOpenRouter(fullPrompt)
+        if (orRes is AIResult.Success) return@withContext orRes.text
+
         return@withContext when {
             res1 is AIResult.Error -> "❌ فشل التوليد: ${res1.message}"
             res2 is AIResult.Error -> "❌ فشل التوليد: ${res2.message}"
             groqRes is AIResult.Error -> "❌ فشل البديل: ${groqRes.message}"
+            orRes is AIResult.Error -> "❌ فشل البديل الثالث: ${orRes.message}"
             else -> "❌ تعذر إتمام الصياغة، يرجى إعادة المحاولة."
         }
     }
@@ -131,7 +148,7 @@ object AIClient {
         attachments: List<Pair<String, String>>
     ): AIResult {
         return try {
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$GEMINI_KEY"
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=${geminiKey()}"
             val rootJson = JsonObject()
             val contentsArr = JsonArray()
             val contentObj = JsonObject()
@@ -202,7 +219,7 @@ object AIClient {
             val body = rootJson.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
                 .url(url)
-                .addHeader("Authorization", "Bearer $GROQ_KEY")
+                .addHeader("Authorization", "Bearer ${groqKey()}")
                 .post(body)
                 .build()
 
@@ -218,6 +235,59 @@ object AIClient {
                         AIResult.Success(text)
                     } else {
                         AIResult.Error("رد فارغ من Groq")
+                    }
+                } else {
+                    AIResult.Error("HTTP ${response.code}")
+                }
+            }
+        } catch (e: Exception) {
+            AIResult.Error(e.localizedMessage ?: "خطأ في الاتصال")
+        }
+    }
+
+    // المزود الثالث المجاني (OpenRouter — نماذج free). يعمل بنفس بروتوكول OpenAI.
+    private fun callOpenRouter(prompt: String): AIResult {
+        return try {
+            val key = openRouterKey()
+            if (key.isBlank()) return AIResult.Error("مفتاح البديل الثالث غير مضبوط")
+            val url = "https://openrouter.ai/api/v1/chat/completions"
+            val rootJson = JsonObject()
+            rootJson.addProperty("model", "meta-llama/llama-3.1-8b-instruct:free")
+            val messagesArr = JsonArray()
+
+            val sysMsg = JsonObject()
+            sysMsg.addProperty("role", "system")
+            sysMsg.addProperty("content", SYSTEM_PROMPT)
+            messagesArr.add(sysMsg)
+
+            val userMsg = JsonObject()
+            userMsg.addProperty("role", "user")
+            userMsg.addProperty("content", prompt)
+            messagesArr.add(userMsg)
+
+            rootJson.add("messages", messagesArr)
+
+            val body = rootJson.toString().toRequestBody("application/json".toMediaType())
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("Authorization", "Bearer $key")
+                .addHeader("HTTP-Referer", "https://github.com/starmaen/Al-Mustashar")
+                .addHeader("X-Title", "Al-Mustashar Legal App")
+                .post(body)
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                val respStr = response.body?.string().orEmpty()
+                if (response.isSuccessful) {
+                    val parsed = JsonParser.parseString(respStr).asJsonObject
+                    val text = parsed.getAsJsonArray("choices")
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("message")
+                        ?.get("content")?.asString
+                    if (!text.isNullOrBlank()) {
+                        AIResult.Success(text)
+                    } else {
+                        AIResult.Error("رد فارغ من البديل الثالث")
                     }
                 } else {
                     AIResult.Error("HTTP ${response.code}")

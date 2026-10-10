@@ -8,6 +8,8 @@ app/build/
 # Secrets
 serviceAccount.json
 *.keystore
+*.jks
+google-services-debug.json
 
 # Data & Temp
 *.pdf
