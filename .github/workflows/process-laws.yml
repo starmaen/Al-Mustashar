@@ -43,8 +43,10 @@ jobs:
         run: |
           pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib pytesseract pdf2image PyMuPDF
 
-      - name: تنظيف الملفات القديمة قبل إعادة التوليد
-        run: rm -rf data/laws/*
+      - name: تنظيف الملفات القديمة مع حفظ سجل التخطي
+        # حذف ملفات القوانين فقط وإبقاء _manifest.json ليعمل تخطي الملفات غير المتغيرة
+        # (الأمر القديم rm -rf data/laws/* كان يحذف السجل فيعيد معالجة كل شيء كل مرة)
+        run: find data/laws -maxdepth 1 -name '*.json' ! -name '_manifest.json' -delete
 
       - name: تشغيل معالج القوانين
         env:

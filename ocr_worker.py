@@ -82,42 +82,79 @@ def normalize_num(s):
 
 
 
-def fix_arabic_errors(text):
-    """إصلاح الأخطاء الشائعة في Tesseract للعربية"""
+DIRECTIONAL_RE = re.compile('[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff\u061c]')
+HARAKAT_RE = re.compile('[\u064b-\u065f\u0670]')
+
+
+def strip_invisible(text):
+    """إزالة علامات اتجاه النص والمحارف غير المرئية التي يتركها Tesseract"""
     if not text:
         return text
+    return DIRECTIONAL_RE.sub('', text)
+
+
+def fix_arabic_errors(text):
+    """إصلاح الأخطاء الشائعة في Tesseract للعربية (مسار OCR فقط)"""
+    if not text:
+        return text
+    text = strip_invisible(text)
+    # توحيد الهمزات والألفات دون المساس بالتاء المربوطة (لها قيمة قانونية)
+    text = text.replace('ٱ', 'ا')
+    # إزالة التشكيل الذي يضيفه Tesseract ضجيجاً (النصوص القانونية غير مشكولة)
+    text = HARAKAT_RE.sub('', text)
+    # همزة شاردة بعد علامات الترقيم: "يوجد,ء فبمقتضى" → "يوجد, فبمقتضى"
+    text = re.sub(r'([،؛:.؟!?,;:])\s*ء\s+', r'\1 ', text)
+    text = re.sub(r'\s+ء\s+', ' ', text)
+    # مسافات قبل علامات الترقيم العربية واللاتينية
+    text = re.sub(r'\s+([،؛:.؟!?,;:])', r'\1', text)
+    # إصلاحات همزات شائعة وآمنة فقط (حُذفت قاعدتا اا→ا و اال→الا الخطيرتان)
     text = re.sub(r'األ', 'الأ', text)
     text = re.sub(r'اإل', 'الإ', text)
-    text = re.sub(r'اآل', 'الآ', text)
-    text = re.sub(r'\bال\s+(ي|ت|ن)(\S+)', r'لا \1\2', text)
-    text = re.sub(r'\sال\s', ' لا ', text)
     text = re.sub(r'\bالي\b', 'إلى', text)
     text = re.sub(r'\bاذا\b', 'إذا', text)
-    text = re.sub(r'اال', 'الا', text)
-    text = re.sub(r'اا', 'ا', text)
+    # تطبيع الأرقام المشرقية داخل رؤوس المواد فقط (يُترك المتن كما هو)
     text = re.sub(r'[ \t]+', ' ', text)
-    return text
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
+def light_clean(text):
+    """تنظيف خفيف لمسار PyMuPDF (نصه سليم أصلاً — لا إصلاحات عدوانية)"""
+    if not text:
+        return text
+    text = strip_invisible(text)
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
 
 
 def parse_articles(text):
     articles = []
+    # يقبل ايضا "؟" و "?" مكان الرقم (Tesseract يقراها 2 و 3 احيانا) - ترقم تسلسليا لاحقا
+    ZW = '\u200B-\u200F'
     pattern = re.compile(
-        r'(?:المادة|المادّة|مادة|مادّة)\s*'
-        r'[\(\[/\s\u200B-\u200F]*'
-        r'([٠-٩\d]{1,4})'
-        r'[\)\]/\s\u200B-\u200F]*',
+        r'(?:\u0627\u0644\u0645\u0627\u062f\u0629|\u0627\u0644\u0645\u0627\u062f\u0647|\u0645\u0627\u062f\u0629|\u0645\u0627\u062f\u0647)\s*'
+        r'[(\[/\s' + ZW + r']*'
+        r'([\u0660-\u0669\d\u061f?]{1,4})'
+        r'[)\]/\s' + ZW + r':.\u061f?]*',
         re.MULTILINE
     )
     matches = list(pattern.finditer(text))
     if not matches:
         return articles
     seen = set()
+    last_num = 0
     for i, m in enumerate(matches):
         raw = normalize_num(m.group(1))
-        try:
-            num = int(raw)
-        except (ValueError, TypeError):
-            continue
+        num = None
+        if raw and re.fullmatch(r'\d{1,4}', raw):
+            try:
+                num = int(raw)
+            except (ValueError, TypeError):
+                num = None
+        if num is None:
+            # راس مشوه (؟) - رقم تسلسلي بعد السابق
+            num = last_num + 1
         if num < 1 or num > 2000 or num in seen:
             continue
         start = m.end()
@@ -126,9 +163,11 @@ def parse_articles(text):
         if len(body) < 10:
             continue
         seen.add(num)
-        articles.append({'number': num, 'text': f"المادة {num}\n\n{body}"})
+        last_num = num
+        articles.append({'number': num, 'text': f"\u0627\u0644\u0645\u0627\u062f\u0629 {num}\n\n{body}"})
     articles.sort(key=lambda x: x['number'])
     return articles
+
 
 
 def is_text_good(text, articles):
@@ -152,6 +191,11 @@ def is_text_good(text, articles):
     words_found = sum(1 for w in common_words if re.search(r'\b' + w + r'\b', sample))
     if words_found < 6:
         print(f"    كلمات شائعة موجودة: {words_found}/21 → النص مشوّه")
+        return False
+    # رفض النص المليء بعلامات استفهام Tesseract (أرقام مواد ضائعة)
+    qmarks = sample.count('؟')
+    if len(sample) > 0 and (qmarks / max(len(sample), 1)) > 0.02:
+        print(f"    علامات ؟ كثيرة ({qmarks}) → النص مشوّه")
         return False
     return True
 
@@ -270,7 +314,7 @@ def main():
             articles = parse_articles(extract_tesseract(pdf_bytes))
             method = "Tesseract"
         else:
-            text = extract_pymupdf(pdf_bytes)
+            text = light_clean(extract_pymupdf(pdf_bytes))
             articles = parse_articles(text)
             print(f"    PyMuPDF: {len(articles)} مادة")
             if not is_text_good(text, articles):

@@ -20,6 +20,7 @@ android {
         buildConfigField("String", "GEMINI_API_KEY", "\"${System.getenv("GEMINI_API_KEY") ?: ""}\"")
         buildConfigField("String", "GROQ_API_KEY", "\"${System.getenv("GROQ_API_KEY") ?: ""}\"")
         buildConfigField("String", "OPENROUTER_API_KEY", "\"${System.getenv("OPENROUTER_API_KEY") ?: ""}\"")
+        buildConfigField("String", "OPENCODE_ZEN_API_KEY", "\"${System.getenv("OPENCODE_ZEN_API_KEY") ?: ""}\"")
     }
 
     signingConfigs {

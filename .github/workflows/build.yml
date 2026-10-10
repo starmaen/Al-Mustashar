@@ -28,6 +28,7 @@ jobs:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY1 }}
         GROQ_API_KEY: ${{ secrets.GROQ_API_KEY1 }}
         OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
         KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
