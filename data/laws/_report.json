@@ -1,105 +1,95 @@
 {
-  "last_updated": "2026-10-10T17:11:36.350691",
+  "generated_at": "2026-10-10T17:11:36.350229",
   "total_laws": 11,
+  "warnings": [],
   "laws": [
     {
       "id": "قانون-التجاره-رقم-33-2007",
       "name": "قانون التجاره رقم 33",
-      "year": "2007",
-      "type": "أساسي",
-      "file": "قانون-التجاره-رقم-33-2007.json",
       "articles_count": 145,
-      "extraction_method": "Tesseract"
+      "prev_count": null,
+      "status": "new",
+      "method": "Tesseract"
     },
     {
       "id": "قانون-العقوبات-السوري-رقم-148-1949",
       "name": "قانون العقوبات السوري رقم 148",
-      "year": "1949",
-      "type": "أساسي",
-      "file": "قانون-العقوبات-السوري-رقم-148-1949.json",
       "articles_count": 729,
-      "extraction_method": "Tesseract"
+      "prev_count": 170,
+      "status": "updated",
+      "method": "Tesseract"
     },
     {
       "id": "القانون-المدني-السوري-رقم-84-1949",
       "name": "القانون المدني السوري رقم 84",
-      "year": "1949",
-      "type": "أساسي",
-      "file": "القانون-المدني-السوري-رقم-84-1949.json",
       "articles_count": 223,
-      "extraction_method": "Tesseract"
+      "prev_count": 219,
+      "status": "updated",
+      "method": "Tesseract"
     },
     {
       "id": "قانون-البينات-2014",
       "name": "قانون البينات",
-      "year": "2014",
-      "type": "معدل",
-      "file": "قانون-البينات-2014.json",
       "articles_count": 152,
-      "extraction_method": "PyMuPDF"
+      "prev_count": 152,
+      "status": "unchanged",
+      "method": "PyMuPDF"
     },
     {
       "id": "قانون-أصول-المحاكمات-المدنية-رقم-1-2016",
       "name": "قانون أصول المحاكمات المدنية رقم 1",
-      "year": "2016",
-      "type": "أساسي",
-      "file": "قانون-أصول-المحاكمات-المدنية-رقم-1-2016.json",
       "articles_count": 278,
-      "extraction_method": "PyMuPDF"
+      "prev_count": 278,
+      "status": "unchanged",
+      "method": "PyMuPDF"
     },
     {
       "id": "قانون-العقوبات-السوري-بالمرسوم-رقم-1-2011",
       "name": "قانون العقوبات السوري بالمرسوم رقم 1",
-      "year": "2011",
-      "type": "معدل",
-      "file": "قانون-العقوبات-السوري-بالمرسوم-رقم-1-2011.json",
       "articles_count": 11,
-      "extraction_method": "Tesseract"
+      "prev_count": 10,
+      "status": "updated",
+      "method": "Tesseract"
     },
     {
       "id": "قانون-تنظيم-مهنة-المحاماة-رقم-21-غير-محدد",
       "name": "قانون تنظيم مهنة المحاماة رقم 21",
-      "year": "غير-محدد",
-      "type": "أساسي",
-      "file": "قانون-تنظيم-مهنة-المحاماة-رقم-21-غير-محدد.json",
       "articles_count": 113,
-      "extraction_method": "Tesseract"
+      "prev_count": 113,
+      "status": "unchanged",
+      "method": "Tesseract"
     },
     {
       "id": "قانون-العقوبات-السوري-رقم-148-1949",
       "name": "قانون العقوبات السوري رقم 148",
-      "year": "1949",
-      "type": "أساسي",
-      "file": "قانون-العقوبات-السوري-رقم-148-1949.json",
       "articles_count": 729,
-      "extraction_method": "Tesseract"
+      "prev_count": 170,
+      "status": "updated",
+      "method": "Tesseract"
     },
     {
       "id": "قانون-المحاكمات-الجزائيه-رقم-112-1950",
       "name": "قانون المحاكمات الجزائيه رقم 112",
-      "year": "1950",
-      "type": "أساسي",
-      "file": "قانون-المحاكمات-الجزائيه-رقم-112-1950.json",
       "articles_count": 439,
-      "extraction_method": "Tesseract"
+      "prev_count": 439,
+      "status": "unchanged",
+      "method": "Tesseract"
     },
     {
       "id": "القانون-الاساسي-للعاملين-في-الدوله-رقم-50-2004",
       "name": "القانون الاساسي للعاملين في الدوله رقم 50",
-      "year": "2004",
-      "type": "أساسي",
-      "file": "القانون-الاساسي-للعاملين-في-الدوله-رقم-50-2004.json",
       "articles_count": 164,
-      "extraction_method": "PyMuPDF"
+      "prev_count": 164,
+      "status": "unchanged",
+      "method": "PyMuPDF"
     },
     {
       "id": "قانون-التامينات-الاجتماعيه-رقم-92-1959",
       "name": "قانون التامينات الاجتماعيه رقم 92",
-      "year": "1959",
-      "type": "أساسي",
-      "file": "قانون-التامينات-الاجتماعيه-رقم-92-1959.json",
       "articles_count": 114,
-      "extraction_method": "Tesseract"
+      "prev_count": 114,
+      "status": "unchanged",
+      "method": "Tesseract"
     }
   ]
 }
