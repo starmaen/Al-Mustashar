@@ -131,11 +131,24 @@ def main():
     old_manifest = load_manifest()
     new_manifest = {}
 
-    files = drive.files().list(
-        q=f"'{folder_id}' in parents and trashed=false",
-        fields="files(id, name, mimeType, modifiedTime)",
-        pageSize=1000,
-    ).execute().get("files", [])
+    def list_children(fid):
+        return drive.files().list(
+            q=f"'{fid}' in parents and trashed=false",
+            fields="files(id, name, mimeType, modifiedTime)",
+            pageSize=1000,
+        ).execute().get("files", [])
+
+    # المستوى الأول + الغوص داخل المجلدات الفرعية (تصنيفات الكتب)
+    top = list_children(folder_id)
+    files = [f for f in top if f.get("mimeType") != "application/vnd.google-apps.folder"]
+    for sub in [f for f in top if f.get("mimeType") == "application/vnd.google-apps.folder"]:
+        try:
+            for f in list_children(sub["id"]):
+                if f.get("mimeType") != "application/vnd.google-apps.folder":
+                    f["_sub"] = sub["name"]
+                    files.append(f)
+        except Exception as e:
+            print(f"    تعذر قراءة المجلد الفرعي {sub.get('name')}: {e}")
     print(f"ملفات المكتبة على Drive: {len(files)}")
 
     index_books = []
@@ -154,6 +167,8 @@ def main():
     units = []
     for f in files:
         name, mt, fbid, mod = f["name"], f.get("mimeType", ""), f["id"], f.get("modifiedTime", "")
+        sub = f.get("_sub", "")
+        disp = f"{sub} / {name}" if sub else name
         low = name.lower()
         if low.endswith(".zip") or mt == "application/zip":
             try:
@@ -162,7 +177,7 @@ def main():
                     il = inner.lower()
                     if il.endswith((".pdf", ".txt")) and not inner.startswith("__"):
                         units.append({
-                            "title": re.sub(r"\.(pdf|txt)$", "", inner.split("/")[-1], flags=re.I),
+                            "title": (f"{sub} / " if sub else "") + re.sub(r"\.(pdf|txt)$", "", inner.split("/")[-1], flags=re.I),
                             "data": zf.read(inner), "kind": "pdf" if il.endswith(".pdf") else "txt",
                             "skip_key": f"zip:{name}/{inner}@{mod}",
                             "source": f"{name} ← {inner}", "drive_id": fbid,
@@ -171,13 +186,13 @@ def main():
                 print(f"    تعذر فك: {name}: {e}")
         elif low.endswith(".pdf") or mt == "application/pdf":
             units.append({
-                "title": re.sub(r"\.pdf$", "", name, flags=re.I),
+                "title": re.sub(r"\.pdf$", "", disp, flags=re.I),
                 "data": None, "kind": "pdf", "skip_key": f"file:{name}@{mod}",
                 "source": name, "drive_id": fbid, "fbid": fbid,
             })
         elif low.endswith(".txt") or mt == "text/plain":
             units.append({
-                "title": re.sub(r"\.txt$", "", name, flags=re.I),
+                "title": re.sub(r"\.txt$", "", disp, flags=re.I),
                 "data": None, "kind": "txt", "skip_key": f"file:{name}@{mod}",
                 "source": name, "drive_id": fbid, "fbid": fbid,
             })
