@@ -1,22 +1,30 @@
 {
-  "generated_at": "2026-10-10T21:12:47.589589",
-  "total_laws": 13,
+  "generated_at": "2026-10-11T03:27:52.207136",
+  "total_laws": 14,
   "warnings": [],
   "laws": [
+    {
+      "id": "قانون-الاداره-المحليه-رقم-107-2011",
+      "name": "قانون الاداره المحليه رقم 107",
+      "articles_count": 154,
+      "prev_count": null,
+      "status": "new",
+      "method": "Tesseract"
+    },
     {
       "id": "قانون-التنظيم-العمراني-وتخطيط-المدن-رقم-23-2015",
       "name": "قانون التنظيم العمراني وتخطيط المدن رقم 23",
       "articles_count": 14,
-      "prev_count": null,
-      "status": "new",
+      "prev_count": 14,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
       "id": "قانون-الضريبة-على-البيوع-العقارية-رقم-15-_-2021",
       "name": "قانون الضريبة على البيوع العقارية رقم 15 _",
       "articles_count": 12,
-      "prev_count": null,
-      "status": "new",
+      "prev_count": 12,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
