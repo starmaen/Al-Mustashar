@@ -1,8 +1,24 @@
 {
-  "generated_at": "2026-10-11T10:25:09.145215",
-  "total_laws": 14,
+  "generated_at": "2026-10-11T11:15:21.761510",
+  "total_laws": 16,
   "warnings": [],
   "laws": [
+    {
+      "id": "قانون-السلطه-القضائيه-وتعديلاته-المرسوم-98-1961",
+      "name": "قانون السلطه القضائيه وتعديلاته المرسوم 98",
+      "articles_count": 141,
+      "prev_count": null,
+      "status": "new",
+      "method": "Tesseract"
+    },
+    {
+      "id": "قانون-الجرائم-المعلوماتيه-رقم-20-2022",
+      "name": "قانون الجرائم المعلوماتيه رقم 20",
+      "articles_count": 50,
+      "prev_count": null,
+      "status": "new",
+      "method": "Tesseract"
+    },
     {
       "id": "قانون-الاداره-المحليه-رقم-107-2011",
       "name": "قانون الاداره المحليه رقم 107",
@@ -15,8 +31,8 @@
       "id": "القانون-المالي-للوحدات-الإدارية-رقم-37-2021",
       "name": "القانون المالي للوحدات الإدارية رقم 37",
       "articles_count": 57,
-      "prev_count": null,
-      "status": "new",
+      "prev_count": 57,
+      "status": "unchanged",
       "method": "PyMuPDF"
     },
     {
