@@ -257,13 +257,12 @@ object LawsRepository {
         return if (results.isNotEmpty()) results.joinToString("\n\n═══════════════════════\n\n") else null
     }
 
+    // الخصوصية: لا روابط Drive تحت المواد — النص المحلي فقط.
+    // رابط المجلد العام / التحميل يبقى عبر زر واحد في الشاشة (btnOpenPdf) فقط.
     private fun formatOutput(lawName: String, number: String, text: String, pdfUrl: String?): String {
         val sb = StringBuilder()
-        sb.append("📖 $lawName - المادة $number:\n\n")
+        sb.append("\ud83d\udcd6 $lawName - المادة $number:\n\n")
         sb.append(text)
-        if (!pdfUrl.isNullOrBlank()) {
-            sb.append("\n\n🔗 رابط المستند: $pdfUrl")
-        }
         return sb.toString()
     }
 }

@@ -230,10 +230,9 @@ class SearchActivity : AppCompatActivity() {
                     scrollResults.visibility = View.VISIBLE
                     searchActions.visibility = View.VISIBLE
 
-                    val driveUrlRegex = Regex("https://drive\\.google\\.com/[^\\s]+")
-                    val match = driveUrlRegex.find(result)
-                    currentPdfUrl = match?.value ?: defaultDriveFolder
-                    btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
+                    // الخصوصية: الزر يفتح مجلد القوانين العام فقط، لا ملفاً خاصاً (منع كشف الحساب)
+                    currentPdfUrl = defaultDriveFolder
+                    btnOpenPdf.text = "فتح مجلد القوانين (تحميل/قراءة)"
                 } else {
                     // لم تُعثر على نص في القوانين المثبتة — إحضار ذكي مع تنويه المصدر
                     val aiText = AIClient.fetchLawArticleFromAI(query)
@@ -292,10 +291,9 @@ class SearchActivity : AppCompatActivity() {
                     Linkify.addLinks(tvSearchResult, Linkify.WEB_URLS)
                     scrollResults.visibility = View.VISIBLE
                     searchActions.visibility = View.VISIBLE
-                    val driveUrlRegex = Regex("https://drive\\.google\\.com/[^\\s]+")
-                    val match = driveUrlRegex.find(result)
-                    currentPdfUrl = match?.value ?: defaultDriveFolder
-                    btnOpenPdf.text = "فتح ملف الـ PDF الأصلي"
+                    // الخصوصية: الزر يفتح مجلد القوانين العام فقط، لا ملفاً خاصاً (منع كشف الحساب)
+                    currentPdfUrl = defaultDriveFolder
+                    btnOpenPdf.text = "فتح مجلد القوانين (تحميل/قراءة)"
                 } else {
                     tvEmpty.text = result
                     tvEmpty.visibility = View.VISIBLE

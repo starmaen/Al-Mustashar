@@ -133,8 +133,7 @@ class LibraryActivity : AppCompatActivity() {
             tvResult.text = hits.joinToString("\n\n───────────────────────\n\n") { p ->
                 "📖 ${p.bookTitle} [${p.type}] — مقطع ${p.n}" +
                     (if (p.heading.isNotBlank()) " (${p.heading})" else "") +
-                    ":\n\n${p.text}" +
-                    (if (!p.driveUrl.isNullOrBlank()) "\n\n🔗 الأصل: ${p.driveUrl}" else "")
+                    ":\n\n${p.text}"
             }
             try {
                 Linkify.addLinks(tvResult, Linkify.WEB_URLS)
@@ -217,8 +216,7 @@ class LibraryActivity : AppCompatActivity() {
             v.setOnClickListener {
                 tvResult.text = "📖 ${p.bookTitle} — مقطع ${p.n}" +
                     (if (p.heading.isNotBlank()) " (${p.heading})" else "") +
-                    ":\n\n${p.text}" +
-                    (if (!p.driveUrl.isNullOrBlank()) "\n\n🔗 الأصل: ${p.driveUrl}" else "")
+                    ":\n\n${p.text}"
                 try {
                     Linkify.addLinks(tvResult, Linkify.WEB_URLS)
                 } catch (_: Exception) {

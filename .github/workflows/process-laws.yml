@@ -50,7 +50,7 @@ jobs:
 
       - name: تثبيت مكتبات بايثون
         run: |
-          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib pytesseract pdf2image PyMuPDF firebase-admin
+          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib pytesseract pdf2image PyMuPDF firebase-admin python-docx
 
       - name: تنظيف الملفات القديمة مع حفظ سجل التخطي
         # حذف ملفات القوانين فقط وإبقاء _manifest.json ليعمل تخطي الملفات غير المتغيرة

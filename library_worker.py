@@ -99,6 +99,29 @@ def decode_txt(raw):
     return raw.decode("utf-8", errors="ignore")
 
 
+def decode_docx(raw):
+    """استخراج نص DOCX (فقرات + جداول). يعيد نصاً فارغاً عند الفشل."""
+    try:
+        import io as _io
+        from docx import Document
+        doc = Document(_io.BytesIO(raw))
+        parts = []
+        for p in doc.paragraphs:
+            t = (p.text or "").strip()
+            if t:
+                parts.append(t)
+        for tbl in getattr(doc, "tables", []):
+            for row in tbl.rows:
+                cells = [(c.text or "").strip() for c in row.cells]
+                line = " | ".join([c for c in cells if c])
+                if line:
+                    parts.append(line)
+        return "\n".join(parts)
+    except Exception as e:
+        print(f"    DOCX فشل: {e}")
+        return ""
+
+
 def process_pdf_bytes(pdf_bytes, ocr):
     """يستخرج النص: PyMuPDF أولاً ثم Tesseract عند التشوه (نفس منطق القوانين)."""
     year_guess = 9999
@@ -147,17 +170,27 @@ def main():
         print("الأسباب: (1) قيمة Secret ‏GDRIVE_LIBRARY_FOLDER_ID خاطئة، (2) المجلد غير مشارك مع حساب الخدمة بدور محرر.")
 
     # المستوى الأول + الغوص داخل المجلدات الفرعية (تصنيفات الكتب)
+    # تنبيه: أي مجلد أعمق من مستوى واحد يُسجل كمتجاهل بدل الصمت.
     top = list_children(folder_id)
     files = [f for f in top if f.get("mimeType") != "application/vnd.google-apps.folder"]
+    deep_folders = []
     for sub in [f for f in top if f.get("mimeType") == "application/vnd.google-apps.folder"]:
         try:
             for f in list_children(sub["id"]):
                 if f.get("mimeType") != "application/vnd.google-apps.folder":
                     f["_sub"] = sub["name"]
                     files.append(f)
+                else:
+                    deep_folders.append(f"{sub.get('name')}/{f.get('name')}")
         except Exception as e:
             print(f"    تعذر قراءة المجلد الفرعي {sub.get('name')}: {e}")
     print(f"ملفات المكتبة على Drive: {len(files)}")
+
+    # حماية 1: منع الكتابة الفارغة — خلل مؤقت (0 ملف) لا يمسح الفهرس السابق الجيد.
+    # منطق التخطي للملفات المرفوعة سابقاً (_manifest) يبقى كما هو ولا يتأثر.
+    if len(files) == 0 and len(old_manifest) > 0:
+        print("⚠️ Drive أعاد 0 ملف مع وجود فهرس سابق — إجهاض لحماية البيانات (لا كتابة ولا مسح)")
+        return 0
 
     index_books = []
     report = []
@@ -173,6 +206,7 @@ def main():
 
     # تجميع الوحدات: (العنوان، النوع، البايتات، الصيغة، مفتاح التخطي)
     units = []
+    ignored = []
     for f in files:
         name, mt, fbid, mod = f["name"], f.get("mimeType", ""), f["id"], f.get("modifiedTime", "")
         sub = f.get("_sub", "")
@@ -183,10 +217,11 @@ def main():
                 zf = zipfile.ZipFile(io.BytesIO(download(fbid)))
                 for inner in zf.namelist():
                     il = inner.lower()
-                    if il.endswith((".pdf", ".txt")) and not inner.startswith("__"):
+                    if il.endswith((".pdf", ".txt", ".docx")) and not inner.startswith("__"):
+                        kind = "pdf" if il.endswith(".pdf") else ("docx" if il.endswith(".docx") else "txt")
                         units.append({
-                            "title": (f"{sub} / " if sub else "") + re.sub(r"\.(pdf|txt)$", "", inner.split("/")[-1], flags=re.I),
-                            "data": zf.read(inner), "kind": "pdf" if il.endswith(".pdf") else "txt",
+                            "title": (f"{sub} / " if sub else "") + re.sub(r"\.(pdf|txt|docx)$", "", inner.split("/")[-1], flags=re.I),
+                            "data": zf.read(inner), "kind": kind,
                             "skip_key": f"zip:{name}/{inner}@{mod}",
                             "source": f"{name} ← {inner}", "drive_id": fbid,
                         })
@@ -204,8 +239,23 @@ def main():
                 "data": None, "kind": "txt", "skip_key": f"file:{name}@{mod}",
                 "source": name, "drive_id": fbid, "fbid": fbid,
             })
+        elif low.endswith(".docx") or mt == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            units.append({
+                "title": re.sub(r"\.docx$", "", disp, flags=re.I),
+                "data": None, "kind": "docx", "skip_key": f"file:{name}@{mod}",
+                "source": name, "drive_id": fbid, "fbid": fbid,
+            })
+        elif low.endswith(".doc") or mt == "application/msword":
+            ignored.append({"file": disp, "reason": "DOC قديم غير مدعوم — حوّله إلى DOCX أو PDF"})
+        else:
+            ignored.append({"file": disp, "reason": f"صيغة غير مدعومة ({mt or low.rsplit('.', 1)[-1]}) — المدعوم: PDF/TXT/DOCX/ZIP"})
 
     print(f"وحدات للمعالجة: {len(units)}")
+
+    # حماية 2: ملفات موجودة لكن لا وحدة صالحة (صيغ غير مدعومة) — لا تمسح السابق أيضاً.
+    if len(units) == 0 and len(old_manifest) > 0:
+        print("⚠️ لا وحدات صالحة (PDF/TXT/DOCX/ZIP) مع وجود فهرس سابق — إجهاض لحماية البيانات")
+        return 0
 
     for u in units:
         prev = old_manifest.get(u["skip_key"])
@@ -232,10 +282,24 @@ def main():
         method = "TXT"
         if u["kind"] == "pdf":
             text, method = process_pdf_bytes(raw, ocr)
+        elif u["kind"] == "docx":
+            text = ocr.strip_invisible(decode_docx(raw))
+            method = "DOCX"
         else:
             text = ocr.strip_invisible(decode_txt(raw))
         chunks = chunk_text(text)
         print(f"    ✓ {method}: {len(chunks)} مقطعاً")
+        # فحص جودة المكتبة (مثل القوانين): عربية كافية + كلمات شائعة + طول أدنى
+        st = "ok" if len(chunks) >= 3 else "TOO_FEW"
+        try:
+            _ar = len(re.findall(r'[\u0600-\u06FF]', text))
+            _tot = len(re.sub(r'\s', '', text)) or 1
+            _common = ['من', 'في', 'على', 'إلى', 'الذي', 'التي', 'هذا', 'القانون', 'المادة', 'أو', 'أن', 'لا']
+            _found = sum(1 for w in _common if re.search(r'\b' + w + r'\b', text[:20000]))
+            if (_ar / _tot) < 0.5 or _found < 4:
+                st = "GARBLED"
+        except Exception:
+            pass
         book_id = make_id(u["title"])
         did = u.get("drive_id", "")
         data = {
@@ -254,10 +318,14 @@ def main():
             "id": book_id, "title": u["title"], "type": data["type"],
             "file": f"{book_id}.json", "chunks_count": len(chunks),
         })
-        st = "ok" if len(chunks) >= 3 else "TOO_FEW"
-        report.append({"title": u["title"], "status": st, "chunks": len(chunks)})
+        report.append({"title": u["title"], "status": st, "chunks": len(chunks), "method": method})
         if st != "ok":
-            print(f"    ⚠️ {st}: مقاطع قليلة — راجع جودة الملف")
+            print(f"    ⚠️ {st}: مقاطع قليلة أو نص مشوّه — راجع جودة الملف")
+
+    # حماية 3 (احتياط أخير): لا تدفع فهرساً فارغاً فوق فهرس سابق جيد.
+    if len(index_books) == 0 and len(old_manifest) > 0:
+        print("⚠️ النتيجة 0 كتاب مع وجود سابق — إجهاض نهائي بدون كتابة (حماية من المسح)")
+        return 0
 
     save_manifest(new_manifest)
     with open(os.path.join(OUTPUT_DIR, "index.json"), "w", encoding="utf-8") as jf:
@@ -267,7 +335,16 @@ def main():
         }, jf, ensure_ascii=False, indent=2)
     with open(os.path.join(OUTPUT_DIR, "_report.json"), "w", encoding="utf-8") as rf:
         json.dump({"generated_at": datetime.now(timezone.utc).isoformat(),
-                   "books": report}, rf, ensure_ascii=False, indent=2)
+                   "books": report, "ignored": ignored,
+                   "deep_folders_skipped": deep_folders}, rf, ensure_ascii=False, indent=2)
+    if ignored:
+        print("\n=== ملفات متجاهلة (لم تدخل الفهرس) ===")
+        for ig in ignored:
+            print(f"  ⏭ {ig.get('file')}: {ig.get('reason')}")
+    if deep_folders:
+        print("\n=== مجلدات عميقة لم تُفحص (أعمق من مستوى واحد) ===")
+        for df in deep_folders:
+            print(f"  📁 {df}")
     print(f"\n=== {len(index_books)} مرجعاً في فهرس المكتبة ===")
 
 

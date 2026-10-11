@@ -256,7 +256,14 @@ def main():
     files = results.get('files', [])
     print(f"ملفات على Drive: {len(files)}")
 
+    # حماية 1: منع الكتابة الفارغة — خلل مؤقت (0 ملف) لا يمسح الفهرس السابق.
+    # منطق التخطي للملفات المرفوعة سابقاً (drive_id + modifiedTime) يبقى كما هو.
+    if len(files) == 0 and len(old_manifest) > 0:
+        print("⚠️ Drive أعاد 0 ملف مع وجود فهرس سابق — إجهاض لحماية البيانات (لا كتابة ولا مسح)")
+        return
+
     index_laws = []
+    ignored_files = []
 
     for f in files:
         filename = f['name']
@@ -288,11 +295,16 @@ def main():
                 continue
 
         # ملف جديد أو معدّل → معالجة
+        # التسمية المرنة: الصيغة الكاملة (اساسي/تعديل + اسم + لعام YYYY) مفضلة،
+        # لكن أي اسم PDF يُقبل كاحتياط (الاسم كاملاً + سنة غير-محدد) بدل التجاهل.
         print(f"\n=== معالجة: {filename}")
         parsed = parse_filename(filename)
         if not parsed:
-            print("    تجاهل: اسم الملف لا يتبع الصيغة")
-            continue
+            fallback_name = re.sub(r'\.pdf$', '', filename, flags=re.I).strip()
+            fallback_name = re.sub(r'\s+', ' ', fallback_name)
+            print(f"    ⚠️ اسم مخالف للصيغة — قبول احتياطي: الاسم كاملاً + سنة غير-محدد")
+            ignored_files.append({"file": filename, "reason": "اسم مخالف — قُبِل احتياطياً (سنة غير-محدد)"})
+            parsed = {'type': 'أساسي', 'name': fallback_name, 'year': 'غير-محدد'}
 
         request = drive.files().get_media(fileId=drive_id)
         buf = io.BytesIO()
@@ -357,6 +369,19 @@ def main():
     except Exception:
         pass
 
+    # كشف الملفات غير-PDF في مجلد القوانين (ZIP/Word/TXT تُتجاهل — للتنبيه بدل الصمت)
+    try:
+        others = drive.files().list(
+            q=f"'{folder_id}' in parents and mimeType!='application/pdf' and mimeType!='application/vnd.google-apps.folder' and trashed=false",
+            fields='files(id, name, mimeType)',
+            pageSize=100
+        ).execute().get('files', [])
+        for o in others:
+            ignored_files.append({"file": o.get('name', '?'),
+                                  "reason": f"غير PDF ({o.get('mimeType', '?')}) — مجلد القوانين يقبل PDF فقط"})
+    except Exception as e:
+        print(f"    تعذر فحص الملفات غير-PDF: {e}")
+
     report_laws = []
     gate_warnings = []
     for l in index_laws:
@@ -384,7 +409,8 @@ def main():
             'generated_at': datetime.utcnow().isoformat(),
             'total_laws': len(index_laws),
             'warnings': gate_warnings,
-            'laws': report_laws
+            'laws': report_laws,
+            'ignored': ignored_files
         }, rf, ensure_ascii=False, indent=2)
     print("\n=== بوابة الجودة ===")
     if gate_warnings:
@@ -392,6 +418,15 @@ def main():
             print(f"  ⚠️ {w}")
     else:
         print("  ✓ كل القوانين سليمة")
+    if ignored_files:
+        print("\n=== ملفات متجاهلة (لم تدخل الفهرس) ===")
+        for ig in ignored_files:
+            print(f"  ⏭ {ig.get('file')}: {ig.get('reason')}")
+
+    # حماية 2 (احتياط أخير): لا تدفع فهرساً فارغاً فوق فهرس سابق جيد.
+    if len(index_laws) == 0 and len(old_manifest) > 0:
+        print("⚠️ النتيجة 0 قانون مع وجود سابق — إجهاض نهائي بدون كتابة (حماية من المسح)")
+        return
 
     save_manifest(new_manifest)
 
