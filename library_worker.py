@@ -138,6 +138,14 @@ def main():
             pageSize=1000,
         ).execute().get("files", [])
 
+    # تشخيص ذاتي: هل المجلد نفسه مرئي لحساب الخدمة؟ (يكشف المعرف الخاطئ أو المشاركة الناقصة)
+    try:
+        meta = drive.files().get(fileId=folder_id, fields="id,name,mimeType").execute()
+        print(f"المجلد المستهدف: {meta.get('name')} ({meta.get('id')})")
+    except Exception as e:
+        print(f"⚠️ تعذر رؤية المجلد نفسه: {e}")
+        print("الأسباب: (1) قيمة Secret ‏GDRIVE_LIBRARY_FOLDER_ID خاطئة، (2) المجلد غير مشارك مع حساب الخدمة بدور محرر.")
+
     # المستوى الأول + الغوص داخل المجلدات الفرعية (تصنيفات الكتب)
     top = list_children(folder_id)
     files = [f for f in top if f.get("mimeType") != "application/vnd.google-apps.folder"]
