@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-11T03:27:52.207136",
+  "generated_at": "2026-10-11T10:25:09.145215",
   "total_laws": 14,
   "warnings": [],
   "laws": [
@@ -7,9 +7,17 @@
       "id": "قانون-الاداره-المحليه-رقم-107-2011",
       "name": "قانون الاداره المحليه رقم 107",
       "articles_count": 154,
+      "prev_count": 154,
+      "status": "unchanged",
+      "method": "Tesseract"
+    },
+    {
+      "id": "القانون-المالي-للوحدات-الإدارية-رقم-37-2021",
+      "name": "القانون المالي للوحدات الإدارية رقم 37",
+      "articles_count": 57,
       "prev_count": null,
       "status": "new",
-      "method": "Tesseract"
+      "method": "PyMuPDF"
     },
     {
       "id": "قانون-التنظيم-العمراني-وتخطيط-المدن-رقم-23-2015",
@@ -80,14 +88,6 @@
       "name": "قانون تنظيم مهنة المحاماة رقم 21",
       "articles_count": 113,
       "prev_count": 113,
-      "status": "unchanged",
-      "method": "Tesseract"
-    },
-    {
-      "id": "قانون-العقوبات-السوري-رقم-148-1949",
-      "name": "قانون العقوبات السوري رقم 148",
-      "articles_count": 729,
-      "prev_count": 729,
       "status": "unchanged",
       "method": "Tesseract"
     },
