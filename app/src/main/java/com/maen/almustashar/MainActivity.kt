@@ -121,6 +121,11 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, GeneralSearchActivity::class.java))
         }
 
+        findViewById<View>(R.id.navLibrary)?.setOnClickListener {
+            drawer.closeDrawer(GravityCompat.END)
+            startActivity(Intent(this, LibraryActivity::class.java))
+        }
+
         findViewById<View>(R.id.navQueries).setOnClickListener {
             drawer.closeDrawer(GravityCompat.END)
             requireLogin {

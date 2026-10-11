@@ -8,6 +8,8 @@ admin.initializeApp();
 const LAWS_FOLDER_ID = "1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3";
 // مجلد الأرشيف الاحتياطي Secure PDFs (مرتبط بـ Firebase)
 const ARCHIVE_FOLDER_ID = "1Dl0H-rKSCTbO5ZMs2U4Ws_t7Lsc55Dr9";
+// مجلد المكتبة القانونية (كتب واجتهادات وشروحات)
+const LIBRARY_FOLDER_ID = "1V7yVfOGAgyMKM7FtSl9BgcRvi-Zz3Gaq";
 
 exports.searchDriveLaws = functions.https.onRequest(async (req, res) => {
   res.set("Access-Control-Allow-Origin", "*");
@@ -22,10 +24,10 @@ exports.searchDriveLaws = functions.https.onRequest(async (req, res) => {
   if (!queryText) {
     return res.status(400).json({ error: "Missing search query parameter" });
   }
-  // scope=laws (افتراضي) أو scope=archive لمجلد الأرشيف الاحتياطي
-  const scope = ((req.body.scope || req.query.scope || "laws").toString().toLowerCase() === "archive")
-    ? "archive" : "laws";
-  const folderId = scope === "archive" ? ARCHIVE_FOLDER_ID : LAWS_FOLDER_ID;
+  // scope=laws (افتراضي) أو scope=archive للأرشيف أو scope=library للمكتبة
+  const rawScope = (req.body.scope || req.query.scope || "laws").toString().toLowerCase();
+  const scope = rawScope === "archive" ? "archive" : (rawScope === "library" ? "library" : "laws");
+  const folderId = scope === "archive" ? ARCHIVE_FOLDER_ID : (scope === "library" ? LIBRARY_FOLDER_ID : LAWS_FOLDER_ID);
 
   try {
     const auth = new google.auth.GoogleAuth({

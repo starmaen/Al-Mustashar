@@ -250,6 +250,32 @@ object AIClient {
         }
     }
 
+    // 5. سؤال المكتبة القانونية — إجابة حصراً من مراجعها مع ذكر المصدر
+    suspend fun askLibraryQuestion(question: String, passages: String): String = withContext(Dispatchers.IO) {
+        val libPrompt = """أنت أمين مكتبة قانونية سورية. أجب حصراً من النصوص المرجعية المرفقة أدناه، واستشهد في كل فقرة باسم المرجع ورقم المقطع. إن لم تجد الجواب فيها فقل بوضوح: لا يوجد في المكتبة ما يجيب عن هذا السؤال. يمنع الاستعانة بأي معرفة خارجية.
+
+المراجع:
+$passages
+
+السؤال: $question"""
+        val res1 = callGeminiWithParts(resolveGemini(), libPrompt, emptyList())
+        if (res1 is AIResult.Success) return@withContext res1.text
+
+        val res2 = callGeminiWithParts(GEMINI_FALLBACK, libPrompt, emptyList())
+        if (res2 is AIResult.Success) return@withContext res2.text
+
+        val sparkRes = callMuseSpark(libPrompt)
+        if (sparkRes is AIResult.Success) return@withContext sparkRes.text
+
+        val groqRes = callGroq(resolveGroq(), libPrompt)
+        if (groqRes is AIResult.Success) return@withContext groqRes.text
+
+        val orRes = callOpenRouter(libPrompt)
+        if (orRes is AIResult.Success) return@withContext orRes.text
+
+        return@withContext "❌ تعذر الاتصال بمزود الخدمة."
+    }
+
     private fun callGemini(model: String, prompt: String): AIResult {
         return callGeminiWithParts(model, "$SYSTEM_PROMPT\n\nالسؤال القانوني: $prompt", emptyList())
     }
