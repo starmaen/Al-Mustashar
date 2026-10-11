@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-11T11:15:21.761510",
+  "generated_at": "2026-10-11T12:10:17.899582",
   "total_laws": 16,
   "warnings": [],
   "laws": [
@@ -7,16 +7,16 @@
       "id": "قانون-السلطه-القضائيه-وتعديلاته-المرسوم-98-1961",
       "name": "قانون السلطه القضائيه وتعديلاته المرسوم 98",
       "articles_count": 141,
-      "prev_count": null,
-      "status": "new",
+      "prev_count": 141,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
       "id": "قانون-الجرائم-المعلوماتيه-رقم-20-2022",
       "name": "قانون الجرائم المعلوماتيه رقم 20",
       "articles_count": 50,
-      "prev_count": null,
-      "status": "new",
+      "prev_count": 50,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
