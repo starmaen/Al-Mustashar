@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-10-11T21:40:50.158633+00:00",
+  "generated_at": "2026-10-11T22:09:29.524975+00:00",
   "books": [
     {
       "title": "صديق المحامي في أصول التنفيذ",
-      "status": "ok",
+      "status": "unchanged",
       "chunks": 536
     },
     {
@@ -41,5 +41,7 @@
       "status": "unchanged",
       "chunks": 162
     }
-  ]
+  ],
+  "ignored": [],
+  "deep_folders_skipped": []
 }
