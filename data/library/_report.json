@@ -1,39 +1,39 @@
 {
-  "generated_at": "2026-10-11T16:48:28.265324+00:00",
+  "generated_at": "2026-10-11T17:18:57.043777+00:00",
   "books": [
     {
       "title": "اتفاقية-القضاء-على-جميع-اشكال-التميز-ضد-المرأة_نسخة",
-      "status": "ok",
+      "status": "unchanged",
       "chunks": 20
     },
     {
       "title": "اتفاقية-حقوق-الأشخاص-ذوي-الإعاقة_نسخة",
-      "status": "ok",
+      "status": "unchanged",
       "chunks": 40
     },
     {
       "title": "الاتفاقية-الدولية-لحماية-جميع-الأشخاص-من-الاختفاء-القسري_نسخة",
-      "status": "ok",
+      "status": "unchanged",
       "chunks": 25
     },
     {
       "title": "اتفاقية-حماية-العمال-المهاجرين-وأسرهم_نسخة",
-      "status": "ok",
+      "status": "unchanged",
       "chunks": 49
     },
     {
       "title": "الاتفاقية-الدولية-للقضاء-علي-جميع-أشكال-التمييز-العنصري_نسخة",
-      "status": "ok",
+      "status": "unchanged",
       "chunks": 17
     },
     {
       "title": "نظام-روما-الأساسي-للمحكمة-الجنائية-الدولية_نسخة",
-      "status": "ok",
+      "status": "unchanged",
       "chunks": 108
     },
     {
       "title": "التطوير-العقاري_نسخة",
-      "status": "ok",
+      "status": "unchanged",
       "chunks": 162
     }
   ]
