@@ -1,12 +1,6 @@
 {
-  "generated_at": "2026-10-12T11:59:00.184059+00:00",
+  "generated_at": "2026-10-12T13:11:27.142255+00:00",
   "books": [
-    {
-      "title": "صديق المحامي في أصول التنفيذ",
-      "status": "ok",
-      "chunks": 526,
-      "method": "Hybrid+OCR(1/345)"
-    },
     {
       "title": "اتفاقية-القضاء-على-جميع-اشكال-التميز-ضد-المرأة_نسخة",
       "status": "GARBLED",
@@ -28,7 +22,7 @@
     {
       "title": "اتفاقية-حماية-العمال-المهاجرين-وأسرهم_نسخة",
       "status": "ok",
-      "chunks": 48,
+      "chunks": 49,
       "method": "PyMuPDF"
     },
     {
@@ -42,12 +36,6 @@
       "status": "ok",
       "chunks": 108,
       "method": "PyMuPDF"
-    },
-    {
-      "title": "التطوير-العقاري_نسخة",
-      "status": "ok",
-      "chunks": 160,
-      "method": "Hybrid+OCR(6/175)"
     }
   ],
   "ignored": [],
