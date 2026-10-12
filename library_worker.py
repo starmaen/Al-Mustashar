@@ -201,24 +201,86 @@ def decode_docx(raw):
         return ""
 
 
-def process_pdf_bytes(pdf_bytes, ocr):
-    """يستخرج النص مع بوابة جودة: PyMuPDF أولاً، وعند التشوه Tesseract.
+def _page_good(t):
+    """جودة صفحة واحدة: طول أدنى + عربية غالبة + كلمتان شائعتان على الأقل."""
+    if not t or len(t) < 80:
+        return False
+    sample = t[:6000]
+    total = len(re.sub(r'\s', '', sample)) or 1
+    if len(re.findall(r'[\u0600-\u06FF]', sample)) / total < 0.4:
+        return False
+    found = sum(1 for w in _COMMON_AR if re.search(r'\b' + w + r'\b', sample))
+    return found >= 2
 
-    يطبَّق إصلاح السطور المعكوسة على المسارين قبل الفحص، لأن المعكوس
-    يفشل فحص الكلمات الشائعة ظلماً.
+
+def extract_hybrid(pdf_bytes, ocr):
+    """استخراج هجين صفحة-صفحة: نص PyMuPDF الجيد يُؤخذ كما هو، والصفحة
+    التالفة التي تحتها صور (ممسوحة) تُعاد قراءتها بـ Tesseract.
+
+    يعالج حالة الغلاف السليم + المحتوى الممسوح بطبقة OCR تالفة، حيث يفشل
+    أي فحص على مستوى الكتاب كاملاً (الصفحات السليمة تخفي التالفة).
     """
-    raw_p = ocr.light_clean(ocr.extract_pymupdf(pdf_bytes))
-    fixed_p = fix_reversed_arabic(raw_p)
-    if is_good_library_text(fixed_p):
-        return fixed_p, "PyMuPDF"
-    raw_t = ocr.fix_arabic_errors(ocr.extract_tesseract(pdf_bytes))
-    fixed_t = fix_reversed_arabic(raw_t)
-    if is_good_library_text(fixed_t):
-        return fixed_t, "Tesseract"
-    # كلاهما رديء — الأطول بعد الإصلاح (الأرجح احتواءً)
-    if len(fixed_t) > len(fixed_p):
-        return fixed_t, "Tesseract-weak"
-    return fixed_p, "PyMuPDF-weak"
+    try:
+        import pymupdf as fitz
+    except ImportError:
+        import fitz
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    n = doc.page_count
+    out_pages = []
+    ocr_pages = 0
+    for i in range(n):
+        page = doc[i]
+        try:
+            t = fix_reversed_arabic(ocr.light_clean(page.get_text("text")))
+        except Exception:
+            t = ""
+        needs_ocr = not _page_good(t)
+        if needs_ocr:
+            try:
+                has_images = bool(page.get_images(full=True))
+            except Exception:
+                has_images = True
+        else:
+            has_images = False
+        if needs_ocr and has_images:
+            try:
+                from pdf2image import convert_from_bytes
+                import pytesseract
+                imgs = convert_from_bytes(pdf_bytes, dpi=150, first_page=i + 1,
+                                          last_page=i + 1, fmt='jpeg', thread_count=1)
+                if imgs:
+                    o = fix_reversed_arabic(ocr.fix_arabic_errors(
+                        pytesseract.image_to_string(imgs[0].convert('L'),
+                                                    lang='ara', config='--psm 6 --oem 1')))
+                    if len(o) > max(80, len(t) // 2):
+                        t = o
+                    ocr_pages += 1
+                    del imgs
+            except Exception as e:
+                print(f"    OCR صفحة {i + 1} فشل: {e}")
+        out_pages.append(t)
+    try:
+        doc.close()
+    except Exception:
+        pass
+    text = "\n".join(out_pages)
+    method = "PyMuPDF" if ocr_pages == 0 else f"Hybrid+OCR({ocr_pages}/{n})"
+    return text, method
+
+
+def process_pdf_bytes(pdf_bytes, ocr):
+    """يستخرج النص هجيناً صفحة-صفحة مع بوابة جودة لكل صفحة."""
+    try:
+        return extract_hybrid(pdf_bytes, ocr)
+    except Exception as e:
+        print(f"    الهجين فشل ({e}) — مسار النص الكامل الاحتياطي")
+        raw_p = ocr.light_clean(ocr.extract_pymupdf(pdf_bytes))
+        fixed_p = fix_reversed_arabic(raw_p)
+        if is_good_library_text(fixed_p):
+            return fixed_p, "PyMuPDF-fallback"
+        raw_t = ocr.fix_arabic_errors(ocr.extract_tesseract(pdf_bytes))
+        fixed_t = fix_reversed_arabic(raw_t)
+        return fixed_t, "Tesseract-fallback"
 
 
 def main():
@@ -384,7 +446,7 @@ def main():
         # بوابة الجودة النهائية على النص بعد كل الإصلاحات
         if len(chunks) < 3:
             st = "TOO_FEW"
-        elif method.endswith("-weak") or not is_good_library_text(text):
+        elif "fallback" in method or not is_good_library_text(text):
             st = "GARBLED"
         else:
             st = "ok"
