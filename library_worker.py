@@ -5,7 +5,8 @@
 
 المخرجات (تطابق شاشة المكتبة في التطبيق):
   data/library/{bookId}.json: {id, title, type, year, source_file,
-      drive_file_id, drive_url, chunks_count, chunks: [{n, heading, text}]}
+      drive_file_id, drive_url, chunks_count, toc_count, toc: [{t, p}],
+      chunks: [{n, heading, text}]}
   data/library/index.json + _manifest.json + _report.json
 
 المتغيرات: GDRIVE_SERVICE_ACCOUNT_JSON، GDRIVE_LIBRARY_FOLDER_ID.
@@ -24,6 +25,9 @@ MANIFEST_PATH = "data/library/_manifest.json"
 
 CHUNK_SIZE = 1500
 CHUNK_OVERLAP = 150
+
+# نسخة مخطط المعالجة: تغييرها يعيد معالجة الكتب مرة واحدة.
+SCHEMA_VERSION = "v4-toc"
 
 TYPE_KEYWORDS = {
     "اجتهاد": ["اجتهاد", "اجتهادات", "قرارات محكمة", "نقض"],
@@ -97,6 +101,96 @@ def decode_txt(raw):
         except Exception:
             continue
     return raw.decode("utf-8", errors="ignore")
+
+
+def build_toc_entries(outline, font_heads, limit=200):
+    """يدمج عناوين PDF المرجعية وعناوين الخط الكبير: إزالة تكرار وضجيج."""
+    seen = set()
+    toc = []
+    for title, page in list(outline) + list(font_heads):
+        t = re.sub(r"\s+", " ", (title or "").strip())
+        if len(t) < 3 or len(t) > 120:
+            continue
+        if re.fullmatch(r"[\d٠-٩\s\-—–_.*·•«»\"'()\[\]]+", t):
+            continue
+        if t in seen:
+            continue
+        seen.add(t)
+        toc.append({"t": t, "p": page or 0})
+        if len(toc) >= limit:
+            break
+    return toc
+
+
+def extract_pdf_toc(pdf_bytes):
+    """فهرس الكتاب من PDF: الإشارات المرجعية أولاً، ثم سطور الخط الكبير.
+
+    يعيد [{t: العنوان, p: الصفحة}]. آمن تماماً: أي فشل يعيد [].
+    """
+    try:
+        import pymupdf as _pm
+    except ImportError:
+        try:
+            import fitz as _pm
+        except ImportError:
+            return []
+    try:
+        doc = _pm.open(stream=pdf_bytes, filetype="pdf")
+    except Exception:
+        return []
+    try:
+        outline = []
+        try:
+            for lvl, title, page in doc.get_toc():
+                if title and page and page > 0:
+                    outline.append((title, page))
+        except Exception:
+            pass
+        font_heads = []
+        try:
+            for pno in range(doc.page_count):
+                try:
+                    d = doc[pno].get_text("dict")
+                except Exception:
+                    continue
+                sizes = []
+                lines = []
+                for b in d.get("blocks", []):
+                    for l in b.get("lines", []):
+                        txt = "".join(s.get("text", "") for s in l.get("spans", [])).strip()
+                        if not txt:
+                            continue
+                        sps = [s for s in l.get("spans", []) if (s.get("text") or "").strip()]
+                        if not sps:
+                            continue
+                        sz = max(s.get("size", 0) for s in sps)
+                        ar = len(re.findall(r"[\u0600-\u06FF]", txt))
+                        lines.append((txt, sz, ar, len(txt)))
+                        if ar > len(txt) * 0.5 and len(txt) > 10:
+                            sizes.append(sz)
+                if not sizes:
+                    continue
+                sizes.sort()
+                body = sizes[len(sizes) // 2]
+                if body <= 0:
+                    continue
+                for txt, sz, ar, ln in lines:
+                    if (sz >= body * 1.3 and ar > ln * 0.6 and 4 <= ln <= 100
+                            and not re.fullmatch(r"[\d٠-٩\s\-—–_.*·•«»\"'()\[\]]+", txt)):
+                        font_heads.append((txt, pno + 1))
+        except Exception:
+            pass
+        try:
+            doc.close()
+        except Exception:
+            pass
+        return build_toc_entries(outline, font_heads)
+    except Exception:
+        try:
+            doc.close()
+        except Exception:
+            pass
+        return []
 
 
 def decode_docx(raw):
@@ -252,6 +346,10 @@ def main():
 
     print(f"وحدات للمعالجة: {len(units)}")
 
+    # وسم المفاتيح بنسخة المخطط: أي تغيير بـ SCHEMA_VERSION يعيد المعالجة مرة واحدة.
+    for u in units:
+        u["skip_key"] = SCHEMA_VERSION + "|" + u["skip_key"]
+
     # حماية 2: ملفات موجودة لكن لا وحدة صالحة (صيغ غير مدعومة) — لا تمسح السابق أيضاً.
     if len(units) == 0 and len(old_manifest) > 0:
         print("⚠️ لا وحدات صالحة (PDF/TXT/DOCX/ZIP) مع وجود فهرس سابق — إجهاض لحماية البيانات")
@@ -289,6 +387,14 @@ def main():
             text = ocr.strip_invisible(decode_txt(raw))
         chunks = chunk_text(text)
         print(f"    ✓ {method}: {len(chunks)} مقطعاً")
+        # فهرس الكتاب (PDF فقط): إشارات المستند + سطور الخط الكبير
+        toc = []
+        if u["kind"] == "pdf":
+            try:
+                toc = extract_pdf_toc(raw)
+            except Exception as e:
+                print(f"    الفهرس فشل: {e}")
+            print(f"    📑 الفهرس: {len(toc)} عنواناً")
         # فحص جودة المكتبة (مثل القوانين): عربية كافية + كلمات شائعة + طول أدنى
         st = "ok" if len(chunks) >= 3 else "TOO_FEW"
         try:
@@ -308,6 +414,8 @@ def main():
             "drive_file_id": did,
             "drive_url": f"https://drive.google.com/file/d/{did}/view" if did else "",
             "chunks_count": len(chunks),
+            "toc": toc,
+            "toc_count": len(toc),
             "chunks": [{"n": i + 1, "heading": c["heading"], "text": c["text"]}
                        for i, c in enumerate(chunks)],
         }
@@ -318,7 +426,7 @@ def main():
             "id": book_id, "title": u["title"], "type": data["type"],
             "file": f"{book_id}.json", "chunks_count": len(chunks),
         })
-        report.append({"title": u["title"], "status": st, "chunks": len(chunks), "method": method})
+        report.append({"title": u["title"], "status": st, "chunks": len(chunks), "method": method, "toc": len(toc)})
         if st != "ok":
             print(f"    ⚠️ {st}: مقاطع قليلة أو نص مشوّه — راجع جودة الملف")
 

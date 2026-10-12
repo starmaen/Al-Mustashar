@@ -5,6 +5,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.method.LinkMovementMethod
+import android.text.style.ClickableSpan
 import android.text.util.Linkify
 import android.view.LayoutInflater
 import android.view.View
@@ -186,13 +190,24 @@ class LibraryActivity : AppCompatActivity() {
         currentList = hits
         currentIndex = -1
         passageFromHits = true
-        tvResult.text = hits.joinToString("\n\n───────────────────────\n\n") { p ->
-            passageHeader(p) + p.text
+        // قائمة منظمة: عنوان كل نتيجة قابل للضغط يعرض المقطع كاملاً
+        val sb = SpannableStringBuilder()
+        hits.forEachIndexed { i, p ->
+            val header = "${i + 1}. 📖 ${p.bookTitle} — مقطع ${p.n}" +
+                (if (p.section.isNotBlank()) "\n   📑 ${p.section}" else "") +
+                (if (p.heading.isNotBlank()) "\n   ▪ ${p.heading}" else "") + "\n"
+            val start = sb.length
+            sb.append(header)
+            sb.setSpan(object : ClickableSpan() {
+                override fun onClick(widget: View) {
+                    showPassage(i)
+                }
+            }, start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            val snippet = p.text.take(250).trim() + "…\n   (اضغط العنوان للعرض الكامل)\n\n───────────────────────\n\n"
+            sb.append(snippet)
         }
-        try {
-            Linkify.addLinks(tvResult, Linkify.WEB_URLS)
-        } catch (_: Exception) {
-        }
+        tvResult.text = sb
+        tvResult.movementMethod = LinkMovementMethod.getInstance()
         tvEmpty.visibility = View.GONE
         scrollResult.visibility = View.VISIBLE
         scrollResult.scrollTo(0, 0)
@@ -296,15 +311,41 @@ class LibraryActivity : AppCompatActivity() {
         }
     }
 
+    // أطفال المجموعة: فهرس الكتاب إن وُجد (منظم)، وإلا المقاطع (احتياط)
+    private fun bookToc(bookId: String): List<LibraryCache.TocEntry> =
+        books.find { it.id == bookId }?.toc ?: emptyList()
+
+    private fun resolveTocToChunk(bookId: String, title: String): Int {
+        val siblings = headings[bookId] ?: return 0
+        if (siblings.isEmpty()) return 0
+        val nt = LibraryCache.norm(title)
+        if (nt.isNotEmpty()) {
+            for (i in siblings.indices) {
+                val s = siblings[i]
+                if (LibraryCache.norm(s.heading).contains(nt) ||
+                    LibraryCache.norm(s.text.take(200)).contains(nt) ||
+                    nt.contains(LibraryCache.norm(s.heading))) {
+                    return i
+                }
+            }
+        }
+        return 0
+    }
+
     private inner class LibraryAdapter : BaseExpandableListAdapter() {
         override fun getGroupCount(): Int = books.size
         override fun getChildrenCount(groupPosition: Int): Int {
-            // بلا حد: القائمة تعرض كل مقاطع المرجع (كانت 60 فقط فتختفي البقية)
+            val toc = bookToc(books[groupPosition].id)
+            if (toc.isNotEmpty()) return toc.size
+            // بلا حد: كل مقاطع المرجع (كانت 60 فقط فتختفي البقية)
             return headings[books[groupPosition].id]?.size ?: 0
         }
         override fun getGroup(groupPosition: Int): Any = books[groupPosition]
-        override fun getChild(groupPosition: Int, childPosition: Int): Any =
-            headings[books[groupPosition].id]!![childPosition]
+        override fun getChild(groupPosition: Int, childPosition: Int): Any {
+            val toc = bookToc(books[groupPosition].id)
+            if (toc.isNotEmpty()) return toc[childPosition]
+            return headings[books[groupPosition].id]!![childPosition]
+        }
         override fun getGroupId(groupPosition: Int): Long = groupPosition.toLong()
         override fun getChildId(groupPosition: Int, childPosition: Int): Long = childPosition.toLong()
         override fun hasStableIds(): Boolean = false
@@ -315,22 +356,42 @@ class LibraryActivity : AppCompatActivity() {
             val v = convertView ?: LayoutInflater.from(this@LibraryActivity)
                 .inflate(android.R.layout.simple_expandable_list_item_1, parent, false)
             (v.findViewById<TextView>(android.R.id.text1)).text =
-                (if (isExpanded) "📂 " else "📁 ") + b.title + "  [${b.type} • ${b.chunksCount} مقطع]"
+                (if (isExpanded) "📂 " else "📁 ") + b.title +
+                    "  [${b.type} • ${b.chunksCount} مقطع" +
+                    (if (b.toc.isNotEmpty()) " • ${b.toc.size} عنوان فهرس" else "") + "]"
             return v
         }
 
         override fun getChildView(groupPosition: Int, childPosition: Int, isLastChild: Boolean, convertView: View?, parent: ViewGroup?): View {
-            val p = headings[books[groupPosition].id]!![childPosition]
+            val bookId = books[groupPosition].id
+            val toc = bookToc(bookId)
             val v = convertView ?: LayoutInflater.from(this@LibraryActivity)
                 .inflate(android.R.layout.simple_list_item_1, parent, false)
-            (v.findViewById<TextView>(android.R.id.text1)).text =
-                "▪ " + (if (p.section.isNotBlank()) p.section + " / " else "") +
-                    p.heading.ifBlank { "مقطع ${p.n}" }
-            v.setOnClickListener {
-                val siblings = headings[books[groupPosition].id] ?: emptyList()
-                currentList = siblings
-                passageFromHits = false
-                showPassage(childPosition)
+            if (toc.isNotEmpty()) {
+                val entry = toc[childPosition]
+                (v.findViewById<TextView>(android.R.id.text1)).text =
+                    "📑 ${entry.title}" + (if (entry.page > 0) "  (ص ${entry.page})" else "")
+                v.setOnClickListener {
+                    val siblings = headings[bookId] ?: emptyList()
+                    if (siblings.isEmpty()) {
+                        Toast.makeText(this@LibraryActivity, "لا مقاطع بعد لهذا المرجع", Toast.LENGTH_SHORT).show()
+                        return@setOnClickListener
+                    }
+                    currentList = siblings
+                    passageFromHits = false
+                    showPassage(resolveTocToChunk(bookId, entry.title))
+                }
+            } else {
+                val p = headings[bookId]!![childPosition]
+                (v.findViewById<TextView>(android.R.id.text1)).text =
+                    "▪ " + (if (p.section.isNotBlank()) p.section + " / " else "") +
+                        p.heading.ifBlank { "مقطع ${p.n}" }
+                v.setOnClickListener {
+                    val siblings = headings[bookId] ?: emptyList()
+                    currentList = siblings
+                    passageFromHits = false
+                    showPassage(childPosition)
+                }
             }
             return v
         }

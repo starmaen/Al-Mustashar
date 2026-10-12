@@ -13,7 +13,13 @@ object LibraryCache {
         val title: String,
         val type: String,
         val driveUrl: String?,
-        val chunksCount: Int
+        val chunksCount: Int,
+        val toc: List<TocEntry> = emptyList()
+    )
+
+    data class TocEntry(
+        val title: String,
+        val page: Int = 0
     )
 
     data class Passage(
@@ -109,7 +115,17 @@ object LibraryCache {
                     val bj = JSONObject(lf.readText())
                     driveUrl = bj.optString("drive_url").ifBlank { null }
                     val chArr = bj.optJSONArray("chunks") ?: org.json.JSONArray()
-                    books.add(BookMeta(id, title, type, driveUrl, chArr.length()))
+                    val tocArr = bj.optJSONArray("toc") ?: org.json.JSONArray()
+                    val toc = mutableListOf<TocEntry>()
+                    for (k in 0 until tocArr.length()) {
+                        try {
+                            val o = tocArr.getJSONObject(k)
+                            val t = o.optString("t")
+                            if (t.length >= 3) toc.add(TocEntry(t, o.optInt("p", 0)))
+                        } catch (_: Exception) {
+                        }
+                    }
+                    books.add(BookMeta(id, title, type, driveUrl, chArr.length(), toc))
                     for (j in 0 until chArr.length()) {
                         val c = chArr.getJSONObject(j)
                         val text = c.optString("text")
@@ -134,15 +150,25 @@ object LibraryCache {
             .replace(Regex("[^a-zA-Z0-9\u0621-\u064A]"), "")
     }
 
-    // بحث محصور بالمكتبة: يعيد أفضل المقاطع مرتبة
+    // بحث محصور بالمكتبة: عبارة دقيقة أولاً، ثم تكرار المصطلحات، ثم الترويسات
     fun search(pool: List<Passage>, rawQuery: String, limit: Int = 15): List<Passage> {
         val terms = rawQuery.split(Regex("\\s+")).map { norm(it) }
             .filter { it.length > 2 && it !in setOf("كتاب", "الكتاب", "قانون", "القانون", "مادة", "المادة") }
         if (terms.isEmpty()) return emptyList()
+        val phrase = norm(rawQuery)
         return pool.mapNotNull { p ->
             val nt = norm(p.text + " " + p.heading + " " + p.section + " " + p.bookTitle)
             var score = 0
-            for (t in terms) if (nt.contains(t)) score += 3
+            if (phrase.length > 3 && nt.contains(phrase)) score += 10
+            for (t in terms) {
+                var c = 0
+                var idx = nt.indexOf(t)
+                while (idx >= 0 && c < 3) {
+                    c++
+                    score += 3
+                    idx = nt.indexOf(t, idx + 1)
+                }
+            }
             if (p.heading.isNotBlank()) {
                 val nh = norm(p.heading)
                 for (t in terms) if (nh.contains(t)) score += 2
