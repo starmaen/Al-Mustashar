@@ -25,69 +25,6 @@ MANIFEST_PATH = "data/library/_manifest.json"
 CHUNK_SIZE = 1500
 CHUNK_OVERLAP = 150
 
-# نسخة مخطط المعالجة: تغييرها يعيد معالجة كل الكتب مرة واحدة (لإصلاح نصوص قديمة مشوهة).
-# v3-hybrid: استخراج هجين صفحة-صفحة (Tesseract للصفحات الممسوحة التالفة).
-SCHEMA_VERSION = "v3-hybrid"
-
-# كلمات شائعة لكشف النص المشوه/المعكوس (تُحسب معكوساتها آلياً)
-_COMMON_AR = {
-    'من', 'في', 'على', 'إلى', 'إلا', 'الذي', 'التي', 'هذا', 'هذه', 'ذلك', 'تلك',
-    'عن', 'مع', 'بعد', 'قبل', 'بين', 'حيث', 'عند', 'غير', 'كما', 'إذا', 'لكن',
-    'قال', 'كان', 'قد', 'لم', 'لن', 'ثم', 'أو', 'ما', 'أن', 'كل', 'هو', 'هي',
-    'القانون', 'المادة', 'الكتاب', 'الفصل', 'الباب', 'أي', 'دون', 'حتى', 'وقد',
-}
-_REVERSED_AR = {w[::-1] for w in _COMMON_AR if len(w) > 1}
-_REVERSED_AR.discard('لا')  # معكوسها 'ال' شائع سليماً — لتفادي الإيجاب الكاذب
-_NUMERIC_LINE_RE = re.compile(r'^[\d٠-٩\s\-—–_.*·•«»"\'()\[\]]+$')
-
-
-def fix_reversed_arabic(text):
-    """إصلاح السطور المعكوسة بصرياً (استخراج PDF مقلوب الترتيب).
-
-    يكشف السطر الذي تغلب عليه الكلمات الشائعة معكوسة (نم/يف/ىلع...)
-    مع غياب الصيغ السليمة، فيعكسه حرفياً. السطور المختلطة تُترك كما هي.
-    """
-    if not text:
-        return text
-    out = []
-    for line in text.split('\n'):
-        s = line.strip()
-        if len(s) < 8:
-            out.append(line)
-            continue
-        ar = len(re.findall(r'[\u0600-\u06FF]', s))
-        if ar < len(s) * 0.5:
-            out.append(line)
-            continue
-        toks = re.findall(r'[\u0600-\u06FF]+', s)
-        if not toks:
-            out.append(line)
-            continue
-        norm = sum(1 for t in toks if t in _COMMON_AR)
-        rev = sum(1 for t in toks if t in _REVERSED_AR)
-        if rev >= 2 and rev > norm + 1:
-            out.append(line[::-1])
-        else:
-            out.append(line)
-    return '\n'.join(out)
-
-
-def is_good_library_text(text):
-    """بوابة جودة نص المكتبة: عربية كافية + كلمات شائعة + لا ضجيج ؟"""
-    if not text or len(text) < 500:
-        return False
-    sample = text[:20000]
-    total = len(re.sub(r'\s', '', sample)) or 1
-    arabic = len(re.findall(r'[\u0600-\u06FF]', sample))
-    if (arabic / total) < 0.5:
-        return False
-    found = sum(1 for w in _COMMON_AR if re.search(r'\b' + w + r'\b', sample))
-    if found < 4:
-        return False
-    if sample.count('؟') / max(len(sample), 1) > 0.02:
-        return False
-    return True
-
 TYPE_KEYWORDS = {
     "اجتهاد": ["اجتهاد", "اجتهادات", "قرارات محكمة", "نقض"],
     "شرح": ["شرح", "تعليق", "موسوعة"],
@@ -126,44 +63,28 @@ def make_id(title):
 
 
 def chunk_text(text):
-    """تقسيم وتبويب: على الترويسات (باب/فصل/مبحث...) مع مسار القسم لكل مقطع.
-
-    - تُتجاهل سطور الترقيم الصرفة (أرقام الصفحات) كترويسات.
-    - كل مقطع يحمل: heading (أقرب ترويسة) + section (آخر باب/فصل كبير).
-    """
+    """تقسيم النص إلى مقاطع: على الترويسات (باب/فصل/مبحث) ثم حجم ثابت مع تداخل."""
     text = re.sub(r"\n{3,}", "\n\n", text.strip())
     if not text:
         return []
-    # إسقاط سطور أرقام الصفحات الصرفة
-    lines_all = [ln for ln in text.split('\n') if not (ln.strip() != "" and _NUMERIC_LINE_RE.fullmatch(ln.strip()) and len(ln.strip()) <= 6)]
-    text = '\n'.join(lines_all)
-    parts = re.split(
-        r"\n(?=(?:الباب|الفصل|المبحث|المطلب|الفرع|المقصد|التمهيد|التوطئة|المقدمة|الخاتمة|الفصل)[\s:0-9٠-٩\-—\.]+)",
-        text,
-    )
+    parts = re.split(r"\n(?=(?:الباب|الفصل|المبحث|المطلب|المقدمة|الخاتمة)[\s:0-9٠-٩\-—]+)", text)
     chunks = []
-    section = ""
     for part in parts:
         part = part.strip()
         if not part:
             continue
         lines = part.split("\n", 1)
-        first = lines[0].strip()
-        heading = ""
-        if len(lines) > 1 and len(first) < 80 and not _NUMERIC_LINE_RE.fullmatch(first):
-            heading = first
-            if re.match(r"^(?:الباب|الفصل|التمهيد|التوطئة|المقدمة|الخاتمة)\b", heading):
-                section = heading
-        body = part if not heading else (lines[1] if len(lines) > 1 else part)
+        heading = lines[0].strip()[:80] if len(lines) > 1 and len(lines[0].strip()) < 80 else ""
+        body = part if not heading else lines[1] if len(lines) > 1 else part
         if len(body) <= CHUNK_SIZE:
             if len(body.strip()) >= 40:
-                chunks.append({"heading": heading, "section": section, "text": body.strip()})
+                chunks.append({"heading": heading, "text": body.strip()})
         else:
             step = CHUNK_SIZE - CHUNK_OVERLAP
             for i in range(0, len(body), step):
                 piece = body[i:i + CHUNK_SIZE].strip()
                 if len(piece) >= 40:
-                    chunks.append({"heading": heading, "section": section, "text": piece})
+                    chunks.append({"heading": heading, "text": piece})
                 if i + CHUNK_SIZE >= len(body):
                     break
     return chunks
@@ -201,86 +122,15 @@ def decode_docx(raw):
         return ""
 
 
-def _page_good(t):
-    """جودة صفحة واحدة: طول أدنى + عربية غالبة + كلمتان شائعتان على الأقل."""
-    if not t or len(t) < 80:
-        return False
-    sample = t[:6000]
-    total = len(re.sub(r'\s', '', sample)) or 1
-    if len(re.findall(r'[\u0600-\u06FF]', sample)) / total < 0.4:
-        return False
-    found = sum(1 for w in _COMMON_AR if re.search(r'\b' + w + r'\b', sample))
-    return found >= 2
-
-
-def extract_hybrid(pdf_bytes, ocr):
-    """استخراج هجين صفحة-صفحة: نص PyMuPDF الجيد يُؤخذ كما هو، والصفحة
-    التالفة التي تحتها صور (ممسوحة) تُعاد قراءتها بـ Tesseract.
-
-    يعالج حالة الغلاف السليم + المحتوى الممسوح بطبقة OCR تالفة، حيث يفشل
-    أي فحص على مستوى الكتاب كاملاً (الصفحات السليمة تخفي التالفة).
-    """
-    try:
-        import pymupdf as fitz
-    except ImportError:
-        import fitz
-    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    n = doc.page_count
-    out_pages = []
-    ocr_pages = 0
-    for i in range(n):
-        page = doc[i]
-        try:
-            t = fix_reversed_arabic(ocr.light_clean(page.get_text("text")))
-        except Exception:
-            t = ""
-        needs_ocr = not _page_good(t)
-        if needs_ocr:
-            try:
-                has_images = bool(page.get_images(full=True))
-            except Exception:
-                has_images = True
-        else:
-            has_images = False
-        if needs_ocr and has_images:
-            try:
-                from pdf2image import convert_from_bytes
-                import pytesseract
-                imgs = convert_from_bytes(pdf_bytes, dpi=150, first_page=i + 1,
-                                          last_page=i + 1, fmt='jpeg', thread_count=1)
-                if imgs:
-                    o = fix_reversed_arabic(ocr.fix_arabic_errors(
-                        pytesseract.image_to_string(imgs[0].convert('L'),
-                                                    lang='ara', config='--psm 6 --oem 1')))
-                    if len(o) > max(80, len(t) // 2):
-                        t = o
-                    ocr_pages += 1
-                    del imgs
-            except Exception as e:
-                print(f"    OCR صفحة {i + 1} فشل: {e}")
-        out_pages.append(t)
-    try:
-        doc.close()
-    except Exception:
-        pass
-    text = "\n".join(out_pages)
-    method = "PyMuPDF" if ocr_pages == 0 else f"Hybrid+OCR({ocr_pages}/{n})"
-    return text, method
-
-
 def process_pdf_bytes(pdf_bytes, ocr):
-    """يستخرج النص هجيناً صفحة-صفحة مع بوابة جودة لكل صفحة."""
-    try:
-        return extract_hybrid(pdf_bytes, ocr)
-    except Exception as e:
-        print(f"    الهجين فشل ({e}) — مسار النص الكامل الاحتياطي")
-        raw_p = ocr.light_clean(ocr.extract_pymupdf(pdf_bytes))
-        fixed_p = fix_reversed_arabic(raw_p)
-        if is_good_library_text(fixed_p):
-            return fixed_p, "PyMuPDF-fallback"
-        raw_t = ocr.fix_arabic_errors(ocr.extract_tesseract(pdf_bytes))
-        fixed_t = fix_reversed_arabic(raw_t)
-        return fixed_t, "Tesseract-fallback"
+    """يستخرج النص: PyMuPDF أولاً ثم Tesseract عند التشوه (نفس منطق القوانين)."""
+    year_guess = 9999
+    text = ocr.light_clean(ocr.extract_pymupdf(pdf_bytes))
+    arts_probe = len(text)
+    good = arts_probe > 500
+    if good:
+        return text, "PyMuPDF"
+    return ocr.fix_arabic_errors(ocr.extract_tesseract(pdf_bytes)), "Tesseract"
 
 
 def main():
@@ -402,10 +252,6 @@ def main():
 
     print(f"وحدات للمعالجة: {len(units)}")
 
-    # وسم المفاتيح بنسخة المخطط: أي تغيير بـ SCHEMA_VERSION يعيد المعالجة مرة واحدة.
-    for u in units:
-        u["skip_key"] = SCHEMA_VERSION + "|" + u["skip_key"]
-
     # حماية 2: ملفات موجودة لكن لا وحدة صالحة (صيغ غير مدعومة) — لا تمسح السابق أيضاً.
     if len(units) == 0 and len(old_manifest) > 0:
         print("⚠️ لا وحدات صالحة (PDF/TXT/DOCX/ZIP) مع وجود فهرس سابق — إجهاض لحماية البيانات")
@@ -437,19 +283,23 @@ def main():
         if u["kind"] == "pdf":
             text, method = process_pdf_bytes(raw, ocr)
         elif u["kind"] == "docx":
-            text = fix_reversed_arabic(ocr.strip_invisible(decode_docx(raw)))
+            text = ocr.strip_invisible(decode_docx(raw))
             method = "DOCX"
         else:
-            text = fix_reversed_arabic(ocr.strip_invisible(decode_txt(raw)))
+            text = ocr.strip_invisible(decode_txt(raw))
         chunks = chunk_text(text)
         print(f"    ✓ {method}: {len(chunks)} مقطعاً")
-        # بوابة الجودة النهائية على النص بعد كل الإصلاحات
-        if len(chunks) < 3:
-            st = "TOO_FEW"
-        elif "fallback" in method or not is_good_library_text(text):
-            st = "GARBLED"
-        else:
-            st = "ok"
+        # فحص جودة المكتبة (مثل القوانين): عربية كافية + كلمات شائعة + طول أدنى
+        st = "ok" if len(chunks) >= 3 else "TOO_FEW"
+        try:
+            _ar = len(re.findall(r'[\u0600-\u06FF]', text))
+            _tot = len(re.sub(r'\s', '', text)) or 1
+            _common = ['من', 'في', 'على', 'إلى', 'الذي', 'التي', 'هذا', 'القانون', 'المادة', 'أو', 'أن', 'لا']
+            _found = sum(1 for w in _common if re.search(r'\b' + w + r'\b', text[:20000]))
+            if (_ar / _tot) < 0.5 or _found < 4:
+                st = "GARBLED"
+        except Exception:
+            pass
         book_id = make_id(u["title"])
         did = u.get("drive_id", "")
         data = {
@@ -458,8 +308,8 @@ def main():
             "drive_file_id": did,
             "drive_url": f"https://drive.google.com/file/d/{did}/view" if did else "",
             "chunks_count": len(chunks),
-            "chunks": [{"n": i + 1, "heading": c.get("heading", ""), "section": c.get("section", ""), "text": c["text"]}
-                        for i, c in enumerate(chunks)],
+            "chunks": [{"n": i + 1, "heading": c["heading"], "text": c["text"]}
+                       for i, c in enumerate(chunks)],
         }
         with open(os.path.join(OUTPUT_DIR, f"{book_id}.json"), "w", encoding="utf-8") as jf:
             json.dump(data, jf, ensure_ascii=False, indent=2)
