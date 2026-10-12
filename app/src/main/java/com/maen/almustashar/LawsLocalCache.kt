@@ -49,6 +49,8 @@ object LawsLocalCache {
     }
 
     // تحميل الفهرس والملفات الناقصة/المتغيرة فقط. يعيد true إن وُجدت نسخة صالحة.
+    // درس 2026-10-12: إذا تغيّر الفهرس البعيد جذرياً (last_updated مختلف) يُعاد
+    // تحميل كل الملفات — وإلا بقيت نسخة تالفة قديمة عالقة عندما يتساوى العدد.
     fun syncIfNeeded(ctx: Context): Boolean {
         return try {
             val d = dir(ctx)
@@ -56,12 +58,19 @@ object LawsLocalCache {
             if (indexText != null) {
                 val idx = JSONObject(indexText)
                 val laws = idx.optJSONArray("laws") ?: org.json.JSONArray()
+                val remoteStamp = idx.optString("last_updated")
+                val localStamp = try {
+                    JSONObject(File(d, "index.json").readText()).optString("last_updated")
+                } catch (_: Exception) {
+                    ""
+                }
+                val fullRefresh = remoteStamp.isNotEmpty() && remoteStamp != localStamp
                 for (i in 0 until laws.length()) {
                     val l = laws.getJSONObject(i)
                     val file = l.optString("file")
                     if (file.isEmpty()) continue
                     val local = File(d, file)
-                    var need = !local.exists()
+                    var need = fullRefresh || !local.exists()
                     if (!need) {
                         try {
                             val lj = JSONObject(local.readText())

@@ -70,12 +70,20 @@ object LibraryCache {
             val indexText = fetchText("index.json") ?: return File(d, "index.json").exists()
             val idx = JSONObject(indexText)
             val books = idx.optJSONArray("books") ?: org.json.JSONArray()
+            // تحديث كامل عند تغيّر الفهرس البعيد — يمنع بقاء نسخ قديمة عالقة
+            val remoteStamp = idx.optString("last_updated")
+            val localStamp = try {
+                JSONObject(File(d, "index.json").readText()).optString("last_updated")
+            } catch (_: Exception) {
+                ""
+            }
+            val fullRefresh = remoteStamp.isNotEmpty() && remoteStamp != localStamp
             for (i in 0 until books.length()) {
                 val b = books.getJSONObject(i)
                 val file = b.optString("file")
                 if (file.isEmpty()) continue
                 val local = File(d, file)
-                var need = !local.exists()
+                var need = fullRefresh || !local.exists()
                 if (!need) {
                     try {
                         if (JSONObject(local.readText()).optInt("chunks_count", -1) != b.optInt("chunks_count", -2)) need = true

@@ -103,6 +103,58 @@ def decode_txt(raw):
     return raw.decode("utf-8", errors="ignore")
 
 
+def clean_library_text(text):
+    """تنظيف خاص بالمكتبة فقط (لا يمس القوانين):
+    توحيد أشكال العرض + إزالة شوائب ترميز خطوط PDF.
+    """
+    if not text:
+        return text
+    try:
+        import unicodedata
+        text = unicodedata.normalize("NFKC", text)
+    except Exception:
+        pass
+    # شائب خطوط مستندات الأمم المتحدة (يظهر بدل التطويل/الوصل)
+    text = text.replace("ѧ", "").replace("Ѧ", "")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def fallback_toc_from_text(text, limit=200):
+    """فهرس احتياطي من بنية النص عند غياب إشارات PDF والخط الكبير:
+    المواد المرقمة (المادة 1..) ثم الترويسات القصيرة البنيوية.
+    """
+    if not text:
+        return []
+    seen = set()
+    toc = []
+
+    def push(t):
+        t = re.sub(r"\s+", " ", (t or "").strip())
+        if len(t) < 3 or len(t) > 120 or t in seen:
+            return
+        if re.fullmatch(r"[\d٠-٩\s\-—–_.*·•«»\"'()\[\]]+", t):
+            return
+        seen.add(t)
+        toc.append({"t": t, "p": 0})
+
+    # 1) المواد المرقمة — فهرس طبيعي للاتفاقيات والقوانين العالمية
+    for m in re.finditer(r"(?m)^\s*(المادة\s*[\d٠-٩]{1,4})\s*(?::|[-–—])?\s*(.{0,60}?)\s*$", text):
+        head = (m.group(1) + (": " + m.group(2).strip() if m.group(2).strip() else "")).strip()
+        push(head)
+        if len(toc) >= limit:
+            return toc
+    # 2) ترويسات بنيوية قصيرة منفردة بسطرها
+    for m in re.finditer(
+            r"(?m)^\s*((?:الباب|الفصل|المبحث|المطلب|الفرع|المقصد|التمهيد|التوطئة|المقدمة|الخاتمة|الديباجة|التعاريف|الغرض|نطاق|أحكام ختامية|أحكام عامة)[^:\n]{0,60})\s*$",
+            text):
+        push(m.group(1))
+        if len(toc) >= limit:
+            return toc
+    return toc
+
+
 def build_toc_entries(outline, font_heads, limit=200):
     """يدمج عناوين PDF المرجعية وعناوين الخط الكبير: إزالة تكرار وضجيج."""
     seen = set()
@@ -385,15 +437,18 @@ def main():
             method = "DOCX"
         else:
             text = ocr.strip_invisible(decode_txt(raw))
+        text = clean_library_text(text)
         chunks = chunk_text(text)
         print(f"    ✓ {method}: {len(chunks)} مقطعاً")
-        # فهرس الكتاب (PDF فقط): إشارات المستند + سطور الخط الكبير
+        # فهرس الكتاب (PDF فقط): إشارات المستند + سطور الخط الكبير، ثم بنية النص
         toc = []
         if u["kind"] == "pdf":
             try:
                 toc = extract_pdf_toc(raw)
             except Exception as e:
                 print(f"    الفهرس فشل: {e}")
+            if not toc:
+                toc = fallback_toc_from_text(text)
             print(f"    📑 الفهرس: {len(toc)} عنواناً")
         # فحص جودة المكتبة (مثل القوانين): عربية كافية + كلمات شائعة + طول أدنى
         st = "ok" if len(chunks) >= 3 else "TOO_FEW"
