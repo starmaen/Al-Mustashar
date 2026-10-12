@@ -1,53 +1,45 @@
 {
-  "generated_at": "2026-10-12T07:00:57.266477+00:00",
+  "generated_at": "2026-10-12T10:03:58.018019+00:00",
   "books": [
     {
       "title": "صديق المحامي في أصول التنفيذ",
-      "status": "ok",
-      "chunks": 529,
-      "method": "PyMuPDF"
+      "status": "unchanged",
+      "chunks": 529
     },
     {
       "title": "اتفاقية-القضاء-على-جميع-اشكال-التميز-ضد-المرأة_نسخة",
-      "status": "ok",
-      "chunks": 18,
-      "method": "Tesseract"
+      "status": "unchanged",
+      "chunks": 18
     },
     {
       "title": "اتفاقية-حقوق-الأشخاص-ذوي-الإعاقة_نسخة",
-      "status": "ok",
-      "chunks": 40,
-      "method": "PyMuPDF"
+      "status": "unchanged",
+      "chunks": 40
     },
     {
       "title": "الاتفاقية-الدولية-لحماية-جميع-الأشخاص-من-الاختفاء-القسري_نسخة",
-      "status": "ok",
-      "chunks": 25,
-      "method": "PyMuPDF"
+      "status": "unchanged",
+      "chunks": 25
     },
     {
       "title": "اتفاقية-حماية-العمال-المهاجرين-وأسرهم_نسخة",
-      "status": "ok",
-      "chunks": 48,
-      "method": "PyMuPDF"
+      "status": "unchanged",
+      "chunks": 48
     },
     {
       "title": "الاتفاقية-الدولية-للقضاء-علي-جميع-أشكال-التمييز-العنصري_نسخة",
-      "status": "ok",
-      "chunks": 17,
-      "method": "PyMuPDF"
+      "status": "unchanged",
+      "chunks": 17
     },
     {
       "title": "نظام-روما-الأساسي-للمحكمة-الجنائية-الدولية_نسخة",
-      "status": "ok",
-      "chunks": 107,
-      "method": "PyMuPDF"
+      "status": "unchanged",
+      "chunks": 107
     },
     {
       "title": "التطوير-العقاري_نسخة",
-      "status": "ok",
-      "chunks": 159,
-      "method": "PyMuPDF"
+      "status": "unchanged",
+      "chunks": 159
     }
   ],
   "ignored": [],
