@@ -1,35 +1,47 @@
 {
-  "generated_at": "2026-10-12T14:20:10.688912+00:00",
+  "generated_at": "2026-10-12T15:55:24.952273+00:00",
   "books": [
     {
       "title": "اتفاقية-القضاء-على-جميع-اشكال-التميز-ضد-المرأة_نسخة",
-      "status": "unchanged",
-      "chunks": 20
+      "status": "GARBLED",
+      "chunks": 20,
+      "method": "PyMuPDF",
+      "toc": 0
     },
     {
       "title": "اتفاقية-حقوق-الأشخاص-ذوي-الإعاقة_نسخة",
-      "status": "unchanged",
-      "chunks": 40
+      "status": "ok",
+      "chunks": 40,
+      "method": "PyMuPDF",
+      "toc": 0
     },
     {
       "title": "الاتفاقية-الدولية-لحماية-جميع-الأشخاص-من-الاختفاء-القسري_نسخة",
-      "status": "unchanged",
-      "chunks": 25
+      "status": "ok",
+      "chunks": 25,
+      "method": "PyMuPDF",
+      "toc": 0
     },
     {
       "title": "اتفاقية-حماية-العمال-المهاجرين-وأسرهم_نسخة",
-      "status": "unchanged",
-      "chunks": 49
+      "status": "ok",
+      "chunks": 49,
+      "method": "PyMuPDF",
+      "toc": 0
     },
     {
       "title": "الاتفاقية-الدولية-للقضاء-علي-جميع-أشكال-التمييز-العنصري_نسخة",
-      "status": "unchanged",
-      "chunks": 17
+      "status": "ok",
+      "chunks": 17,
+      "method": "PyMuPDF",
+      "toc": 0
     },
     {
       "title": "نظام-روما-الأساسي-للمحكمة-الجنائية-الدولية_نسخة",
-      "status": "unchanged",
-      "chunks": 108
+      "status": "ok",
+      "chunks": 108,
+      "method": "PyMuPDF",
+      "toc": 2
     }
   ],
   "ignored": [],
