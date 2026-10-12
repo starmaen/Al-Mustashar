@@ -21,6 +21,7 @@ import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -63,6 +64,7 @@ class SearchActivity : AppCompatActivity() {
     private var lawChoices: List<LawChoice> = listOf(LawChoice(null, "كل القوانين"))
     private var currentPdfUrl: String? = null
     private val defaultDriveFolder = "https://drive.google.com/drive/folders/1sPjdzMBeun-H-P5gSTujESzdMR0SpMm3"
+    private lateinit var backCallback: OnBackPressedCallback
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -98,7 +100,17 @@ class SearchActivity : AppCompatActivity() {
         rvDriveResults.layoutManager = LinearLayoutManager(this)
         rvDriveResults.adapter = driveAdapter
 
+        // الرجوع بأسلوب المتصفح: من النتيجة إلى نموذج البحث لا إلى الرئيسية
+        backCallback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                goBackToForm()
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, backCallback)
+
         rgMode.setOnCheckedChangeListener { _, checkedId ->
+            // تبديل الوضع يعيد نموذج البحث: لا شيء للرجوع إليه
+            backCallback.isEnabled = false
             if (checkedId == R.id.rbModeDrive) {
                 spinnerLaw.visibility = View.GONE
                 scrollResults.visibility = View.GONE
@@ -201,6 +213,8 @@ class SearchActivity : AppCompatActivity() {
         scrollResults.visibility = View.GONE
         searchActions.visibility = View.GONE
         rvDriveResults.visibility = View.GONE
+        // تنقل للأمام: الرجوع يعيد نموذج البحث
+        backCallback.isEnabled = true
 
         if (rbDrive.isChecked) {
             searchDriveFiles(query)
@@ -209,6 +223,16 @@ class SearchActivity : AppCompatActivity() {
         } else {
             searchFirestoreLaws(query)
         }
+    }
+
+    // الرجوع بأسلوب المتصفح: إخفاء النتيجة وإبقاء نموذج البحث
+    private fun goBackToForm() {
+        progressBar.visibility = View.GONE
+        tvEmpty.visibility = View.GONE
+        scrollResults.visibility = View.GONE
+        searchActions.visibility = View.GONE
+        rvDriveResults.visibility = View.GONE
+        backCallback.isEnabled = false
     }
 
     private fun searchFirestoreLaws(query: String) {

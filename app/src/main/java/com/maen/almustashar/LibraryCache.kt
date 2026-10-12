@@ -23,7 +23,8 @@ object LibraryCache {
         val n: Int,
         val heading: String,
         val text: String,
-        val driveUrl: String?
+        val driveUrl: String?,
+        val section: String = ""
     )
 
     private val MIRRORS = listOf(
@@ -114,7 +115,7 @@ object LibraryCache {
                         val text = c.optString("text")
                         if (text.length < 40) continue
                         passages.add(
-                            Passage(id, title, type, c.optInt("n", j + 1), c.optString("heading"), text, driveUrl)
+                            Passage(id, title, type, c.optInt("n", j + 1), c.optString("heading"), text, driveUrl, c.optString("section"))
                         )
                     }
                 } catch (_: Exception) {
@@ -139,7 +140,7 @@ object LibraryCache {
             .filter { it.length > 2 && it !in setOf("كتاب", "الكتاب", "قانون", "القانون", "مادة", "المادة") }
         if (terms.isEmpty()) return emptyList()
         return pool.mapNotNull { p ->
-            val nt = norm(p.text + " " + p.heading + " " + p.bookTitle)
+            val nt = norm(p.text + " " + p.heading + " " + p.section + " " + p.bookTitle)
             var score = 0
             for (t in terms) if (nt.contains(t)) score += 3
             if (p.heading.isNotBlank()) {

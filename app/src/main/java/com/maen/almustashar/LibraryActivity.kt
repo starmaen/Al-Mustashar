@@ -17,6 +17,7 @@ import android.widget.ExpandableListView
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +25,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 // 📚 المكتبة القانونية: مراجع قابلة للطي + بحث وسؤال محصور بها حصراً
+// التنقل بأسلوب المتصفح: قائمة ← نتائج ← مقطع، والرجوع يعود للتبويب السابق.
 class LibraryActivity : AppCompatActivity() {
+
+    private enum class LibView { LIST, HITS, PASSAGE, ASK }
 
     private lateinit var etSearch: EditText
     private lateinit var progress: ProgressBar
@@ -32,6 +36,16 @@ class LibraryActivity : AppCompatActivity() {
     private lateinit var expList: ExpandableListView
     private lateinit var scrollResult: View
     private lateinit var tvResult: TextView
+    private lateinit var navRow: View
+    private lateinit var btnPrev: Button
+    private lateinit var btnNext: Button
+    private lateinit var tvPosition: TextView
+    private lateinit var backCallback: OnBackPressedCallback
+
+    private var libView = LibView.LIST
+    private var passageFromHits = false
+    private var currentList: List<LibraryCache.Passage> = emptyList()
+    private var currentIndex: Int = -1
 
     private var books: List<LibraryCache.BookMeta> = emptyList()
     private var passages: List<LibraryCache.Passage> = emptyList()
@@ -53,6 +67,20 @@ class LibraryActivity : AppCompatActivity() {
         expList = findViewById(R.id.expLibrary)
         scrollResult = findViewById(R.id.scrollLibraryResult)
         tvResult = findViewById(R.id.tvLibraryResult)
+        navRow = findViewById(R.id.libraryNavRow)
+        btnPrev = findViewById(R.id.btnLibraryPrev)
+        btnNext = findViewById(R.id.btnLibraryNext)
+        tvPosition = findViewById(R.id.tvLibraryPosition)
+
+        backCallback = object : OnBackPressedCallback(false) {
+            override fun handleOnBackPressed() {
+                goBack()
+            }
+        }
+        onBackPressedDispatcher.addCallback(this, backCallback)
+
+        btnPrev.setOnClickListener { stepPassage(-1) }
+        btnNext.setOnClickListener { stepPassage(1) }
 
         findViewById<Button>(R.id.btnLibrarySearch).setOnClickListener { doSearch() }
         findViewById<Button>(R.id.btnLibraryAsk).setOnClickListener { doAsk() }
@@ -108,9 +136,92 @@ class LibraryActivity : AppCompatActivity() {
             passages = pool.second
             headings = passages.groupBy { it.bookId }
             expList.setAdapter(LibraryAdapter())
-            expList.visibility = View.VISIBLE
-            tvEmpty.visibility = View.GONE
+            setView(LibView.LIST)
         }
+    }
+
+    // ——— التنقل بأسلوب المتصفح ———
+    private fun setView(v: LibView) {
+        libView = v
+        backCallback.isEnabled = (v != LibView.LIST)
+        if (v != LibView.PASSAGE) {
+            navRow.visibility = View.GONE
+        }
+        when (v) {
+            LibView.LIST -> {
+                scrollResult.visibility = View.GONE
+                tvEmpty.visibility = View.GONE
+                expList.visibility = View.VISIBLE
+            }
+            else -> {
+                expList.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun goBack() {
+        when (libView) {
+            LibView.PASSAGE -> {
+                if (passageFromHits && currentList.isNotEmpty()) {
+                    showHits(currentList)
+                } else {
+                    setView(LibView.LIST)
+                }
+            }
+            LibView.HITS, LibView.ASK -> setView(LibView.LIST)
+            LibView.LIST -> { /* يعالجها النظام (خروج) */ }
+        }
+    }
+
+    private fun passageHeader(p: LibraryCache.Passage): String {
+        val sb = StringBuilder()
+        sb.append("📖 ${p.bookTitle} [${p.type}] — مقطع ${p.n}")
+        if (p.section.isNotBlank()) sb.append("\n📑 ${p.section}")
+        if (p.heading.isNotBlank()) sb.append("\n▪ ${p.heading}")
+        sb.append("\n\n")
+        return sb.toString()
+    }
+
+    private fun showHits(hits: List<LibraryCache.Passage>) {
+        currentList = hits
+        currentIndex = -1
+        passageFromHits = true
+        tvResult.text = hits.joinToString("\n\n───────────────────────\n\n") { p ->
+            passageHeader(p) + p.text
+        }
+        try {
+            Linkify.addLinks(tvResult, Linkify.WEB_URLS)
+        } catch (_: Exception) {
+        }
+        tvEmpty.visibility = View.GONE
+        scrollResult.visibility = View.VISIBLE
+        scrollResult.scrollTo(0, 0)
+        setView(LibView.HITS)
+    }
+
+    private fun showPassage(index: Int) {
+        if (index < 0 || index >= currentList.size) return
+        currentIndex = index
+        val p = currentList[index]
+        tvResult.text = passageHeader(p) + p.text +
+            "\n\n───────────────────────\nالنتيجة ${index + 1} من ${currentList.size}"
+        try {
+            Linkify.addLinks(tvResult, Linkify.WEB_URLS)
+        } catch (_: Exception) {
+        }
+        tvPosition.text = "${index + 1} / ${currentList.size}"
+        btnPrev.isEnabled = index > 0
+        btnNext.isEnabled = index < currentList.size - 1
+        navRow.visibility = View.VISIBLE
+        tvEmpty.visibility = View.GONE
+        scrollResult.visibility = View.VISIBLE
+        scrollResult.scrollTo(0, 0)
+        setView(LibView.PASSAGE)
+        navRow.visibility = View.VISIBLE
+    }
+
+    private fun stepPassage(delta: Int) {
+        showPassage(currentIndex + delta)
     }
 
     private fun doSearch() {
@@ -129,18 +240,12 @@ class LibraryActivity : AppCompatActivity() {
             tvEmpty.text = "لا نتائج في المكتبة لـ \"$q\""
             tvEmpty.visibility = View.VISIBLE
             scrollResult.visibility = View.GONE
+            // الرجوع من هنا يعيد قائمة المراجع لا واجهة التطبيق
+            libView = LibView.HITS
+            currentList = emptyList()
+            backCallback.isEnabled = true
         } else {
-            tvResult.text = hits.joinToString("\n\n───────────────────────\n\n") { p ->
-                "📖 ${p.bookTitle} [${p.type}] — مقطع ${p.n}" +
-                    (if (p.heading.isNotBlank()) " (${p.heading})" else "") +
-                    ":\n\n${p.text}"
-            }
-            try {
-                Linkify.addLinks(tvResult, Linkify.WEB_URLS)
-            } catch (_: Exception) {
-            }
-            tvEmpty.visibility = View.GONE
-            scrollResult.visibility = View.VISIBLE
+            showHits(hits)
         }
     }
 
@@ -165,6 +270,9 @@ class LibraryActivity : AppCompatActivity() {
                     progress.visibility = View.GONE
                     tvEmpty.text = "لا يوجد في المكتبة ما يجيب عن \"$q\""
                     tvEmpty.visibility = View.VISIBLE
+                    libView = LibView.HITS
+                    currentList = emptyList()
+                    backCallback.isEnabled = true
                     return@launch
                 }
                 val refs = hits.joinToString("\n\n") { p ->
@@ -176,10 +284,14 @@ class LibraryActivity : AppCompatActivity() {
                     hits.joinToString("\n") { "• ${it.bookTitle} — مقطع ${it.n}" }
                 tvEmpty.visibility = View.GONE
                 scrollResult.visibility = View.VISIBLE
+                scrollResult.scrollTo(0, 0)
+                setView(LibView.ASK)
             } catch (e: Exception) {
                 progress.visibility = View.GONE
                 tvEmpty.text = "تعذر إتمام السؤال: ${e.localizedMessage}"
                 tvEmpty.visibility = View.VISIBLE
+                libView = LibView.HITS
+                backCallback.isEnabled = true
             }
         }
     }
@@ -187,8 +299,8 @@ class LibraryActivity : AppCompatActivity() {
     private inner class LibraryAdapter : BaseExpandableListAdapter() {
         override fun getGroupCount(): Int = books.size
         override fun getChildrenCount(groupPosition: Int): Int {
-            val h = headings[books[groupPosition].id] ?: emptyList()
-            return minOf(h.size, 60)
+            // بلا حد: القائمة تعرض كل مقاطع المرجع (كانت 60 فقط فتختفي البقية)
+            return headings[books[groupPosition].id]?.size ?: 0
         }
         override fun getGroup(groupPosition: Int): Any = books[groupPosition]
         override fun getChild(groupPosition: Int, childPosition: Int): Any =
@@ -212,18 +324,13 @@ class LibraryActivity : AppCompatActivity() {
             val v = convertView ?: LayoutInflater.from(this@LibraryActivity)
                 .inflate(android.R.layout.simple_list_item_1, parent, false)
             (v.findViewById<TextView>(android.R.id.text1)).text =
-                "▪ ${p.heading.ifBlank { "مقطع ${p.n}" }}"
+                "▪ " + (if (p.section.isNotBlank()) p.section + " / " else "") +
+                    p.heading.ifBlank { "مقطع ${p.n}" }
             v.setOnClickListener {
-                tvResult.text = "📖 ${p.bookTitle} — مقطع ${p.n}" +
-                    (if (p.heading.isNotBlank()) " (${p.heading})" else "") +
-                    ":\n\n${p.text}"
-                try {
-                    Linkify.addLinks(tvResult, Linkify.WEB_URLS)
-                } catch (_: Exception) {
-                }
-                expList.visibility = View.GONE
-                tvEmpty.visibility = View.GONE
-                scrollResult.visibility = View.VISIBLE
+                val siblings = headings[books[groupPosition].id] ?: emptyList()
+                currentList = siblings
+                passageFromHits = false
+                showPassage(childPosition)
             }
             return v
         }
