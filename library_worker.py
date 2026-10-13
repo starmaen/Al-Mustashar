@@ -374,6 +374,66 @@ def main():
             print(f"    تعذر قراءة المجلد الفرعي {sub.get('name')}: {e}")
     print(f"ملفات المكتبة على Drive: {len(files)}")
 
+    # تنظيم تلقائي لمجلدات الأقسام: أي كتاب في الجذر ينتقل لمجلد قسمه.
+    # (مجلدات مطابقة لأقسام التطبيق؛ الرفع للجذر يكفي والباقي تلقائي ومسجل)
+    moved = []
+
+    def ensure_section_folder(parent_id, section_name, existing):
+        for s in existing:
+            if s.get("name") == section_name:
+                return s["id"]
+        try:
+            created = drive.files().create(
+                body={"name": section_name,
+                      "mimeType": "application/vnd.google-apps.folder",
+                      "parents": [parent_id]},
+                fields="id").execute()
+            print(f"    📁 أنشئ مجلد القسم: {section_name}")
+            return created.get("id")
+        except Exception as e:
+            print(f"    ⚠️ تعذر إنشاء مجلد {section_name}: {e}")
+            return None
+
+    try:
+        section_folders = {}
+        subs_now = [f for f in top if f.get("mimeType") == "application/vnd.google-apps.folder"]
+        for section_name in SECTIONS:
+            fid = ensure_section_folder(folder_id, section_name, subs_now)
+            if fid:
+                section_folders[section_name] = fid
+                # حدّث القائمة المحلية ليتعرف عليها الغوص التالي
+                if not any(s.get("id") == fid for s in subs_now):
+                    subs_now.append({"id": fid, "name": section_name})
+        if section_folders:
+            for f in [x for x in top if x.get("mimeType") != "application/vnd.google-apps.folder"]:
+                clean = re.sub(r"\.(pdf|txt|docx|zip)$", "", f.get("name", ""), flags=re.I)
+                section = detect_section(clean, "")
+                target = section_folders.get(section)
+                if target and target != folder_id:
+                    try:
+                        drive.files().update(
+                            fileId=f["id"], addParents=target, removeParents=folder_id,
+                            fields="id, parents").execute()
+                        moved.append({"file": f.get("name"), "section": section})
+                        print(f"    ➜ نُقل: {f.get('name')} إلى [{section}]")
+                    except Exception as e:
+                        print(f"    ⚠️ تعذر نقل {f.get('name')}: {e}")
+            if moved:
+                # إعادة القراءة بعد النقل ليتسق ما بعده مع المواقع الجديدة
+                top = list_children(folder_id)
+                files = [f for f in top if f.get("mimeType") != "application/vnd.google-apps.folder"]
+                for sub in [f for f in top if f.get("mimeType") == "application/vnd.google-apps.folder"]:
+                    try:
+                        for f in list_children(sub["id"]):
+                            if f.get("mimeType") != "application/vnd.google-apps.folder":
+                                f["_sub"] = sub["name"]
+                                files.append(f)
+                    except Exception:
+                        pass
+                print(f"ملفات المكتبة بعد التنظيم: {len(files)}")
+    except Exception as e:
+        print(f"    ⚠️ التنظيم التلقائي تعذر: {e} — المتابعة بدونه")
+
     # حماية 1: منع الكتابة الفارغة — خلل مؤقت (0 ملف) لا يمسح الفهرس السابق الجيد.
     # منطق التخطي للملفات المرفوعة سابقاً (_manifest) يبقى كما هو ولا يتأثر.
     if len(files) == 0 and len(old_manifest) > 0:
@@ -398,7 +458,8 @@ def main():
     for f in files:
         name, mt, fbid, mod = f["name"], f.get("mimeType", ""), f["id"], f.get("modifiedTime", "")
         sub = f.get("_sub", "")
-        disp = f"{sub} / {name}" if sub else name
+        # العنوان باسم الملف مجرداً (مستقر عند نقل الملف بين الأقسام)؛
+        # القسم يُحسم من المجلد الفرعي أولاً ثم العنوان.
         low = name.lower()
         if low.endswith(".zip") or mt == "application/zip":
             try:
@@ -408,35 +469,39 @@ def main():
                     if il.endswith((".pdf", ".txt", ".docx")) and not inner.startswith("__"):
                         kind = "pdf" if il.endswith(".pdf") else ("docx" if il.endswith(".docx") else "txt")
                         units.append({
-                            "title": (f"{sub} / " if sub else "") + re.sub(r"\.(pdf|txt|docx)$", "", inner.split("/")[-1], flags=re.I),
+                            "title": re.sub(r"\.(pdf|txt|docx)$", "", inner.split("/")[-1], flags=re.I),
                             "data": zf.read(inner), "kind": kind,
                             "skip_key": f"zip:{name}/{inner}@{mod}",
-                            "source": f"{name} ← {inner}", "drive_id": fbid, "sub": sub,
+                            "source": (f"{sub} / " if sub else "") + f"{name} ← {inner}",
+                            "drive_id": fbid, "sub": sub,
                         })
             except Exception as e:
                 print(f"    تعذر فك: {name}: {e}")
         elif low.endswith(".pdf") or mt == "application/pdf":
             units.append({
-                "title": re.sub(r"\.pdf$", "", disp, flags=re.I),
+                "title": re.sub(r"\.pdf$", "", name, flags=re.I),
                 "data": None, "kind": "pdf", "skip_key": f"file:{name}@{mod}",
-                "source": name, "drive_id": fbid, "fbid": fbid, "sub": sub,
+                "source": (f"{sub} / " if sub else "") + name,
+                "drive_id": fbid, "fbid": fbid, "sub": sub,
             })
         elif low.endswith(".txt") or mt == "text/plain":
             units.append({
-                "title": re.sub(r"\.txt$", "", disp, flags=re.I),
+                "title": re.sub(r"\.txt$", "", name, flags=re.I),
                 "data": None, "kind": "txt", "skip_key": f"file:{name}@{mod}",
-                "source": name, "drive_id": fbid, "fbid": fbid, "sub": sub,
+                "source": (f"{sub} / " if sub else "") + name,
+                "drive_id": fbid, "fbid": fbid, "sub": sub,
             })
         elif low.endswith(".docx") or mt == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             units.append({
-                "title": re.sub(r"\.docx$", "", disp, flags=re.I),
+                "title": re.sub(r"\.docx$", "", name, flags=re.I),
                 "data": None, "kind": "docx", "skip_key": f"file:{name}@{mod}",
-                "source": name, "drive_id": fbid, "fbid": fbid, "sub": sub,
+                "source": (f"{sub} / " if sub else "") + name,
+                "drive_id": fbid, "fbid": fbid, "sub": sub,
             })
         elif low.endswith(".doc") or mt == "application/msword":
-            ignored.append({"file": disp, "reason": "DOC قديم غير مدعوم — حوّله إلى DOCX أو PDF"})
+            ignored.append({"file": (f"{sub} / " if sub else "") + name, "reason": "DOC قديم غير مدعوم — حوّله إلى DOCX أو PDF"})
         else:
-            ignored.append({"file": disp, "reason": f"صيغة غير مدعومة ({mt or low.rsplit('.', 1)[-1]}) — المدعوم: PDF/TXT/DOCX/ZIP"})
+            ignored.append({"file": (f"{sub} / " if sub else "") + name, "reason": f"صيغة غير مدعومة ({mt or low.rsplit('.', 1)[-1]}) — المدعوم: PDF/TXT/DOCX/ZIP"})
 
     print(f"وحدات للمعالجة: {len(units)}")
 
@@ -459,9 +524,13 @@ def main():
                 new_manifest[u["skip_key"]] = prev
                 try:
                     ex = json.load(open(jp, encoding="utf-8"))
+                    # القسم من الموقع الحالي أولاً (قد يكون الملف نُقل تلقائياً)، ثم المخزن، ثم العنوان
+                    cur_section = detect_section(u.get("title", ""), u.get("sub", ""))
+                    if not u.get("sub"):
+                        cur_section = ex.get("section") or detect_section(ex.get("title", ""), "")
                     index_books.append({
                         "id": ex["id"], "title": ex["title"], "type": ex.get("type", "مرجع"),
-                        "section": ex.get("section") or detect_section(ex.get("title", ""), ""),
+                        "section": cur_section,
                         "file": f"{book_id}.json", "chunks_count": ex.get("chunks_count", 0),
                     })
                     report.append({"title": ex["title"], "status": "unchanged",
@@ -552,8 +621,12 @@ def main():
         }, jf, ensure_ascii=False, indent=2)
     with open(os.path.join(OUTPUT_DIR, "_report.json"), "w", encoding="utf-8") as rf:
         json.dump({"generated_at": datetime.now(timezone.utc).isoformat(),
-                   "books": report, "ignored": ignored,
+                   "books": report, "ignored": ignored, "moved": moved,
                    "deep_folders_skipped": deep_folders}, rf, ensure_ascii=False, indent=2)
+    if moved:
+        print("\n=== كتب نُقلت تلقائياً لأقسامها ===")
+        for mv in moved:
+            print(f"  ➜ {mv.get('file')} → [{mv.get('section')}]")
     if ignored:
         print("\n=== ملفات متجاهلة (لم تدخل الفهرس) ===")
         for ig in ignored:
