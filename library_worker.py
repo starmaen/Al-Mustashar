@@ -415,8 +415,17 @@ def main():
                       "mimeType": "application/vnd.google-apps.folder",
                       "parents": [parent_id]},
                 fields="id").execute()
-            print(f"    📁 أنشئ مجلد القسم: {section_name}")
-            return created.get("id")
+            new_id = created.get("id")
+            # سياسة القراءة فقط: أي شخص لديه الرابط = عارض، لا محرر أبداً.
+            # (ملفاتك المنقولة تحتفظ بمشاركتها الحالية؛ الجديد يُفتح قراءة فقط)
+            try:
+                drive.permissions().create(
+                    fileId=new_id,
+                    body={"type": "anyone", "role": "reader"}).execute()
+            except Exception as e:
+                print(f"    ⚠️ تعذر ضبط مشاركة {section_name} قراءةً: {e}")
+            print(f"    📁 أنشئ مجلد القسم: {section_name} (قراءة للجميع)")
+            return new_id
         except Exception as e:
             print(f"    ⚠️ تعذر إنشاء مجلد {section_name}: {e}")
             return None
