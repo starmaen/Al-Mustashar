@@ -115,6 +115,11 @@ def _build_word_fixes():
         "قتراع": "اقتراع",
         "اشكاال": "أشكالا",
         "باإلضافة": "بالإضافة",
+        # همزات ساقطة وتاء مربوطة (مشاهدات صريحة — أشكال مستحيلة الصحة)
+        "ايضاً": "أيضاً",
+        "اللجنه": "اللجنة",
+        "المبدء": "المبدأ",
+        "إلي": "إلى",
     })
     return fixes
 
@@ -130,8 +135,8 @@ def _get_word_pattern():
     if _WORD_PATTERN is None:
         keys = sorted(WORD_FIXES.keys(), key=len, reverse=True)
         alt = "|".join(re.escape(k) for k in keys)
-        # حدود الحروف فقط (0621-064A) لتطال التنوين والحركات الملاصقة
-        _WORD_PATTERN = re.compile("(?<![\u0621-\u064A])(" + alt + ")(?![\u0621-\u064A])")
+        # حدود الحروف فقط (0621-064A) + سوابق منفصلة شائعة (و/ف/ب/ك/ل) تُحفظ كما هي
+        _WORD_PATTERN = re.compile("(?<![\u0621-\u064A])(و|ف|ب|ك|ل|ول)?(" + alt + ")(?![\u0621-\u064A])")
     return _WORD_PATTERN
 
 
@@ -155,7 +160,7 @@ def repair_words(text):
 
     def _sub(m):
         count[0] += 1
-        return WORD_FIXES[m.group(1)]
+        return (m.group(1) or "") + WORD_FIXES[m.group(2)]
 
     text = _get_word_pattern().sub(_sub, text)
     # تدوير [ا،ل،أ] -> [ا،أ،ل] (األشخاص -> الأشخاص): بداية األ مستحيلة الصحة
