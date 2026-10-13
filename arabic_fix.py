@@ -105,6 +105,16 @@ def _build_word_fixes():
         "اإلحصاءات": "الإحصاءات",
         "واإلحصاءات": "والإحصاءات",
         "واالستفتاءات": "والاستفتاءات",
+        # مشاهدات صريحة أخرى (أشكال مستحيلة الصحة)
+        "لاشخاص": "للأشخاص",
+        "مبادى": "مبادئ",
+        "تري أن": "ترى أن",
+        # سقوط حروف مشاهَد صراحة (أشكال مستحيلة الصحة)
+        "مجاالت": "مجالات",
+        "الحاالت": "الحالات",
+        "قتراع": "اقتراع",
+        "اشكاال": "أشكالا",
+        "باإلضافة": "بالإضافة",
     })
     return fixes
 
@@ -120,7 +130,8 @@ def _get_word_pattern():
     if _WORD_PATTERN is None:
         keys = sorted(WORD_FIXES.keys(), key=len, reverse=True)
         alt = "|".join(re.escape(k) for k in keys)
-        _WORD_PATTERN = re.compile("(?<![\u0600-\u06FF])(" + alt + ")(?![\u0600-\u06FF])")
+        # حدود الحروف فقط (0621-064A) لتطال التنوين والحركات الملاصقة
+        _WORD_PATTERN = re.compile("(?<![\u0621-\u064A])(" + alt + ")(?![\u0621-\u064A])")
     return _WORD_PATTERN
 
 
@@ -147,6 +158,21 @@ def repair_words(text):
         return WORD_FIXES[m.group(1)]
 
     text = _get_word_pattern().sub(_sub, text)
+    # تدوير [ا،ل،أ] -> [ا،أ،ل] (األشخاص -> الأشخاص): بداية األ مستحيلة الصحة
+    def _sub3(m):
+        count[0] += 1
+        return (m.group(1) or "") + "الأ"
+    text = re.sub(r"(?<![\u0621-\u064A])(و|ف|ب|ك|ل|ول)?األ", _sub3, text)
+    # تدوير [ا،ل،ا] -> [ا،ا،ل] (االستعمار -> الاستعمار): بداية اال مستحيلة الصحة
+    def _sub4(m):
+        count[0] += 1
+        return (m.group(1) or "") + "الا"
+    text = re.sub(r"(?<![\u0621-\u064A])(و|ف|ب|ك|ل|ول)?اال(?=[\u0621-\u064A])", _sub4, text)
+    # تاء مربوطة منفصلة بخطأ (باإلضاف ة -> باإلضافة): حرف ة وحيد لا يكون كلمة
+    def _sub5(m):
+        count[0] += 1
+        return m.group(1) + "ة"
+    text = re.sub(r"([\u0621-\u064A]) ة(?![\u0621-\u064A])", _sub5, text)
     return text, count[0]
 
 
