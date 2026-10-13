@@ -28,7 +28,48 @@ CHUNK_OVERLAP = 150
 
 # نسخة مخطط المعالجة: تغييرها يعيد معالجة الكتب مرة واحدة.
 # v5-full: فهرس احتياطي من بنية النص + تنظيف NFKC لنصوص المكتبة.
-SCHEMA_VERSION = "v6-repair"
+SCHEMA_VERSION = "v7-sections"
+
+# أقسام المكتبة الإلكترونية (بالترتيب المعتمد في التطبيق)
+SECTIONS = ["مراجع قانونية", "قوانين واتفاقات دولية", "اجتهادات قضائية", "كتب منوعة"]
+
+_SECTION_KEYWORDS = [
+    ("اجتهادات قضائية", ["اجتهاد", "اجتهادات", "قرارات محكمة", "نقض",
+                          "أحكام المحاكم", "السوابق", "مبادئ المحاكم"]),
+    ("مراجع قانونية", ["شرح", "تعليق", "موسوعة", "مرجع", "صديق المحامي",
+                        "دليل المحامي", "الدعاوى", "الطعون", "الصيغ"]),
+    ("قوانين واتفاقات دولية", ["اتفاقية", "اتفاقيات", "اتفاق", "معاهدة", "معاهدات",
+                                "بروتوكول", "نظام روما", "ميثاق", "عهد دولي",
+                                "إعلان عالمي", "قانون"]),
+]
+
+
+def _section_key_hit(hay, key):
+    """مطابقة بكلمة مستقلة مع جواز الـ التعريف (تتفادى قانونية/اتفاقية عند اللزوم)."""
+    pat = r"(?<![\u0600-\u06FF])(?:ال)?" + re.escape(key) + r"(?![\u0600-\u06FF])"
+    return re.search(pat, hay) is not None
+
+
+def _norm_section_hay(s):
+    s = re.sub(r"[_—–\-/]+", " ", s or "")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def detect_section(title, sub=""):
+    """تصنيف الكتاب في قسم: اسم المجلد الفرعي أولاً، ثم عنوان الكتاب."""
+    hay = _norm_section_hay(f"{sub} {title}")
+    for section, words in _SECTION_KEYWORDS:
+        for w in words:
+            if _section_key_hit(hay, w):
+                return section
+    return "كتب منوعة"
+
+
+def section_order(section):
+    try:
+        return SECTIONS.index(section)
+    except ValueError:
+        return len(SECTIONS)
 
 TYPE_KEYWORDS = {
     "اجتهاد": ["اجتهاد", "اجتهادات", "قرارات محكمة", "نقض"],
@@ -370,7 +411,7 @@ def main():
                             "title": (f"{sub} / " if sub else "") + re.sub(r"\.(pdf|txt|docx)$", "", inner.split("/")[-1], flags=re.I),
                             "data": zf.read(inner), "kind": kind,
                             "skip_key": f"zip:{name}/{inner}@{mod}",
-                            "source": f"{name} ← {inner}", "drive_id": fbid,
+                            "source": f"{name} ← {inner}", "drive_id": fbid, "sub": sub,
                         })
             except Exception as e:
                 print(f"    تعذر فك: {name}: {e}")
@@ -378,19 +419,19 @@ def main():
             units.append({
                 "title": re.sub(r"\.pdf$", "", disp, flags=re.I),
                 "data": None, "kind": "pdf", "skip_key": f"file:{name}@{mod}",
-                "source": name, "drive_id": fbid, "fbid": fbid,
+                "source": name, "drive_id": fbid, "fbid": fbid, "sub": sub,
             })
         elif low.endswith(".txt") or mt == "text/plain":
             units.append({
                 "title": re.sub(r"\.txt$", "", disp, flags=re.I),
                 "data": None, "kind": "txt", "skip_key": f"file:{name}@{mod}",
-                "source": name, "drive_id": fbid, "fbid": fbid,
+                "source": name, "drive_id": fbid, "fbid": fbid, "sub": sub,
             })
         elif low.endswith(".docx") or mt == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
             units.append({
                 "title": re.sub(r"\.docx$", "", disp, flags=re.I),
                 "data": None, "kind": "docx", "skip_key": f"file:{name}@{mod}",
-                "source": name, "drive_id": fbid, "fbid": fbid,
+                "source": name, "drive_id": fbid, "fbid": fbid, "sub": sub,
             })
         elif low.endswith(".doc") or mt == "application/msword":
             ignored.append({"file": disp, "reason": "DOC قديم غير مدعوم — حوّله إلى DOCX أو PDF"})
@@ -420,6 +461,7 @@ def main():
                     ex = json.load(open(jp, encoding="utf-8"))
                     index_books.append({
                         "id": ex["id"], "title": ex["title"], "type": ex.get("type", "مرجع"),
+                        "section": ex.get("section") or detect_section(ex.get("title", ""), ""),
                         "file": f"{book_id}.json", "chunks_count": ex.get("chunks_count", 0),
                     })
                     report.append({"title": ex["title"], "status": "unchanged",
@@ -470,8 +512,10 @@ def main():
             pass
         book_id = make_id(u["title"])
         did = u.get("drive_id", "")
+        section = detect_section(u["title"], u.get("sub", ""))
         data = {
             "id": book_id, "title": u["title"], "type": detect_type(u["title"]),
+            "section": section,
             "source_file": u["source"], "extraction_method": method,
             "drive_file_id": did,
             "drive_url": f"https://drive.google.com/file/d/{did}/view" if did else "",
@@ -486,6 +530,7 @@ def main():
         new_manifest[u["skip_key"]] = {"book_id": book_id}
         index_books.append({
             "id": book_id, "title": u["title"], "type": data["type"],
+            "section": section,
             "file": f"{book_id}.json", "chunks_count": len(chunks),
         })
         report.append({"title": u["title"], "status": st, "chunks": len(chunks), "method": method, "toc": len(toc)})
@@ -498,6 +543,8 @@ def main():
         return 0
 
     save_manifest(new_manifest)
+    # ترتيب الفهرس: الأقسام بالتسلسل المعتمد ثم العناوين أبجدياً
+    index_books.sort(key=lambda b: (section_order(b.get("section", "")), b.get("title", "")))
     with open(os.path.join(OUTPUT_DIR, "index.json"), "w", encoding="utf-8") as jf:
         json.dump({
             "last_updated": datetime.now(timezone.utc).isoformat(),

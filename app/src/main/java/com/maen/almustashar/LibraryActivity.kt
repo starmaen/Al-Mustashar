@@ -51,6 +51,12 @@ class LibraryActivity : AppCompatActivity() {
     private var currentList: List<LibraryCache.Passage> = emptyList()
     private var currentIndex: Int = -1
 
+    // أقسام المكتبة: تصفية حسب القسم بدل العرض العشوائي المكدس
+    private var activeSection: String? = null
+    private var visibleBooks: List<LibraryCache.BookMeta> = emptyList()
+    private var libAdapter: LibraryAdapter? = null
+    private val sectionChips = mutableMapOf<String?, Int>()
+
     private var books: List<LibraryCache.BookMeta> = emptyList()
     private var passages: List<LibraryCache.Passage> = emptyList()
     private var headings: Map<String, List<LibraryCache.Passage>> = emptyMap()
@@ -85,6 +91,15 @@ class LibraryActivity : AppCompatActivity() {
 
         btnPrev.setOnClickListener { stepPassage(-1) }
         btnNext.setOnClickListener { stepPassage(1) }
+
+        sectionChips[null] = R.id.chipAll
+        sectionChips["مراجع قانونية"] = R.id.chipRef
+        sectionChips["قوانين واتفاقات دولية"] = R.id.chipLaws
+        sectionChips["اجتهادات قضائية"] = R.id.chipCases
+        sectionChips["كتب منوعة"] = R.id.chipMisc
+        for ((section, id) in sectionChips) {
+            findViewById<Button>(id).setOnClickListener { setSectionFilter(section) }
+        }
 
         findViewById<Button>(R.id.btnLibrarySearch).setOnClickListener { doSearch() }
         findViewById<Button>(R.id.btnLibraryAsk).setOnClickListener { doAsk() }
@@ -139,8 +154,51 @@ class LibraryActivity : AppCompatActivity() {
             books = pool.first
             passages = pool.second
             headings = passages.groupBy { it.bookId }
-            expList.setAdapter(LibraryAdapter())
+            libAdapter = LibraryAdapter()
+            expList.setAdapter(libAdapter)
+            applySectionFilter()
             setView(LibView.LIST)
+        }
+    }
+
+    private fun applySectionFilter() {
+        visibleBooks = if (activeSection == null) books else books.filter { it.section == activeSection }
+        libAdapter?.notifyDataSetChanged()
+        paintChips()
+    }
+
+    private fun setSectionFilter(section: String?) {
+        activeSection = section
+        applySectionFilter()
+        setView(LibView.LIST)
+    }
+
+    private fun paintChips() {
+        val on = 0xFF0F2042.toInt()
+        val off = 0xFFE2E8F0.toInt()
+        for ((section, id) in sectionChips) {
+            try {
+                val b = findViewById<Button>(id)
+                val selected = (section == activeSection)
+                b.backgroundTintList = android.content.res.ColorStateList.valueOf(if (selected) on else off)
+                b.setTextColor(if (selected) 0xFFFFFFFF.toInt() else 0xFF0F2042.toInt())
+            } catch (_: Exception) {
+            }
+        }
+    }
+
+    // القفز من ترشيح موضوعي إلى فهرس الكتاب مباشرة
+    private fun jumpToBook(bookId: String) {
+        activeSection = null
+        applySectionFilter()
+        setView(LibView.LIST)
+        val idx = visibleBooks.indexOfFirst { it.id == bookId }
+        if (idx >= 0) {
+            try {
+                expList.expandGroup(idx)
+                expList.smoothScrollToPosition(idx)
+            } catch (_: Exception) {
+            }
         }
     }
 
@@ -186,12 +244,31 @@ class LibraryActivity : AppCompatActivity() {
         return sb.toString()
     }
 
-    private fun showHits(hits: List<LibraryCache.Passage>) {
+    private fun showHits(hits: List<LibraryCache.Passage>, suggestions: List<LibraryCache.BookSuggestion> = emptyList()) {
         currentList = hits
         currentIndex = -1
         passageFromHits = true
-        // قائمة منظمة: عنوان كل نتيجة قابل للضغط يعرض المقطع كاملاً
+        // قائمة منظمة: كتب مقترحة حول الموضوع أولاً، ثم نتائج قابلة للضغط
         val sb = SpannableStringBuilder()
+        if (suggestions.isNotEmpty()) {
+            sb.append("📚 كتب مقترحة حول موضوعك:\n\n")
+            suggestions.forEachIndexed { i, s ->
+                val header = "${i + 1}. 📕 ${s.book.title}\n   [${s.book.section} • ${s.book.type} • ${s.book.chunksCount} مقطع]\n"
+                val start = sb.length
+                sb.append(header)
+                val bid = s.book.id
+                sb.setSpan(object : ClickableSpan() {
+                    override fun onClick(widget: View) {
+                        jumpToBook(bid)
+                    }
+                }, start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                sb.append("\n")
+            }
+            sb.append("───────────────────────\n\n")
+        }
+        if (hits.isEmpty()) {
+            sb.append("لا مقاطع مطابقة حرفياً — جرّب صياغة أخرى أو افتح فهرس كتاب مقترح.")
+        }
         hits.forEachIndexed { i, p ->
             val header = "${i + 1}. 📖 ${p.bookTitle} — مقطع ${p.n}" +
                 (if (p.section.isNotBlank()) "\n   📑 ${p.section}" else "") +
@@ -251,7 +328,14 @@ class LibraryActivity : AppCompatActivity() {
         }
         val hits = LibraryCache.search(passages, q, 15)
         expList.visibility = View.GONE
-        if (hits.isEmpty()) {
+        // بحث بالصفحة: "صفحة 12" — أقرب عنوان فهرس مرقم في كل كتاب
+        val page = LibraryCache.extractPageNumber(q)
+        if (page > 0) {
+            showPageResults(page)
+            return
+        }
+        val suggestions = LibraryCache.suggestBooks(books, passages, q, 4)
+        if (hits.isEmpty() && suggestions.isEmpty()) {
             tvEmpty.text = "لا نتائج في المكتبة لـ \"$q\""
             tvEmpty.visibility = View.VISIBLE
             scrollResult.visibility = View.GONE
@@ -260,8 +344,58 @@ class LibraryActivity : AppCompatActivity() {
             currentList = emptyList()
             backCallback.isEnabled = true
         } else {
-            showHits(hits)
+            showHits(hits, suggestions)
         }
+    }
+
+    private fun showPageResults(page: Int) {
+        data class Row(val bookId: String, val bookTitle: String, val entry: LibraryCache.TocEntry, val chunkIdx: Int)
+        val rows = mutableListOf<Row>()
+        for (b in books) {
+            val paged = b.toc.filter { it.page > 0 }
+            if (paged.isEmpty()) continue
+            var best = paged[0]
+            for (e in paged) {
+                if (e.page <= page && e.page >= best.page) best = e
+            }
+            if (best.page > page) best = paged.minByOrNull { kotlin.math.abs(it.page - page) } ?: best
+            rows.add(Row(b.id, b.title, best, resolveTocToChunk(b.id, best.title)))
+        }
+        if (rows.isEmpty()) {
+            tvEmpty.text = "لا ترقيم صفحات في فهارس الكتب — جرّب البحث بالكلمة أو المعنى."
+            tvEmpty.visibility = View.VISIBLE
+            scrollResult.visibility = View.GONE
+            libView = LibView.HITS
+            currentList = emptyList()
+            backCallback.isEnabled = true
+            return
+        }
+        currentList = emptyList()
+        currentIndex = -1
+        passageFromHits = false
+        val sb = SpannableStringBuilder()
+        sb.append("📄 صفحة $page — أقرب عناوين الفهارس:\n\n")
+        rows.forEachIndexed { i, r ->
+            val header = "${i + 1}. 📖 ${r.bookTitle}\n   📑 ${r.entry.title}  (ص ${r.entry.page})\n"
+            val start = sb.length
+            sb.append(header)
+            sb.setSpan(object : ClickableSpan() {
+                override fun onClick(widget: View) {
+                    val siblings = headings[r.bookId] ?: emptyList()
+                    if (siblings.isEmpty()) return
+                    currentList = siblings
+                    passageFromHits = false
+                    showPassage(r.chunkIdx.coerceIn(siblings.indices))
+                }
+            }, start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            sb.append("\n")
+        }
+        tvResult.text = sb
+        tvResult.movementMethod = LinkMovementMethod.getInstance()
+        tvEmpty.visibility = View.GONE
+        scrollResult.visibility = View.VISIBLE
+        scrollResult.scrollTo(0, 0)
+        setView(LibView.HITS)
     }
 
     private fun doAsk() {
@@ -333,18 +467,18 @@ class LibraryActivity : AppCompatActivity() {
     }
 
     private inner class LibraryAdapter : BaseExpandableListAdapter() {
-        override fun getGroupCount(): Int = books.size
+        override fun getGroupCount(): Int = visibleBooks.size
         override fun getChildrenCount(groupPosition: Int): Int {
-            val toc = bookToc(books[groupPosition].id)
+            val toc = bookToc(visibleBooks[groupPosition].id)
             if (toc.isNotEmpty()) return toc.size
             // بلا حد: كل مقاطع المرجع (كانت 60 فقط فتختفي البقية)
-            return headings[books[groupPosition].id]?.size ?: 0
+            return headings[visibleBooks[groupPosition].id]?.size ?: 0
         }
-        override fun getGroup(groupPosition: Int): Any = books[groupPosition]
+        override fun getGroup(groupPosition: Int): Any = visibleBooks[groupPosition]
         override fun getChild(groupPosition: Int, childPosition: Int): Any {
-            val toc = bookToc(books[groupPosition].id)
+            val toc = bookToc(visibleBooks[groupPosition].id)
             if (toc.isNotEmpty()) return toc[childPosition]
-            return headings[books[groupPosition].id]!![childPosition]
+            return headings[visibleBooks[groupPosition].id]!![childPosition]
         }
         override fun getGroupId(groupPosition: Int): Long = groupPosition.toLong()
         override fun getChildId(groupPosition: Int, childPosition: Int): Long = childPosition.toLong()
@@ -352,18 +486,18 @@ class LibraryActivity : AppCompatActivity() {
         override fun isChildSelectable(groupPosition: Int, childPosition: Int): Boolean = true
 
         override fun getGroupView(groupPosition: Int, isExpanded: Boolean, convertView: View?, parent: ViewGroup?): View {
-            val b = books[groupPosition]
+            val b = visibleBooks[groupPosition]
             val v = convertView ?: LayoutInflater.from(this@LibraryActivity)
                 .inflate(android.R.layout.simple_expandable_list_item_1, parent, false)
             (v.findViewById<TextView>(android.R.id.text1)).text =
                 (if (isExpanded) "📂 " else "📁 ") + b.title +
-                    "  [${b.type} • ${b.chunksCount} مقطع" +
+                    "  [${b.section} • ${b.type} • ${b.chunksCount} مقطع" +
                     (if (b.toc.isNotEmpty()) " • ${b.toc.size} عنوان فهرس" else "") + "]"
             return v
         }
 
         override fun getChildView(groupPosition: Int, childPosition: Int, isLastChild: Boolean, convertView: View?, parent: ViewGroup?): View {
-            val bookId = books[groupPosition].id
+            val bookId = visibleBooks[groupPosition].id
             val toc = bookToc(bookId)
             val v = convertView ?: LayoutInflater.from(this@LibraryActivity)
                 .inflate(android.R.layout.simple_list_item_1, parent, false)

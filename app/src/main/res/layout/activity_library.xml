@@ -14,6 +14,71 @@
         app:title="📚 المكتبة القانونية"
         app:titleTextColor="#FFFFFF" />
 
+    <HorizontalScrollView
+        android:id="@+id/sectionChipRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="#FFFFFF"
+        android:paddingVertical="6dp"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp">
+
+            <Button
+                android:id="@+id/chipAll"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:backgroundTint="#0F2042"
+                android:text="الكل 📚"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/chipRef"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:backgroundTint="#E2E8F0"
+                android:text="مراجع قانونية"
+                android:textColor="#0F2042"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/chipLaws"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:backgroundTint="#E2E8F0"
+                android:text="قوانين واتفاقات دولية"
+                android:textColor="#0F2042"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/chipCases"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="6dp"
+                android:backgroundTint="#E2E8F0"
+                android:text="اجتهادات قضائية"
+                android:textColor="#0F2042"
+                android:textSize="12sp" />
+
+            <Button
+                android:id="@+id/chipMisc"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:backgroundTint="#E2E8F0"
+                android:text="كتب منوعة"
+                android:textColor="#0F2042"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </HorizontalScrollView>
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

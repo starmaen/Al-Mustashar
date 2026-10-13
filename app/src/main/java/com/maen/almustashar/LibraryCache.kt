@@ -14,7 +14,8 @@ object LibraryCache {
         val type: String,
         val driveUrl: String?,
         val chunksCount: Int,
-        val toc: List<TocEntry> = emptyList()
+        val toc: List<TocEntry> = emptyList(),
+        val section: String = "كتب منوعة"
     )
 
     data class TocEntry(
@@ -133,7 +134,7 @@ object LibraryCache {
                         } catch (_: Exception) {
                         }
                     }
-                    books.add(BookMeta(id, title, type, driveUrl, chArr.length(), toc))
+                    books.add(BookMeta(id, title, type, driveUrl, chArr.length(), toc, b.optString("section", "كتب منوعة")))
                     for (j in 0 until chArr.length()) {
                         val c = chArr.getJSONObject(j)
                         val text = c.optString("text")
@@ -183,5 +184,71 @@ object LibraryCache {
             }
             if (score > 0) Pair(p, score) else null
         }.sortedByDescending { it.second }.take(limit).map { it.first }
+    }
+
+    // مرادفات قانونية مختصرة للبحث بالمعنى (تُوسَّع تدريجياً)
+    private val SYNONYMS = mapOf(
+        "حقوق الانسان" to listOf("حقوق الانسان", "الحريات", "الكرامه", "المساواه", "التمييز"),
+        "الاحوال الشخصيه" to listOf("الاحوال الشخصيه", "الزواج", "الطلاق", "الميراث", "الوصيه"),
+        "العقود" to listOf("العقود", "الالتزامات", "العقد", "الاتفاق"),
+        "الجرائم" to listOf("الجرائم", "العقوبات", "الجريمه", "الجنايات"),
+        "الاجرائات" to listOf("الاجرائات", "الاجراءات", "المرافعات", "اصول المحاكمات"),
+    )
+
+    private fun expandedTerms(rawQuery: String): List<String> {
+        val base = rawQuery.split(Regex("\\s+")).map { norm(it) }
+            .filter { it.length > 2 && it !in setOf("كتاب", "الكتاب", "قانون", "القانون", "مادة", "المادة") }
+        val out = base.toMutableList()
+        val nq = norm(rawQuery)
+        for ((k, vs) in SYNONYMS) {
+            if (nq.contains(k)) for (v in vs) if (v !in out) out.add(v)
+        }
+        return out
+    }
+
+    data class BookSuggestion(
+        val book: BookMeta,
+        val score: Int
+    )
+
+    // ترشيح كتب حول موضوع: العنوان ×5، الفهرس ×3، المقاطع ×1
+    fun suggestBooks(
+        books: List<BookMeta>,
+        passages: List<Passage>,
+        rawQuery: String,
+        limit: Int = 5
+    ): List<BookSuggestion> {
+        val terms = expandedTerms(rawQuery)
+        if (terms.isEmpty()) return emptyList()
+        val byBook = passages.groupBy { it.bookId }
+        return books.mapNotNull { b ->
+            var score = 0
+            val nt = norm(b.title)
+            for (t in terms) if (nt.contains(t)) score += 5
+            for (e in b.toc) {
+                val th = norm(e.title)
+                for (t in terms) if (th.contains(t)) {
+                    score += 3
+                    break
+                }
+            }
+            val ps = byBook[b.id] ?: emptyList()
+            var hits = 0
+            for (p in ps) {
+                val pt = norm(p.text)
+                var c = 0
+                for (t in terms) if (pt.contains(t)) c++
+                if (c > 0) hits++
+                if (hits >= 10) break
+            }
+            score += minOf(hits, 10)
+            if (score > 0) BookSuggestion(b, score) else null
+        }.sortedByDescending { it.score }.take(limit)
+    }
+
+    // استخراج رقم صفحة من الاستعلام: "صفحة 12" — أو -1
+    fun extractPageNumber(rawQuery: String): Int {
+        val m = Regex("(?:صفحة|ص)\\s*(\\d{1,4})").find(rawQuery)
+        return m?.groupValues?.get(1)?.toIntOrNull() ?: -1
     }
 }
