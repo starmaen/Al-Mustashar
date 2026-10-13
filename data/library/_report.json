@@ -1,54 +1,40 @@
 {
-  "generated_at": "2026-10-13T15:24:36.404070+00:00",
+  "generated_at": "2026-10-13T18:42:53.900407+00:00",
   "books": [
     {
       "title": "  عبد الفتاح خضر الثقافة القانونية لغير القانونيين 3 ",
-      "status": "ok",
-      "chunks": 73,
-      "method": "PyMuPDF",
-      "toc": 34
+      "status": "unchanged",
+      "chunks": 73
     },
     {
       "title": "نظام-روما-الأساسي-للمحكمة-الجنائية-الدولية_نسخة",
-      "status": "ok",
-      "chunks": 108,
-      "method": "PyMuPDF",
-      "toc": 2
+      "status": "unchanged",
+      "chunks": 108
     },
     {
       "title": "الاتفاقية-الدولية-للقضاء-علي-جميع-أشكال-التمييز-العنصري_نسخة",
-      "status": "ok",
-      "chunks": 17,
-      "method": "PyMuPDF",
-      "toc": 24
+      "status": "unchanged",
+      "chunks": 17
     },
     {
       "title": "الاتفاقية-الدولية-لحماية-جميع-الأشخاص-من-الاختفاء-القسري_نسخة",
-      "status": "ok",
-      "chunks": 25,
-      "method": "PyMuPDF",
-      "toc": 44
+      "status": "unchanged",
+      "chunks": 25
     },
     {
       "title": "اتفاقية-حماية-العمال-المهاجرين-وأسرهم_نسخة",
-      "status": "ok",
-      "chunks": 49,
-      "method": "PyMuPDF",
-      "toc": 94
+      "status": "unchanged",
+      "chunks": 49
     },
     {
       "title": "اتفاقية-حقوق-الأشخاص-ذوي-الإعاقة_نسخة",
-      "status": "ok",
-      "chunks": 40,
-      "method": "PyMuPDF",
-      "toc": 53
+      "status": "unchanged",
+      "chunks": 40
     },
     {
       "title": "اتفاقية-القضاء-على-جميع-اشكال-التميز-ضد-المرأة_نسخة",
-      "status": "ok",
-      "chunks": 19,
-      "method": "PyMuPDF",
-      "toc": 31
+      "status": "unchanged",
+      "chunks": 19
     }
   ],
   "ignored": [],
