@@ -129,6 +129,12 @@ def light_clean(text):
 
 
 def parse_articles(text):
+    # إصلاح التراكيب اللغوية قبل التقطيع (موصول لا/همزات — قاموس صريح آمن)
+    try:
+        import arabic_fix
+        text, _ = arabic_fix.repair_text(text)
+    except Exception:
+        pass
     articles = []
     # يقبل ايضا "؟" و "?" مكان الرقم (Tesseract يقراها 2 و 3 احيانا) - ترقم تسلسليا لاحقا
     ZW = '\u200B-\u200F'

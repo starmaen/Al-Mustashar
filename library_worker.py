@@ -28,7 +28,7 @@ CHUNK_OVERLAP = 150
 
 # نسخة مخطط المعالجة: تغييرها يعيد معالجة الكتب مرة واحدة.
 # v5-full: فهرس احتياطي من بنية النص + تنظيف NFKC لنصوص المكتبة.
-SCHEMA_VERSION = "v5-full"
+SCHEMA_VERSION = "v6-repair"
 
 TYPE_KEYWORDS = {
     "اجتهاد": ["اجتهاد", "اجتهادات", "قرارات محكمة", "نقض"],
@@ -439,6 +439,12 @@ def main():
         else:
             text = ocr.strip_invisible(decode_txt(raw))
         text = clean_library_text(text)
+        # إصلاح التراكيب اللغوية (موصول لا/همزات/تاء مربوطة) — قاموس صريح آمن
+        try:
+            import arabic_fix
+            text, _nfix = arabic_fix.repair_text(text)
+        except Exception:
+            pass
         chunks = chunk_text(text)
         print(f"    ✓ {method}: {len(chunks)} مقطعاً")
         # فهرس الكتاب (PDF فقط): إشارات المستند + سطور الخط الكبير، ثم بنية النص

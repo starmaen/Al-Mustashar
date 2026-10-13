@@ -17,10 +17,22 @@
 import json
 import os
 import sys
+import hashlib
 from datetime import datetime, timezone
 
 OUTPUT_DIR = "data/laws"
 MANIFEST_PATH = "data/laws/_manifest.json"
+
+
+def content_hash(articles):
+    """بصمة محتوى المواد: تلتقط أي إصلاح نصي حتى مع ثبات التاريخ والعدد."""
+    h = hashlib.sha1()
+    for a in articles:
+        h.update(str(a.get("number", "")).encode("utf-8", "ignore"))
+        h.update(b"\x00")
+        h.update(str(a.get("text", "")).encode("utf-8", "ignore"))
+        h.update(b"\x00")
+    return h.hexdigest()
 
 
 def load_json(path):
@@ -79,10 +91,12 @@ def main():
 
         law_ref = db.collection("laws").document(law_id)
         existing = law_ref.get()
+        chash = content_hash(articles)
         if existing.exists:
             ed = existing.to_dict() or {}
             if (ed.get("drive_modified_time") == drive_modified
                     and ed.get("articles_count") == len(articles)
+                    and ed.get("text_hash", "") == chash
                     and drive_modified):
                 print(f"تخطي (بدون تغيير): {law.get('name')}")
                 skipped += 1
@@ -98,6 +112,7 @@ def main():
             "extraction_method": law.get("extraction_method", ""),
             "drivePdfUrl": drive_url,
             "drive_modified_time": drive_modified,
+            "text_hash": chash,
             "updated_at": datetime.now(timezone.utc).isoformat(),
         })
 
