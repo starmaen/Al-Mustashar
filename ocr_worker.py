@@ -29,6 +29,29 @@ def save_manifest(m):
         json.dump(m, f, ensure_ascii=False, indent=2)
 
 
+def write_if_changed(path, obj):
+    """يكتب JSON فقط عند اختلاف المحتوى (يتجاهل الطوابع الزمنية).
+    يمنع طابعاً جديداً كل تشغيل — وإلا تعارض الدفع مع أي تعديل ويب."""
+    new_text = json.dumps(obj, ensure_ascii=False, indent=2)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            old_text = f.read()
+        old = json.loads(old_text)
+        new = json.loads(new_text)
+        for k in ("last_updated", "generated_at"):
+            if isinstance(old, dict):
+                old.pop(k, None)
+            if isinstance(new, dict):
+                new.pop(k, None)
+        if old == new:
+            return False
+    except (FileNotFoundError, ValueError, OSError):
+        pass
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_text)
+    return True
+
+
 def clean_filename(filename):
     name = re.sub(r'(\.pdf|\.PDF)+$', '', filename)
     name = re.sub(r'[_\-]?(نسخة|copie|copy|final|نهائي|الجديد|جديد)\s*', ' ', name, flags=re.IGNORECASE)
@@ -410,14 +433,13 @@ def main():
             'id': l['id'], 'name': l['name'], 'articles_count': l['articles_count'],
             'prev_count': prev, 'status': status, 'method': l.get('extraction_method', '')
         })
-    with open(os.path.join(OUTPUT_DIR, '_report.json'), 'w', encoding='utf-8') as rf:
-        json.dump({
-            'generated_at': datetime.utcnow().isoformat(),
-            'total_laws': len(index_laws),
-            'warnings': gate_warnings,
-            'laws': report_laws,
-            'ignored': ignored_files
-        }, rf, ensure_ascii=False, indent=2)
+    wrote_report = write_if_changed(os.path.join(OUTPUT_DIR, '_report.json'), {
+        'generated_at': datetime.utcnow().isoformat(),
+        'total_laws': len(index_laws),
+        'warnings': gate_warnings,
+        'laws': report_laws,
+        'ignored': ignored_files
+    })
     print("\n=== بوابة الجودة ===")
     if gate_warnings:
         for w in gate_warnings:
@@ -441,8 +463,10 @@ def main():
         'total_laws': len(index_laws),
         'laws': index_laws
     }
-    with open(os.path.join(OUTPUT_DIR, 'index.json'), 'w', encoding='utf-8') as jf:
-        json.dump(index_data, jf, ensure_ascii=False, indent=2)
+    if write_if_changed(os.path.join(OUTPUT_DIR, 'index.json'), index_data):
+        print("حُدّث الفهرس (تغيّر المحتوى)")
+    else:
+        print("الفهرس مطابق — بلا كتابة (لا دفع زائد)")
 
     print(f"\n=== {len(index_laws)} قانون في الفهرس ===")
 

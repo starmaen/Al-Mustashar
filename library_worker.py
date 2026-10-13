@@ -94,6 +94,31 @@ def save_manifest(m):
         json.dump(m, f, ensure_ascii=False, indent=2)
 
 
+def write_if_changed(path, obj):
+    """يكتب JSON فقط عند اختلاف المحتوى (يتجاهل الطوابع الزمنية).
+    يمنع طابعاً جديداً كل تشغيل — وإلا تعارض الدفع مع أي تعديل ويب.
+    يعيد True إذا كتب فعلاً."""
+    new_text = json.dumps(obj, ensure_ascii=False, indent=2)
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            old_text = f.read()
+        old = json.loads(old_text)
+        new = json.loads(new_text)
+        for k in ("last_updated", "generated_at"):
+            if isinstance(old, dict):
+                old.pop(k, None)
+            if isinstance(new, dict):
+                new.pop(k, None)
+        if old == new:
+            return False
+    except (FileNotFoundError, ValueError, OSError):
+        pass
+    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(new_text)
+    return True
+
+
 def detect_type(name):
     for t, words in TYPE_KEYWORDS.items():
         for w in words:
@@ -333,7 +358,9 @@ def main():
 
     creds = service_account.Credentials.from_service_account_info(
         json.loads(os.environ["GDRIVE_SERVICE_ACCOUNT_JSON"]),
-        scopes=["https://www.googleapis.com/auth/drive.readonly"],
+        # نطاق كامل: القراءة للفهرسة + إنشاء مجلدات الأقسام ونقل الكتب إليها.
+        # (المفتاح في Secrets، والكتابة محصورة بمجلد المكتبة فقط)
+        scopes=["https://www.googleapis.com/auth/drive"],
     )
     drive = build("drive", "v3", credentials=creds)
     folder_id = os.environ["GDRIVE_LIBRARY_FOLDER_ID"]
@@ -442,6 +469,7 @@ def main():
 
     index_books = []
     report = []
+    wrote_books = [False]
 
     def download(fbid):
         req = drive.files().get_media(fileId=fbid)
@@ -596,6 +624,7 @@ def main():
         }
         with open(os.path.join(OUTPUT_DIR, f"{book_id}.json"), "w", encoding="utf-8") as jf:
             json.dump(data, jf, ensure_ascii=False, indent=2)
+        wrote_books[0] = True
         new_manifest[u["skip_key"]] = {"book_id": book_id}
         index_books.append({
             "id": book_id, "title": u["title"], "type": data["type"],
@@ -611,18 +640,20 @@ def main():
         print("⚠️ النتيجة 0 كتاب مع وجود سابق — إجهاض نهائي بدون كتابة (حماية من المسح)")
         return 0
 
+    wrote = {"books": wrote_books[0]}
     save_manifest(new_manifest)
     # ترتيب الفهرس: الأقسام بالتسلسل المعتمد ثم العناوين أبجدياً
     index_books.sort(key=lambda b: (section_order(b.get("section", "")), b.get("title", "")))
-    with open(os.path.join(OUTPUT_DIR, "index.json"), "w", encoding="utf-8") as jf:
-        json.dump({
-            "last_updated": datetime.now(timezone.utc).isoformat(),
-            "total_books": len(index_books), "books": index_books,
-        }, jf, ensure_ascii=False, indent=2)
-    with open(os.path.join(OUTPUT_DIR, "_report.json"), "w", encoding="utf-8") as rf:
-        json.dump({"generated_at": datetime.now(timezone.utc).isoformat(),
-                   "books": report, "ignored": ignored, "moved": moved,
-                   "deep_folders_skipped": deep_folders}, rf, ensure_ascii=False, indent=2)
+    wrote_index = write_if_changed(os.path.join(OUTPUT_DIR, "index.json"), {
+        "last_updated": datetime.now(timezone.utc).isoformat(),
+        "total_books": len(index_books), "books": index_books,
+    })
+    wrote_report = write_if_changed(os.path.join(OUTPUT_DIR, "_report.json"), {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "books": report, "ignored": ignored, "moved": moved,
+        "deep_folders_skipped": deep_folders})
+    if not (wrote["books"] or wrote_index or wrote_report or moved):
+        print("لا جديد — كل الملفات مطابقة (لا كتابة ولا دفع).")
     if moved:
         print("\n=== كتب نُقلت تلقائياً لأقسامها ===")
         for mv in moved:
