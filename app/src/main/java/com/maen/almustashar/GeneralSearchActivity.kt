@@ -167,6 +167,11 @@ class GeneralSearchActivity : AppCompatActivity() {
 
                 val answer = AIClient.askLegalQuestion(promptToSend)
 
+                try {
+                    tvSearchMode.text = "🤖 الوضع: إجابة ذكية — المصدر: ${AIClient.lastProvider}"
+                    Toast.makeText(this@GeneralSearchActivity, "المصدر: ${AIClient.lastProvider}", Toast.LENGTH_SHORT).show()
+                } catch (_: Exception) {}
+
                 if (answer.isNotEmpty() && !answer.startsWith("❌")) {
                     val cleaned = cleanMarkdown(answer)
                     if (conversationHistory.isNotEmpty()) {

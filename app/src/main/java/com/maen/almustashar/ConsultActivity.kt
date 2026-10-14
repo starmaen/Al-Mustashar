@@ -70,6 +70,9 @@ class ConsultActivity : AppCompatActivity() {
                             }
                             val result = AIClient.askLegalQuestion(prompt, this@ConsultActivity)
                             tvAnswer?.text = result
+                            try {
+                                Toast.makeText(this@ConsultActivity, "المصدر: ${AIClient.lastProvider}", Toast.LENGTH_SHORT).show()
+                            } catch (_: Exception) {}
                             if (!result.startsWith("❌")) {
                                 conversationHistory.append("\nالاستشارة: ").append(q)
                                     .append("\nالرأي القانوني:\n").append(result).append("\n")

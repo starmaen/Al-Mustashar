@@ -19,10 +19,11 @@ sealed class AIResult {
 
 object AIClient {
     // المفاتيح تُحقن من BuildConfig عبر GitHub Secrets — لا توجد مفاتيح نصية هنا.
-    // الترتيب: GEMINI أساسي، ثم Muse Spark عبر OpenCode Zen (مجاني)، ثم GROQ، ثم OPENROUTER.
+    // الترتيب المعتمد: GEMINI أساسي (أول + بديل)، ثم GROQ ثاني/ثالث عند فشل Gemini، ثم Muse Spark، ثم OPENROUTER أخيراً.
     // أسماء الموديلات ثابتة هنا (مدروسة ومجربة) — لا Secrets لها لتفادي فخ القيم الفارغة.
-    private const val GEMINI_PRIMARY = "gemini-2.5-flash"
-    private const val GEMINI_FALLBACK = "gemini-2.0-flash"
+    private const val GEMINI_PRIMARY = "gemini-3.8-flash"
+    // كما في صورتك: البديل السريع هو 3.5 Flash-Lite
+    private const val GEMINI_FALLBACK = "gemini-3.5-flash-lite"
     // موديل Groq الأصلي السريع (المثبت تاريخياً في التطبيق) — والاكتشاف يرقّيه تلقائياً إن تقاعد
     private const val GROQ_MODEL = "llama-3.1-8b-instant"
     private const val OR_MODEL = "google/gemma-4-31b-it:free"
@@ -43,7 +44,12 @@ object AIClient {
 2. 📜 السند القانوني النافذ (اسم القانون ورقمه وسنته + أرقام المواد ونصوصها الصريحة من التشريع السوري ذي الصلة، مع ذكر التعديلات إن وجدت).
 3. 💡 التحليل القانوني وإبداء الرأي والحل أو العقوبة المقررة (مع المدد والمواعيد القانونية كالتقادم ومهل الطعن).
 4. 🧭 التوجيه العملي والإجراءات المتبعة أمام المحاكم والدوائر الرسمية السورية خطوة بخطوة.
-قاعدة ملزمة: إن زُوّدت بمواد مسترجعة من قاعدة قوانين التطبيق فاعتمدها أولاً واستشهد بها حرفياً، ولا تخترع نصوص مواد. وإن لم تكفِ فأجب من معرفتك مع التنبيه أن النص يحتاج مراجعة."""
+قاعدة ملزمة: إن زُوّدت بمواد مسترجعة من قاعدة قوانين التطبيق فاعتمدها أولاً واستشهد بها حرفياً، ولا تخترع نصوص مواد. وإن لم تكفِ فأجب من معرفتك مع التنبيه أن النص يحتاج مراجعة.
+قاعدة اللغة الصارمة (لمنع تداخل الاتجاهات):
+- أجب باللغة العربية الفصحى حصراً ومن اليمين إلى اليسار. يمنع منعاً باتاً كتابة أي جملة أو عبارة باللغة الإنجليزية داخل الجواب.
+- ترجم كل المصطلحات القانونية إلى العربية (مثال: الزوج بدل Husband، الزوجة بدل wife، الإجراءات بدل procedures، كاتب المحكمة بدل clerk of the court، المحكمة بدل the court، الشخصي بدل Personal، حكومي بدل governmental، تشريعي بدل legislative، قانوني بدل Legal). لا تترك أي مصطلح إنجليزي له مقابل عربي.
+- عند الضرورة القصوى لاسم علم أجنبي لا يقبل الترجمة ضعه وحده بين قوسين عربيين ( ... ) في سطر مستقل أو آخر الجملة، ولا تدمجه وسط الكلام العربي.
+- اكتب كل فقرة بسطر مستقل، وابدأ كل بند برقم عربي ثم نقطة، ولا تدمج لغتين في سطر واحد أبداً."""
 
     private const val DRAFTING_SYSTEM_PROMPT = """أنت محامٍ ومستشار قضائي سوري متمرس وخبير في أصول المحاكمات السورية والصياغة القانونية الرصينة.
 مهمتك: صياغة مذكرات قضائية، لوائح جوابية، واستدعاءات رسمية وإدارية للبلديات والمحاكم بدقة لغوية وقانونية متناهية.
@@ -54,56 +60,136 @@ object AIClient {
    - إذا كان موكلك هو (المدعي / المستدعي): تُصاغ المذكرة للمطالبة بحقوقه وتثبيت طلباته أو استدعاء البلدية باسمه، والتوقيع يكون حصراً: (وكيل المدعي / وكيل المستدعي).
    - إذا كان موكلك هو (المدعى عليه): تُصاغ المذكرة كدفاع وجواب ودحض لادعاءات الخصم، والتوقيع يكون حصراً: (وكيل المدعى عليه).
    - يمنع منعاً باتاً الخلط بين المدعي والمدعى عليه أو التناقض بين متن المذكرة وخاتمتها.
-3. الترتيب القضائي للمذكرة:
+ 3. الترتيب القضائي للمذكرة:
    - الترويسة والأطراف.
    - من حيث الشكل (قبول المذكرة/الاستدعاء شكلاً).
    - من حيث الوقائع والأسانيد (سرد الوقائع والاستناد إلى الوثائق والمستندات بأسلوب قانوني جازم).
    - من حيث القانون (المواد القانونية السورية النافذة).
-   - الطلبات الختامية المرقمة بدقة، وخاتمة الاحترام والتوقيع المتطابق مع صفة الموكل."""
+   - الطلبات الختامية المرقمة بدقة، وخاتمة الاحترام والتوقيع المتطابق مع صفة الموكل.
+قاعدة اللغة: صُغ المذكرة بالعربية الفصحى حصراً. يمنع إقحام أي كلمة إنجليزية لها مقابل عربي. أي اسم أجنبي ضروري يوضع بين قوسين بسطر مستقل ولا يُدمج وسط الجملة."""
 
-    // 1. الاستشارة القانونية
+    // ===== فلترة اللغة العامة: عربية افتراضياً، وإنجليزية فقط عند طلب صريح =====
+    private const val AR_ONLY_RULE = "\n\n[قاعدة لغة ملزمة: أجب باللغة العربية الفصحى حصراً. يمنع أي جملة أو مصطلح إنجليزي له مقابل عربي. ترجم كل المصطلحات (الزوج، الزوجة، الإجراءات، المحكمة، كاتب المحكمة...). أي اسم أجنبي ضروري يوضع بين قوسين في آخر الجملة فقط.]"
+
+    private fun wantsEnglish(userPrompt: String): Boolean {
+        val q = userPrompt.lowercase()
+        return q.contains("in english") || q.contains("answer in english") ||
+            q.contains("english please") || q.contains("translate to english") ||
+            userPrompt.contains("بالانكليز") || userPrompt.contains("بالإنكليز") ||
+            userPrompt.contains("بالإنجليز") || userPrompt.contains("بالانجليز") ||
+            userPrompt.contains("باللغة الانكليزية") || userPrompt.contains("باللغة الإنجليزية") ||
+            userPrompt.contains("أجب بالانكليزية") || userPrompt.contains("أجب بالإنجليزية")
+    }
+
+    private fun withLangGuard(userPrompt: String): String =
+        if (wantsEnglish(userPrompt)) userPrompt else userPrompt + AR_ONLY_RULE
+
+    // قاموس إسعافي لأشهر المصطلحات الإنجليزية التي تسربت سابقاً (من لقطات المستخدم)
+    // يطبق فقط عندما لم يطلب المستخدم الإنجليزية.
+    private val EN_AR_DICT: List<Pair<Regex, String>> = listOf(
+        Regex("\\bclerk of the court\\b", RegexOption.IGNORE_CASE) to "كاتب المحكمة",
+        Regex("\\bclerk of the wife\\b", RegexOption.IGNORE_CASE) to "كاتب المحكمة",
+        Regex("\\bpersonal status\\b", RegexOption.IGNORE_CASE) to "الأحوال الشخصية",
+        Regex("\\bthe court\\b", RegexOption.IGNORE_CASE) to "المحكمة",
+        Regex("\\bprocedures\\b", RegexOption.IGNORE_CASE) to "الإجراءات",
+        Regex("\\bprocedure\\b", RegexOption.IGNORE_CASE) to "الإجراء",
+        Regex("\\bhusband\\b", RegexOption.IGNORE_CASE) to "الزوج",
+        Regex("\\bwife\\b", RegexOption.IGNORE_CASE) to "الزوجة",
+        Regex("\\bspouse\\b", RegexOption.IGNORE_CASE) to "الزوج الآخر",
+        Regex("\\blegislative\\b", RegexOption.IGNORE_CASE) to "تشريعي",
+        Regex("\\bgovernmental\\b", RegexOption.IGNORE_CASE) to "حكومي",
+        Regex("\\blegal\\b", RegexOption.IGNORE_CASE) to "قانوني",
+        Regex("\\bprobabilities\\b", RegexOption.IGNORE_CASE) to "الاحتمالات",
+        Regex("\\bprobability\\b", RegexOption.IGNORE_CASE) to "الاحتمال",
+        Regex("\\bprepare\\b", RegexOption.IGNORE_CASE) to "إعداد",
+        Regex("\\bfiled\\b", RegexOption.IGNORE_CASE) to "المُقدَّم",
+        Regex("\\bbinding\\b", RegexOption.IGNORE_CASE) to "مُلزِم",
+        Regex("\\bexam\\b", RegexOption.IGNORE_CASE) to "الفحص",
+        Regex("\\bproducts\\b", RegexOption.IGNORE_CASE) to "المنتجات",
+        Regex("\\bclerk\\b", RegexOption.IGNORE_CASE) to "الكاتب",
+        Regex("\\bcourt\\b", RegexOption.IGNORE_CASE) to "المحكمة",
+        Regex("\\bpersonal\\b", RegexOption.IGNORE_CASE) to "الشخصي",
+        Regex("\\bfrente\\b", RegexOption.IGNORE_CASE) to ""
+    )
+
+    private fun arabizeCommonTerms(text: String): String {
+        var out = text
+        for ((re, ar) in EN_AR_DICT) out = re.replace(out, ar)
+        // تنظيف فراغات مزدوجة قد تنتج عن حذف كلمات غريبة
+        out = out.replace(Regex("[ \\t]{2,}"), " ")
+        return out
+    }
+
+    // عزل أي مقطع لاتيني متبقٍ بمحارف FSI/PDI حتى لا يكسر اتجاه السطر العربي
+    private val LATIN_RUN = Regex("[A-Za-z][A-Za-z0-9 \\t\\-_,.;:'\"()/]*[A-Za-z0-9)]|[A-Za-z]")
+    private fun isolateBidi(text: String): String {
+        return LATIN_RUN.replace(text) { m -> "\u2066${m.value}\u2069" }
+    }
+
+    private fun finalizeAnswer(raw: String, userPrompt: String): String {
+        if (raw.startsWith("❌")) return raw
+        return if (wantsEnglish(userPrompt)) isolateBidi(raw)
+        else isolateBidi(arabizeCommonTerms(raw))
+    }
+
+    // آخر مزود نجح فعلاً — للتحقق أن Gemini هو العامل وليس Groq
+    var lastProvider: String = "—"
+        private set
+
+    private fun markProvider(name: String) {
+        lastProvider = name
+        try { android.util.Log.d("AIClient", "Provider used: $name") } catch (_: Exception) {}
+    }
+
+    // 1. الاستشارة القانونية — الترتيب: Gemini أولاً، ثم Groq ثانياً عند فشله، ثم البدائل
     suspend fun askLegalQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
-        val res1 = callGemini(resolveGemini(), prompt)
-        if (res1 is AIResult.Success) return@withContext res1.text
+        val guarded = withLangGuard(prompt)
+        val m1 = resolveGemini()
+        val res1 = callGemini(m1, guarded)
+        if (res1 is AIResult.Success) { markProvider("Gemini:$m1"); return@withContext finalizeAnswer(res1.text, prompt) }
 
-        val res2 = callGemini(GEMINI_FALLBACK, prompt)
-        if (res2 is AIResult.Success) return@withContext res2.text
+        val res2 = callGemini(GEMINI_FALLBACK, guarded)
+        if (res2 is AIResult.Success) { markProvider("Gemini:$GEMINI_FALLBACK"); return@withContext finalizeAnswer(res2.text, prompt) }
 
-        val sparkRes = callMuseSpark(prompt)
-        if (sparkRes is AIResult.Success) return@withContext sparkRes.text
+        val gm = resolveGroq()
+        val groqRes = callGroq(gm, guarded, SYSTEM_PROMPT)
+        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext finalizeAnswer(groqRes.text, prompt) }
 
-        val groqRes = callGroq(resolveGroq(), prompt)
-        if (groqRes is AIResult.Success) return@withContext groqRes.text
+        val sparkRes = callMuseSpark(guarded)
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, prompt) }
 
-        val orRes = callOpenRouter(prompt)
-        if (orRes is AIResult.Success) return@withContext orRes.text
+        val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, prompt) }
 
         return@withContext when {
             res1 is AIResult.Error -> "❌ فشل الاتصال: ${res1.message}"
             res2 is AIResult.Error -> "❌ فشل الاتصال البديل: ${res2.message}"
-            sparkRes is AIResult.Error -> "❌ فشل اتصال ماوي سبارك: ${sparkRes.message}"
             groqRes is AIResult.Error -> "❌ فشل اتصال Groq: ${groqRes.message}"
+            sparkRes is AIResult.Error -> "❌ فشل اتصال ماوي سبارك: ${sparkRes.message}"
             orRes is AIResult.Error -> "❌ فشل اتصال البديل الثالث: ${orRes.message}"
             else -> "❌ تعذر إتمام الطلب، يرجى التحقق من اتصال الإنترنت."
         }
     }
 
-    // 2. البحث العام
+    // 2. البحث العام — نفس الفلترة العربية ونفس الترتيب (Gemini ثم Groq)
     suspend fun askGeneralQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
-        val res1 = callGemini(resolveGemini(), prompt)
-        if (res1 is AIResult.Success) return@withContext res1.text
+        val guarded = withLangGuard(prompt)
+        val m1 = resolveGemini()
+        val res1 = callGemini(m1, guarded)
+        if (res1 is AIResult.Success) { markProvider("Gemini:$m1"); return@withContext finalizeAnswer(res1.text, prompt) }
 
-        val res2 = callGemini(GEMINI_FALLBACK, prompt)
-        if (res2 is AIResult.Success) return@withContext res2.text
+        val res2 = callGemini(GEMINI_FALLBACK, guarded)
+        if (res2 is AIResult.Success) { markProvider("Gemini:$GEMINI_FALLBACK"); return@withContext finalizeAnswer(res2.text, prompt) }
 
-        val sparkRes = callMuseSpark(prompt)
-        if (sparkRes is AIResult.Success) return@withContext sparkRes.text
+        val gm = resolveGroq()
+        val groqRes = callGroq(gm, guarded, SYSTEM_PROMPT)
+        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext finalizeAnswer(groqRes.text, prompt) }
 
-        val groqRes = callGroq(resolveGroq(), prompt)
-        if (groqRes is AIResult.Success) return@withContext groqRes.text
+        val sparkRes = callMuseSpark(guarded)
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, prompt) }
 
-        val orRes = callOpenRouter(prompt)
-        if (orRes is AIResult.Success) return@withContext orRes.text
+        val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, prompt) }
 
         return@withContext "❌ تعذر الاتصال بمزود الخدمة."
     }
@@ -111,20 +197,21 @@ object AIClient {
     // 3. البحث في مواد القوانين
     suspend fun fetchLawArticleFromAI(rawQ: String): String = withContext(Dispatchers.IO) {
         val searchPrompt = "استخرج النص الحرفي والكامل للمادة القانونية التالية من التشريعات السورية بدقة متناهية:\n$rawQ"
-        val res1 = callGemini(resolveGemini(), searchPrompt)
-        if (res1 is AIResult.Success) return@withContext res1.text
+        val guarded = withLangGuard(searchPrompt)
+        val res1 = callGemini(resolveGemini(), guarded)
+        if (res1 is AIResult.Success) return@withContext finalizeAnswer(res1.text, rawQ)
 
-        val res2 = callGemini(GEMINI_FALLBACK, searchPrompt)
-        if (res2 is AIResult.Success) return@withContext res2.text
+        val res2 = callGemini(GEMINI_FALLBACK, guarded)
+        if (res2 is AIResult.Success) return@withContext finalizeAnswer(res2.text, rawQ)
 
-        val sparkRes = callMuseSpark(searchPrompt)
-        if (sparkRes is AIResult.Success) return@withContext sparkRes.text
+        val groqRes = callGroq(resolveGroq(), guarded, SYSTEM_PROMPT)
+        if (groqRes is AIResult.Success) return@withContext finalizeAnswer(groqRes.text, rawQ)
 
-        val groqRes = callGroq(resolveGroq(), searchPrompt)
-        if (groqRes is AIResult.Success) return@withContext groqRes.text
+        val sparkRes = callMuseSpark(guarded)
+        if (sparkRes is AIResult.Success) return@withContext finalizeAnswer(sparkRes.text, rawQ)
 
-        val orRes = callOpenRouter(searchPrompt)
-        if (orRes is AIResult.Success) return@withContext orRes.text
+        val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
+        if (orRes is AIResult.Success) return@withContext finalizeAnswer(orRes.text, rawQ)
 
         return@withContext ""
     }
@@ -134,22 +221,23 @@ object AIClient {
         userNotes: String,
         attachmentsBase64: List<Pair<String, String>> = emptyList()
     ): String = withContext(Dispatchers.IO) {
-        val fullPrompt = DRAFTING_SYSTEM_PROMPT + "\n\nمعطيات ومطالب الصياغة:\n" + userNotes
+        val guardedNotes = withLangGuard(userNotes)
+        val fullPrompt = DRAFTING_SYSTEM_PROMPT + "\n\nمعطيات ومطالب الصياغة:\n" + guardedNotes
 
         val res1 = callGeminiWithParts(resolveGemini(), fullPrompt, attachmentsBase64)
-        if (res1 is AIResult.Success) return@withContext res1.text
+        if (res1 is AIResult.Success) return@withContext finalizeAnswer(res1.text, userNotes)
 
         val res2 = callGeminiWithParts(GEMINI_FALLBACK, fullPrompt, attachmentsBase64)
-        if (res2 is AIResult.Success) return@withContext res2.text
+        if (res2 is AIResult.Success) return@withContext finalizeAnswer(res2.text, userNotes)
+
+        val groqRes = callGroq(resolveGroq(), guardedNotes, DRAFTING_SYSTEM_PROMPT)
+        if (groqRes is AIResult.Success) return@withContext finalizeAnswer(groqRes.text, userNotes)
 
         val sparkRes = callMuseSpark(fullPrompt)
-        if (sparkRes is AIResult.Success) return@withContext sparkRes.text
+        if (sparkRes is AIResult.Success) return@withContext finalizeAnswer(sparkRes.text, userNotes)
 
-        val groqRes = callGroq(resolveGroq(), fullPrompt)
-        if (groqRes is AIResult.Success) return@withContext groqRes.text
-
-        val orRes = callOpenRouter(fullPrompt)
-        if (orRes is AIResult.Success) return@withContext orRes.text
+        val orRes = callOpenRouter(guardedNotes, DRAFTING_SYSTEM_PROMPT)
+        if (orRes is AIResult.Success) return@withContext finalizeAnswer(orRes.text, userNotes)
 
         return@withContext when {
             res1 is AIResult.Error -> "❌ فشل التوليد: ${res1.message}"
@@ -195,6 +283,19 @@ object AIClient {
         val key = geminiKey()
         if (key.isNotBlank()) {
             val list = httpGet("https://generativelanguage.googleapis.com/v1beta/models?key=$key")
+            // الأفضلية لاختيارك في الصورة: 3.8 ثم 3.5 ثم 3.5-lite ثم أي Flash متاح
+            pickFromList(list, "models", "name", "models/") { it.contains("3.8-flash", true) }?.let {
+                geminiResolved = it to System.currentTimeMillis()
+                return it
+            }
+            pickFromList(list, "models", "name", "models/") { it.contains("3.5-flash-lite", true) }?.let {
+                geminiResolved = it to System.currentTimeMillis()
+                return it
+            }
+            pickFromList(list, "models", "name", "models/") { it.contains("3.5-flash", true) }?.let {
+                geminiResolved = it to System.currentTimeMillis()
+                return it
+            }
             pickFromList(list, "models", "name", "models/") { it.contains("flash", true) }?.let {
                 geminiResolved = it to System.currentTimeMillis()
                 return it
@@ -253,25 +354,26 @@ object AIClient {
     // 5. سؤال المكتبة القانونية — إجابة حصراً من مراجعها مع ذكر المصدر
     suspend fun askLibraryQuestion(question: String, passages: String): String = withContext(Dispatchers.IO) {
         val libPrompt = """أنت أمين مكتبة قانونية سورية. أجب حصراً من النصوص المرجعية المرفقة أدناه، واستشهد في كل فقرة باسم المرجع ورقم المقطع. إن لم تجد الجواب فيها فقل بوضوح: لا يوجد في المكتبة ما يجيب عن هذا السؤال. يمنع الاستعانة بأي معرفة خارجية.
+أجب باللغة العربية الفصحى حصراً. يمنع أي مصطلح إنجليزي له مقابل عربي.
 
 المراجع:
 $passages
 
-السؤال: $question"""
+السؤال: ${withLangGuard(question)}"""
         val res1 = callGeminiWithParts(resolveGemini(), libPrompt, emptyList())
-        if (res1 is AIResult.Success) return@withContext res1.text
+        if (res1 is AIResult.Success) return@withContext finalizeAnswer(res1.text, question)
 
         val res2 = callGeminiWithParts(GEMINI_FALLBACK, libPrompt, emptyList())
-        if (res2 is AIResult.Success) return@withContext res2.text
+        if (res2 is AIResult.Success) return@withContext finalizeAnswer(res2.text, question)
+
+        val groqRes = callGroq(resolveGroq(), libPrompt, libPrompt.substringBefore("\n\nالمراجع:"))
+        if (groqRes is AIResult.Success) return@withContext finalizeAnswer(groqRes.text, question)
 
         val sparkRes = callMuseSpark(libPrompt)
-        if (sparkRes is AIResult.Success) return@withContext sparkRes.text
+        if (sparkRes is AIResult.Success) return@withContext finalizeAnswer(sparkRes.text, question)
 
-        val groqRes = callGroq(resolveGroq(), libPrompt)
-        if (groqRes is AIResult.Success) return@withContext groqRes.text
-
-        val orRes = callOpenRouter(libPrompt)
-        if (orRes is AIResult.Success) return@withContext orRes.text
+        val orRes = callOpenRouter(libPrompt, SYSTEM_PROMPT)
+        if (orRes is AIResult.Success) return@withContext finalizeAnswer(orRes.text, question)
 
         return@withContext "❌ تعذر الاتصال بمزود الخدمة."
     }
@@ -335,7 +437,7 @@ $passages
         }
     }
 
-    private fun callGroq(model: String, prompt: String): AIResult {
+    private fun callGroq(model: String, prompt: String, systemPrompt: String = SYSTEM_PROMPT): AIResult {
         return try {
             val url = "https://api.groq.com/openai/v1/chat/completions"
             val rootJson = JsonObject()
@@ -344,7 +446,7 @@ $passages
 
             val sysMsg = JsonObject()
             sysMsg.addProperty("role", "system")
-            sysMsg.addProperty("content", DRAFTING_SYSTEM_PROMPT)
+            sysMsg.addProperty("content", systemPrompt)
             messagesArr.add(sysMsg)
 
             val userMsg = JsonObject()
@@ -383,7 +485,7 @@ $passages
         }
     }
 
-    // ماوي سبارك 1.3 المجاني عبر OpenCode Zen (الخيار الثاني بعد Gemini).
+    // ماوي سبارك 1.3 المجاني عبر OpenCode Zen (الخيار الثالث بعد Gemini وGroq).
     // Endpoint: https://opencode.ai/zen/v1/responses — بروتوكول OpenAI Responses.
     // المفتاح من لوحة https://opencode.ai/console ويُحقن عبر OPENCODE_ZEN_API_KEY.
     private fun callMuseSpark(prompt: String): AIResult {
@@ -443,7 +545,7 @@ $passages
     }
 
     // المزود الثالث المجاني (OpenRouter — نماذج free). يعمل بنفس بروتوكول OpenAI.
-    private fun callOpenRouter(prompt: String): AIResult {
+    private fun callOpenRouter(prompt: String, systemPrompt: String = SYSTEM_PROMPT): AIResult {
         return try {
             val key = openRouterKey()
             if (key.isBlank()) return AIResult.Error("مفتاح البديل الثالث غير مضبوط")
@@ -454,7 +556,7 @@ $passages
 
             val sysMsg = JsonObject()
             sysMsg.addProperty("role", "system")
-            sysMsg.addProperty("content", SYSTEM_PROMPT)
+            sysMsg.addProperty("content", systemPrompt)
             messagesArr.add(sysMsg)
 
             val userMsg = JsonObject()
