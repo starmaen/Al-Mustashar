@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-14T16:15:35.820960",
+  "generated_at": "2026-10-14T21:09:21.495315",
   "total_laws": 21,
   "warnings": [],
   "laws": [
@@ -7,8 +7,8 @@
       "id": "قانون-الكاتب-بالعدل-رقم-11-2014",
       "name": "قانون الكاتب بالعدل رقم 11",
       "articles_count": 43,
-      "prev_count": null,
-      "status": "new",
+      "prev_count": 43,
+      "status": "unchanged",
       "method": "PyMuPDF"
     },
     {
