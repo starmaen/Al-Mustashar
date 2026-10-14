@@ -19,11 +19,11 @@ sealed class AIResult {
 
 object AIClient {
     // المفاتيح تُحقن من BuildConfig عبر GitHub Secrets — لا توجد مفاتيح نصية هنا.
-    // الترتيب المعتمد: GEMINI أساسي (أول + بديل)، ثم GROQ ثاني/ثالث عند فشل Gemini، ثم Muse Spark، ثم OPENROUTER أخيراً.
+    // الترتيب المعتمد: Gemini أولاً (4 ثم 3.8 ثم البدلاء)، ثم Muse Spark لدقته، ثم OpenRouter، وGroq أخيراً.
     // أسماء الموديلات ثابتة هنا (مدروسة ومجربة) — لا Secrets لها لتفادي فخ القيم الفارغة.
-    private const val GEMINI_PRIMARY = "gemini-3.8-flash"
-    // كما في صورتك: البديل السريع هو 3.5 Flash-Lite
-    private const val GEMINI_FALLBACK = "gemini-3.5-flash-lite"
+    // Gemini 4 صدر اليوم وهو اختيارك الأول، ثم 3.8 (اشتراكك)، ثم 3.5-lite السريع
+    private const val GEMINI_PRIMARY = "gemini-4-flash"
+    private const val GEMINI_FALLBACK = "gemini-3.8-flash"
     // موديل Groq الأصلي السريع (المثبت تاريخياً في التطبيق) — والاكتشاف يرقّيه تلقائياً إن تقاعد
     private const val GROQ_MODEL = "llama-3.1-8b-instant"
     private const val OR_MODEL = "google/gemma-4-31b-it:free"
@@ -141,19 +141,27 @@ object AIClient {
         try { android.util.Log.d("AIClient", "Provider used: $name") } catch (_: Exception) {}
     }
 
-    // 1. الاستشارة القانونية — الترتيب: Gemini أولاً، ثم Groq ثانياً عند فشله، ثم البدائل
+    // سلسلة Gemini بالترتيب: 4 ثم 3.8 ثم 3.5 — يجرّب كل اسم فعلياً حتى لو غاب عن قائمة النماذج المعلنة لمفتاحك
+    private fun geminiChain(): List<String> =
+        listOf(GEMINI_PRIMARY, GEMINI_FALLBACK, "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash", resolveGemini()).distinct()
+
+    private var lastGeminiError: AIResult.Error? = null
+
+    private fun tryGeminiChain(call: (String) -> AIResult, origPrompt: String): String? {
+        lastGeminiError = null
+        for (m in geminiChain()) {
+            when (val r = call(m)) {
+                is AIResult.Success -> { markProvider("Gemini:$m"); return finalizeAnswer(r.text, origPrompt) }
+                is AIResult.Error -> lastGeminiError = r
+            }
+        }
+        return null
+    }
+
+    // 1. الاستشارة القانونية — الترتيب: Gemini (4/3.8/3.5) ثم Muse Spark ثم OpenRouter وGroq أخيراً
     suspend fun askLegalQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
         val guarded = withLangGuard(prompt)
-        val m1 = resolveGemini()
-        val res1 = callGemini(m1, guarded)
-        if (res1 is AIResult.Success) { markProvider("Gemini:$m1"); return@withContext finalizeAnswer(res1.text, prompt) }
-
-        val res2 = callGemini(GEMINI_FALLBACK, guarded)
-        if (res2 is AIResult.Success) { markProvider("Gemini:$GEMINI_FALLBACK"); return@withContext finalizeAnswer(res2.text, prompt) }
-
-        val gm = resolveGroq()
-        val groqRes = callGroq(gm, guarded, SYSTEM_PROMPT)
-        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext finalizeAnswer(groqRes.text, prompt) }
+        tryGeminiChain({ m -> callGemini(m, guarded) }, prompt)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(guarded)
         if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, prompt) }
@@ -161,35 +169,33 @@ object AIClient {
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
         if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, prompt) }
 
+        val gm = resolveGroq()
+        val groqRes = callGroq(gm, guarded, SYSTEM_PROMPT)
+        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext finalizeAnswer(groqRes.text, prompt) }
+
         return@withContext when {
-            res1 is AIResult.Error -> "❌ فشل الاتصال: ${res1.message}"
-            res2 is AIResult.Error -> "❌ فشل الاتصال البديل: ${res2.message}"
-            groqRes is AIResult.Error -> "❌ فشل اتصال Groq: ${groqRes.message}"
+            lastGeminiError != null -> "❌ فشل الاتصال: ${lastGeminiError?.message}"
             sparkRes is AIResult.Error -> "❌ فشل اتصال ماوي سبارك: ${sparkRes.message}"
             orRes is AIResult.Error -> "❌ فشل اتصال البديل الثالث: ${orRes.message}"
+            groqRes is AIResult.Error -> "❌ فشل اتصال Groq: ${groqRes.message}"
             else -> "❌ تعذر إتمام الطلب، يرجى التحقق من اتصال الإنترنت."
         }
     }
 
-    // 2. البحث العام — نفس الفلترة العربية ونفس الترتيب (Gemini ثم Groq)
+    // 2. البحث العام — نفس الترتيب: Gemini ثم Muse Spark ثم OpenRouter وGroq أخيراً
     suspend fun askGeneralQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
         val guarded = withLangGuard(prompt)
-        val m1 = resolveGemini()
-        val res1 = callGemini(m1, guarded)
-        if (res1 is AIResult.Success) { markProvider("Gemini:$m1"); return@withContext finalizeAnswer(res1.text, prompt) }
-
-        val res2 = callGemini(GEMINI_FALLBACK, guarded)
-        if (res2 is AIResult.Success) { markProvider("Gemini:$GEMINI_FALLBACK"); return@withContext finalizeAnswer(res2.text, prompt) }
-
-        val gm = resolveGroq()
-        val groqRes = callGroq(gm, guarded, SYSTEM_PROMPT)
-        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext finalizeAnswer(groqRes.text, prompt) }
+        tryGeminiChain({ m -> callGemini(m, guarded) }, prompt)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(guarded)
         if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, prompt) }
 
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
         if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, prompt) }
+
+        val gm = resolveGroq()
+        val groqRes = callGroq(gm, guarded, SYSTEM_PROMPT)
+        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext finalizeAnswer(groqRes.text, prompt) }
 
         return@withContext "❌ تعذر الاتصال بمزود الخدمة."
     }
@@ -198,20 +204,16 @@ object AIClient {
     suspend fun fetchLawArticleFromAI(rawQ: String): String = withContext(Dispatchers.IO) {
         val searchPrompt = "استخرج النص الحرفي والكامل للمادة القانونية التالية من التشريعات السورية بدقة متناهية:\n$rawQ"
         val guarded = withLangGuard(searchPrompt)
-        val res1 = callGemini(resolveGemini(), guarded)
-        if (res1 is AIResult.Success) return@withContext finalizeAnswer(res1.text, rawQ)
-
-        val res2 = callGemini(GEMINI_FALLBACK, guarded)
-        if (res2 is AIResult.Success) return@withContext finalizeAnswer(res2.text, rawQ)
-
-        val groqRes = callGroq(resolveGroq(), guarded, SYSTEM_PROMPT)
-        if (groqRes is AIResult.Success) return@withContext finalizeAnswer(groqRes.text, rawQ)
+        tryGeminiChain({ m -> callGemini(m, guarded) }, rawQ)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(guarded)
-        if (sparkRes is AIResult.Success) return@withContext finalizeAnswer(sparkRes.text, rawQ)
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, rawQ) }
 
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
-        if (orRes is AIResult.Success) return@withContext finalizeAnswer(orRes.text, rawQ)
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, rawQ) }
+
+        val groqRes = callGroq(resolveGroq(), guarded, SYSTEM_PROMPT)
+        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext finalizeAnswer(groqRes.text, rawQ) }
 
         return@withContext ""
     }
@@ -224,27 +226,22 @@ object AIClient {
         val guardedNotes = withLangGuard(userNotes)
         val fullPrompt = DRAFTING_SYSTEM_PROMPT + "\n\nمعطيات ومطالب الصياغة:\n" + guardedNotes
 
-        val res1 = callGeminiWithParts(resolveGemini(), fullPrompt, attachmentsBase64)
-        if (res1 is AIResult.Success) return@withContext finalizeAnswer(res1.text, userNotes)
-
-        val res2 = callGeminiWithParts(GEMINI_FALLBACK, fullPrompt, attachmentsBase64)
-        if (res2 is AIResult.Success) return@withContext finalizeAnswer(res2.text, userNotes)
-
-        val groqRes = callGroq(resolveGroq(), guardedNotes, DRAFTING_SYSTEM_PROMPT)
-        if (groqRes is AIResult.Success) return@withContext finalizeAnswer(groqRes.text, userNotes)
+        tryGeminiChain({ m -> callGeminiWithParts(m, fullPrompt, attachmentsBase64) }, userNotes)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(fullPrompt)
-        if (sparkRes is AIResult.Success) return@withContext finalizeAnswer(sparkRes.text, userNotes)
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, userNotes) }
 
         val orRes = callOpenRouter(guardedNotes, DRAFTING_SYSTEM_PROMPT)
-        if (orRes is AIResult.Success) return@withContext finalizeAnswer(orRes.text, userNotes)
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, userNotes) }
+
+        val groqRes = callGroq(resolveGroq(), guardedNotes, DRAFTING_SYSTEM_PROMPT)
+        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext finalizeAnswer(groqRes.text, userNotes) }
 
         return@withContext when {
-            res1 is AIResult.Error -> "❌ فشل التوليد: ${res1.message}"
-            res2 is AIResult.Error -> "❌ فشل التوليد: ${res2.message}"
+            lastGeminiError != null -> "❌ فشل التوليد: ${lastGeminiError?.message}"
             sparkRes is AIResult.Error -> "❌ فشل ماوي سبارك: ${sparkRes.message}"
-            groqRes is AIResult.Error -> "❌ فشل البديل: ${groqRes.message}"
             orRes is AIResult.Error -> "❌ فشل البديل الثالث: ${orRes.message}"
+            groqRes is AIResult.Error -> "❌ فشل البديل: ${groqRes.message}"
             else -> "❌ تعذر إتمام الصياغة، يرجى إعادة المحاولة."
         }
     }
@@ -360,20 +357,16 @@ object AIClient {
 $passages
 
 السؤال: ${withLangGuard(question)}"""
-        val res1 = callGeminiWithParts(resolveGemini(), libPrompt, emptyList())
-        if (res1 is AIResult.Success) return@withContext finalizeAnswer(res1.text, question)
-
-        val res2 = callGeminiWithParts(GEMINI_FALLBACK, libPrompt, emptyList())
-        if (res2 is AIResult.Success) return@withContext finalizeAnswer(res2.text, question)
-
-        val groqRes = callGroq(resolveGroq(), libPrompt, libPrompt.substringBefore("\n\nالمراجع:"))
-        if (groqRes is AIResult.Success) return@withContext finalizeAnswer(groqRes.text, question)
+        tryGeminiChain({ m -> callGeminiWithParts(m, libPrompt, emptyList()) }, question)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(libPrompt)
-        if (sparkRes is AIResult.Success) return@withContext finalizeAnswer(sparkRes.text, question)
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, question) }
 
         val orRes = callOpenRouter(libPrompt, SYSTEM_PROMPT)
-        if (orRes is AIResult.Success) return@withContext finalizeAnswer(orRes.text, question)
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, question) }
+
+        val groqRes = callGroq(resolveGroq(), libPrompt, libPrompt.substringBefore("\n\nالمراجع:"))
+        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext finalizeAnswer(groqRes.text, question) }
 
         return@withContext "❌ تعذر الاتصال بمزود الخدمة."
     }
@@ -485,7 +478,7 @@ $passages
         }
     }
 
-    // ماوي سبارك 1.3 المجاني عبر OpenCode Zen (الخيار الثالث بعد Gemini وGroq).
+    // ماوي سبارك 1.3 المجاني عبر OpenCode Zen (الثاني بعد Gemini لدقته، وGroq أخيراً).
     // Endpoint: https://opencode.ai/zen/v1/responses — بروتوكول OpenAI Responses.
     // المفتاح من لوحة https://opencode.ai/console ويُحقن عبر OPENCODE_ZEN_API_KEY.
     private fun callMuseSpark(prompt: String): AIResult {
