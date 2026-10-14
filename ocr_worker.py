@@ -12,6 +12,9 @@ SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
 OUTPUT_DIR = 'data/laws'
 MANIFEST_PATH = 'data/laws/_manifest.json'
 
+# نسخة مخطط الاستخراج: تغييرها يعيد معالجة كل القوانين مرة واحدة بأحدث الإصلاحات.
+LAWS_SCHEMA = "v2-repair"
+
 
 def load_manifest():
     if os.path.exists(MANIFEST_PATH):
@@ -301,7 +304,8 @@ def main():
 
         # هل الملف معالَج مسبقًا ولم يتغير؟
         prev = old_manifest.get(filename)
-        if prev and prev.get('drive_id') == drive_id and prev.get('modified_time') == modified:
+        if (prev and prev.get('drive_id') == drive_id and prev.get('modified_time') == modified
+                and prev.get('schema', 'v1') == LAWS_SCHEMA):
             law_id = prev.get('law_id')
             json_path = os.path.join(OUTPUT_DIR, f"{law_id}.json")
             if os.path.exists(json_path):
@@ -375,7 +379,8 @@ def main():
             json.dump(data, jf, ensure_ascii=False, indent=2)
 
         new_manifest[filename] = {
-            'drive_id': drive_id, 'modified_time': modified, 'law_id': law_id
+            'drive_id': drive_id, 'modified_time': modified, 'law_id': law_id,
+            'schema': LAWS_SCHEMA
         }
         index_laws.append({
             'id': law_id, 'name': parsed['name'], 'year': parsed['year'],
