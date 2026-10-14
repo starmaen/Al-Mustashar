@@ -289,6 +289,23 @@
             android:textColor="#0F2042"
             android:gravity="right"/>
 
+        <Button
+            android:id="@+id/btnAddSession"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="8dp"
+            android:text="➕ توثيق جلسة (تاريخ + قرار + القادم)"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#0F2042" />
+
+        <LinearLayout
+            android:id="@+id/layoutSessionsLogList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginTop="8dp" />
+
         <!-- القسم الرابع: تفاصيل ودفوع الدعوى -->
         <TextView
             android:layout_width="match_parent"
@@ -358,6 +375,121 @@
             android:padding="12dp"
             android:background="@android:drawable/edit_text"
             android:textColor="#0F2042"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⚖️ مواعيد الطعن (تنبيه قبل 3 أيام ويوم المهلة)"
+            android:textColor="#C5A059"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etAppealType"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="نوع الطعن (استئناف / نقض / اعتراض / إعادة محاكمة)"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etAppealJudgmentDate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="تاريخ صدور الحكم المطعون فيه"
+            android:focusable="false"
+            android:clickable="true"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etAppealDeadline"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="آخر مهلة للطعن (يُضبط التنبيه عليها)"
+            android:focusable="false"
+            android:clickable="true"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="💰 المتابعة المالية (ليرة سورية)"
+            android:textColor="#C5A059"
+            android:textStyle="bold"
+            android:textSize="14sp"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="6dp"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etFeesAgreed"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="الأتعاب المتفق عليها"
+            android:inputType="numberDecimal"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etFeesPaid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="المدفوع من الأتعاب"
+            android:inputType="numberDecimal"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <EditText
+            android:id="@+id/etFeesExpenses"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="مصاريف الدعوى (رسوم، انتقال...)"
+            android:inputType="numberDecimal"
+            android:padding="12dp"
+            android:background="@android:drawable/edit_text"
+            android:textColor="#0F2042"
+            android:gravity="right"/>
+
+        <TextView
+            android:id="@+id/tvFinanceRemaining"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="المتبقي: -"
+            android:textColor="#0F2042"
+            android:textSize="13sp"
+            android:gravity="right"/>
+
+        <Button
+            android:id="@+id/btnPrintCase"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:layout_marginTop="16dp"
+            android:text="🖨️ طباعة / تصدير ملف الدعوى PDF"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:backgroundTint="#455A64" />
 
         <!-- القسم الخامس: المرفقات والمستندات المؤرشفة -->
         <TextView

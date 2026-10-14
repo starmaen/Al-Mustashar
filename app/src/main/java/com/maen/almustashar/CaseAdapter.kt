@@ -25,6 +25,8 @@ class CaseAdapter(
         val layoutNextSession: LinearLayout = v.findViewById(R.id.layoutNextSession)
         val tvNextSessionDate: TextView = v.findViewById(R.id.tvNextSessionDate)
         val tvNextSessionRequired: TextView = v.findViewById(R.id.tvNextSessionRequired)
+        val tvAppealDeadline: TextView = v.findViewById(R.id.tvAppealDeadline)
+        val tvCaseStage: TextView = v.findViewById(R.id.tvCaseStage)
         val layoutClientActions: LinearLayout = v.findViewById(R.id.layoutClientActions)
         val btnCall: Button = v.findViewById(R.id.btnCallClient)
         val btnWhatsApp: Button = v.findViewById(R.id.btnWhatsAppClient)
@@ -69,6 +71,26 @@ class CaseAdapter(
             holder.layoutNextSession.visibility = View.GONE
         }
 
+        // مهلة الطعن: تظهر دائماً عند وجودها، وحمراء عند الاقتراب
+        if (c.appealDeadline.isNotBlank()) {
+            holder.tvAppealDeadline.visibility = View.VISIBLE
+            val days = daysUntil(c.appealDeadline)
+            val typeStr = if (c.appealType.isNotBlank()) " (${c.appealType})" else ""
+            holder.tvAppealDeadline.text = when {
+                days == null -> "⚖️ مهلة الطعن$typeStr: ${c.appealDeadline}"
+                days < 0 -> "⛔ انتهت مهلة الطعن$typeStr بتاريخ ${c.appealDeadline}!"
+                days == 0 -> "🔴 مهلة الطعن$typeStr اليوم!"
+                days <= 7 -> "🔴 مهلة الطعن$typeStr بعد $days أيام (${c.appealDeadline})"
+                days <= 30 -> "🟠 مهلة الطعن$typeStr بعد $days يوماً (${c.appealDeadline})"
+                else -> "⚖️ مهلة الطعن$typeStr: ${c.appealDeadline}"
+            }
+        } else {
+            holder.tvAppealDeadline.visibility = View.GONE
+        }
+
+        // المرحلة الزمنية المستنتجة من الحالة
+        holder.tvCaseStage.text = "📌 المرحلة: ${stageOf(c.status)}"
+
         // تاريخ افتتاح الدعوى
         holder.tvCreatedAt.text = if (c.date.isNotEmpty()) "افتتاح: ${c.date}" else ""
 
@@ -98,8 +120,37 @@ class CaseAdapter(
         holder.itemView.setOnClickListener { onClick(c) }
     }
 
-    private fun openWhatsApp(context: Context, rawPhone: String, c: Case) {
-        try {
+    private fun daysUntil(dateStr: String): Long? {
+        return try {
+            val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(dateStr)
+                ?: return null
+            val today = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }.time
+            (day.time - today.time) / (24 * 3600 * 1000L)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun stageOf(status: String): String {
+        val s = status.trim()
+        return when {
+            s.contains("تنفيذ") -> "قيد التنفيذ ⚙️"
+            s.contains("مشطوب") -> "مشطوبة 🗂️"
+            s.contains("محكوم") || s.contains("حكم") || s.contains("صدر") -> "صدر الحكم 📜"
+            s.contains("طعن") || s.contains("استئناف") || s.contains("نقض") -> "مرحلة الطعن ⚖️"
+            s.contains("خبرة") || s.contains("خبير") -> "مرحلة الخبرة 🔍"
+            s.contains("تبليغ") -> "مرحلة التبليغ 📬"
+            s.isBlank() || s.contains("نظر") -> "قيد النظر 📝"
+            else -> s
+        }
+    }
+
+    private fun openWhatsApp(context: Context, rawPhone: String, c: Case) {        try {
             var phone = rawPhone.replace(" ", "").replace("-", "")
             if (phone.startsWith("0")) {
                 phone = phone.substring(1) // تحويل للأرقام الدولية إن لزم

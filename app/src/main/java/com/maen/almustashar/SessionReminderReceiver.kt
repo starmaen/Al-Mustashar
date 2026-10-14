@@ -7,31 +7,37 @@ import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
-// يستقبل منبه الجلسة ويعرض إشعاراً بموعدها
+// يستقبل منبه الجلسة أو الطعن ويعرض إشعاراً (النوع من EXTRA_KIND)
 class SessionReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val caseId = intent.getStringExtra(SessionReminder.EXTRA_CASE_ID) ?: return
         val title = intent.getStringExtra(SessionReminder.EXTRA_TITLE) ?: "دعوى"
         val date = intent.getStringExtra(SessionReminder.EXTRA_DATE) ?: ""
-        SessionReminder.ensureChannel(context)
+        val isAppeal = intent.getStringExtra(AppealReminder.EXTRA_KIND) == AppealReminder.KIND_APPEAL
+        if (isAppeal) AppealReminder.ensureChannel(context) else SessionReminder.ensureChannel(context)
 
         val openIntent = Intent(context, CasesActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
-        val pi = PendingIntent.getActivity(
+        val openPi = PendingIntent.getActivity(
             context, caseId.hashCode(), openIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notif = NotificationCompat.Builder(context, SessionReminder.CHANNEL_ID)
+        val channel = if (isAppeal) AppealReminder.CHANNEL_ID else SessionReminder.CHANNEL_ID
+        val notif = NotificationCompat.Builder(context, channel)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("⏰ تذكير جلسة: $title")
-            .setContentText("موعد الجلسة: $date — راجع ملف الدعوى والمستندات")
+            .setContentTitle(if (isAppeal) "⚖️ مهلة طعن: $title" else "⏰ تذكير جلسة: $title")
+            .setContentText(
+                if (isAppeal) "آخر مهلة: $date — راجع ملف الدعوى قبل فوات الميعاد"
+                else "موعد الجلسة: $date — راجع ملف الدعوى والمستندات"
+            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(pi)
+            .setContentIntent(openPi)
             .build()
         try {
-            NotificationManagerCompat.from(context).notify(caseId.hashCode(), notif)
+            val nid = if (isAppeal) AppealReminder.requestCode(caseId) else caseId.hashCode()
+            NotificationManagerCompat.from(context).notify(nid, notif)
         } catch (_: SecurityException) {
             // إذن الإشعارات مرفوض — يُطلب من شاشة الأرشيف
         }

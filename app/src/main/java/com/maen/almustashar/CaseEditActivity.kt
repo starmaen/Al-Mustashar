@@ -58,6 +58,20 @@ class CaseEditActivity : AppCompatActivity() {
     private lateinit var etProcedures: EditText
     private lateinit var etStatus: EditText
     private lateinit var etFinalJudgment: EditText
+    private lateinit var etAppealType: EditText
+    private lateinit var etAppealJudgmentDate: EditText
+    private lateinit var etAppealDeadline: EditText
+    private lateinit var etFeesAgreed: EditText
+    private lateinit var etFeesPaid: EditText
+    private lateinit var etFeesExpenses: EditText
+    private lateinit var tvFinanceRemaining: TextView
+    private lateinit var btnPrintCase: Button
+    private lateinit var btnAddSession: Button
+    private lateinit var layoutSessionsLogList: LinearLayout
+
+    // سجل الجلسات المنظم: [{d, decision, next}]
+    data class SessionEntry(val d: String, val decision: String, val next: String)
+    private val sessionsLog = mutableListOf<SessionEntry>()
 
     private lateinit var tvEditTitle: TextView
     private lateinit var btnDelete: Button
@@ -134,6 +148,13 @@ class CaseEditActivity : AppCompatActivity() {
             procedures = etProcedures.text?.toString()?.trim() ?: "",
             status = etStatus.text?.toString()?.trim().let { if (it.isNullOrEmpty()) "قيد النظر" else it },
             finalJudgment = etFinalJudgment.text?.toString()?.trim() ?: "",
+            appealType = etAppealType.text?.toString()?.trim() ?: "",
+            appealJudgmentDate = etAppealJudgmentDate.text?.toString()?.trim() ?: "",
+            appealDeadline = etAppealDeadline.text?.toString()?.trim() ?: "",
+            sessionsLog = serializeSessionsLog(),
+            feesAgreed = etFeesAgreed.text?.toString()?.trim() ?: "",
+            feesPaid = etFeesPaid.text?.toString()?.trim() ?: "",
+            expenses = etFeesExpenses.text?.toString()?.trim() ?: "",
             documentsNotes = serializeDocs(),
             userId = userId,
             timestamp = timestamp
@@ -144,7 +165,7 @@ class CaseEditActivity : AppCompatActivity() {
         val user = FirebaseAuth.getInstance().currentUser
         val c = collectCase(user?.uid ?: "", System.currentTimeMillis()) ?: return "{}"
         return JSONObject().apply {
-            put("version", 1)
+            put("version", 2)
             put("title", c.title)
             put("basisNumber", c.basisNumber)
             put("caseYear", c.caseYear)
@@ -166,6 +187,13 @@ class CaseEditActivity : AppCompatActivity() {
             put("procedures", c.procedures)
             put("status", c.status)
             put("finalJudgment", c.finalJudgment)
+            put("appealType", c.appealType)
+            put("appealJudgmentDate", c.appealJudgmentDate)
+            put("appealDeadline", c.appealDeadline)
+            put("sessionsLog", c.sessionsLog)
+            put("feesAgreed", c.feesAgreed)
+            put("feesPaid", c.feesPaid)
+            put("expenses", c.expenses)
             put("documentsNotes", c.documentsNotes)
         }.toString(2)
     }
@@ -290,6 +318,16 @@ class CaseEditActivity : AppCompatActivity() {
         etProcedures = findViewById(R.id.etProcedures)
         etStatus = findViewById(R.id.etStatus)
         etFinalJudgment = findViewById(R.id.etFinalJudgment)
+        etAppealType = findViewById(R.id.etAppealType)
+        etAppealJudgmentDate = findViewById(R.id.etAppealJudgmentDate)
+        etAppealDeadline = findViewById(R.id.etAppealDeadline)
+        etFeesAgreed = findViewById(R.id.etFeesAgreed)
+        etFeesPaid = findViewById(R.id.etFeesPaid)
+        etFeesExpenses = findViewById(R.id.etFeesExpenses)
+        tvFinanceRemaining = findViewById(R.id.tvFinanceRemaining)
+        btnPrintCase = findViewById(R.id.btnPrintCase)
+        btnAddSession = findViewById(R.id.btnAddSession)
+        layoutSessionsLogList = findViewById(R.id.layoutSessionsLogList)
 
         tvEditTitle = findViewById(R.id.tvEditTitle)
         btnDelete = findViewById(R.id.btnDelete)
@@ -301,6 +339,19 @@ class CaseEditActivity : AppCompatActivity() {
 
         etDate.setOnClickListener { showDatePicker(etDate) }
         etNextSessionDate.setOnClickListener { showDatePicker(etNextSessionDate) }
+        etAppealJudgmentDate.setOnClickListener { showDatePicker(etAppealJudgmentDate) }
+        etAppealDeadline.setOnClickListener { showDatePicker(etAppealDeadline) }
+
+        btnAddSession.setOnClickListener { showAddSessionDialog() }
+        btnPrintCase.setOnClickListener { printCasePdf() }
+        val financeWatcher = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { updateFinanceRemaining() }
+        }
+        etFeesAgreed.addTextChangedListener(financeWatcher)
+        etFeesPaid.addTextChangedListener(financeWatcher)
+        etFeesExpenses.addTextChangedListener(financeWatcher)
 
         btnAddDocument.setOnClickListener {
             filePickerLauncher.launch(arrayOf("*/*"))
@@ -345,6 +396,175 @@ class CaseEditActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "احفظ الدعوى أولاً", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    // ——— سجل الجلسات المنظم ———
+    private fun serializeSessionsLog(): String {
+        return try {
+            val arr = JSONArray()
+            for (s in sessionsLog) {
+                arr.put(JSONObject().apply {
+                    put("d", s.d)
+                    put("decision", s.decision)
+                    put("next", s.next)
+                })
+            }
+            arr.toString()
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    private fun deserializeSessionsLog(json: String) {
+        sessionsLog.clear()
+        if (json.isBlank()) {
+            renderSessionsLog()
+            return
+        }
+        try {
+            val arr = JSONArray(json)
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                sessionsLog.add(
+                    SessionEntry(
+                        o.optString("d"), o.optString("decision"), o.optString("next")
+                    )
+                )
+            }
+        } catch (_: Exception) {
+        }
+        renderSessionsLog()
+    }
+
+    private fun renderSessionsLog() {
+        layoutSessionsLogList.removeAllViews()
+        if (sessionsLog.isEmpty()) {
+            val tv = TextView(this).apply {
+                text = "لا جلسات موثقة بعد — وثّق كل جلسة بضغطة الزر أعلاه."
+                textSize = 12f
+                setTextColor(android.graphics.Color.parseColor("#64748B"))
+                gravity = Gravity.RIGHT
+            }
+            layoutSessionsLogList.addView(tv)
+            return
+        }
+        for ((index, s) in sessionsLog.withIndex()) {
+            val tv = TextView(this).apply {
+                text = "${index + 1}. 📅 ${s.d.ifBlank { "-" }}\n   القرار: ${s.decision.ifBlank { "-" }}\n   القادم: ${s.next.ifBlank { "-" }}"
+                textSize = 12.5f
+                setTextColor(android.graphics.Color.parseColor("#0F2042"))
+                gravity = Gravity.RIGHT
+                setPadding(12, 10, 12, 10)
+                setBackgroundColor(android.graphics.Color.WHITE)
+            }
+            tv.setOnLongClickListener {
+                AlertDialog.Builder(this@CaseEditActivity)
+                    .setTitle("حذف توثيق الجلسة؟")
+                    .setPositiveButton("حذف") { _, _ ->
+                        sessionsLog.removeAt(index)
+                        renderSessionsLog()
+                    }
+                    .setNegativeButton("إلغاء", null)
+                    .show()
+                true
+            }
+            layoutSessionsLogList.addView(tv)
+        }
+    }
+
+    private fun showAddSessionDialog() {
+        val ctx = this
+        val layout = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(50, 30, 50, 10)
+        }
+        val etD = EditText(ctx).apply { hint = "تاريخ الجلسة (يُملأ تلقائياً)" }
+        val etDec = EditText(ctx).apply { hint = "قرار الجلسة / ما جرى فيها" }
+        val etN = EditText(ctx).apply { hint = "المطلوب / موعد قادم (تاريخ؟)" }
+        try {
+            val today = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US)
+                .format(java.util.Date())
+            etD.setText(today)
+        } catch (_: Exception) {
+        }
+        etD.setOnClickListener { showDatePicker(etD) }
+        layout.addView(etD)
+        layout.addView(etDec)
+        layout.addView(etN)
+        AlertDialog.Builder(ctx)
+            .setTitle("📝 توثيق جلسة")
+            .setView(layout)
+            .setPositiveButton("توثيق") { _, _ ->
+                val d = etD.text?.toString()?.trim() ?: ""
+                val dec = etDec.text?.toString()?.trim() ?: ""
+                val nx = etN.text?.toString()?.trim() ?: ""
+                if (d.isBlank() && dec.isBlank() && nx.isBlank()) {
+                    Toast.makeText(ctx, "أدخل شيئاً على الأقل", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                sessionsLog.add(SessionEntry(d, dec, nx))
+                // ترحيل تلقائي: القرار الأخير + الجلسة القادمة إن كانت تاريخاً
+                if (dec.isNotBlank()) etLastSessionDecision.setText(dec)
+                if (nx.matches(Regex("\\d{4}-\\d{2}-\\d{2}"))) {
+                    etNextSessionDate.setText(nx)
+                    etNextSessionRequired.setText("")
+                } else if (nx.isNotBlank()) {
+                    etNextSessionRequired.setText(nx)
+                }
+                renderSessionsLog()
+                Toast.makeText(ctx, "وُثقت الجلسة — لا تنسَ الحفظ", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    // ——— المالية ———
+    private fun updateFinanceRemaining() {
+        val agreed = etFeesAgreed.text?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
+        val paid = etFeesPaid.text?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
+        val exp = etFeesExpenses.text?.toString()?.trim()?.toDoubleOrNull() ?: 0.0
+        val remaining = agreed - paid
+        fun fmt(v: Double): String {
+            return if (v == v.toLong().toDouble()) v.toLong().toString() else v.toString()
+        }
+        tvFinanceRemaining.text = "المتبقي من الأتعاب: ${fmt(remaining)} | المصاريف: ${fmt(exp)}"
+    }
+
+    // ——— طباعة ملف الدعوى ———
+    private fun escHtml(s: String): String {
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    }
+
+    private fun printCasePdf() {
+        try {
+            val c = collectCase(FirebaseAuth.getInstance().currentUser?.uid ?: "", System.currentTimeMillis())
+                ?: return
+            val sb = StringBuilder()
+            sb.append("<h2>⚖️ ملف دعوى: ${escHtml(c.title)}</h2>")
+            sb.append("<p>أساس: ${escHtml(c.basisNumber)}/${escHtml(c.caseYear)} — المحكمة: ${escHtml(c.court)} (${escHtml(c.chamber)}) — القاضي: ${escHtml(c.judgeName)}</p>")
+            sb.append("<p>الموكل: ${escHtml(c.clientName)} (${escHtml(c.clientRole)}) — هاتف: ${escHtml(c.clientPhone)}</p>")
+            sb.append("<p>الخصم: ${escHtml(c.opponentName)} — محاميه: ${escHtml(c.opponentLawyer)}</p>")
+            sb.append("<p>الحالة: ${escHtml(c.status)} — افتتاح: ${escHtml(c.date)} — الجلسة القادمة: ${escHtml(c.nextSessionDate)}</p>")
+            if (c.appealDeadline.isNotBlank()) sb.append("<p><b>مهلة الطعن (${escHtml(c.appealType)}): ${escHtml(c.appealDeadline)}</b></p>")
+            sb.append("<h3>الوقائع</h3><p>${escHtml(c.summary).replace("\n", "<br>")}</p>")
+            if (sessionsLog.isNotEmpty()) {
+                sb.append("<h3>سجل الجلسات الموثق</h3><ol>")
+                for (s in sessionsLog) sb.append("<li>${escHtml(s.d)} — ${escHtml(s.decision)} — القادم: ${escHtml(s.next)}</li>")
+                sb.append("</ol>")
+            }
+            if (c.procedures.isNotBlank()) sb.append("<h3>الإجراءات</h3><p>${escHtml(c.procedures).replace("\n", "<br>")}</p>")
+            if (c.finalJudgment.isNotBlank()) sb.append("<h3>القرار النهائي</h3><p>${escHtml(c.finalJudgment).replace("\n", "<br>")}</p>")
+            val agreed = c.feesAgreed.toDoubleOrNull() ?: 0.0
+            val paid = c.feesPaid.toDoubleOrNull() ?: 0.0
+            sb.append("<h3>المالية</h3><p>متفق: $agreed — مدفوع: $paid — متبقٍ: ${agreed - paid} — مصاريف: ${c.expenses}</p>")
+            val wv = android.webkit.WebView(this)
+            val html = "<html dir=\"rtl\"><head><meta charset=\"utf-8\"></head><body style=\"font-family:sans-serif;padding:20px;line-height:1.7;\">${sb}</body></html>"
+            wv.loadDataWithBaseURL(null, html, "text/HTML", "UTF-8", null)
+            val pm = getSystemService(Context.PRINT_SERVICE) as android.print.PrintManager
+            pm.print("ملف_دعوى", wv.createPrintDocumentAdapter("ملف_دعوى"), null)
+        } catch (e: Exception) {
+            Toast.makeText(this, "تعذر الطباعة: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -719,6 +939,14 @@ class CaseEditActivity : AppCompatActivity() {
                 etProcedures.setText(c.procedures)
                 etStatus.setText(if (c.status.isNotEmpty()) c.status else "قيد النظر")
                 etFinalJudgment.setText(c.finalJudgment)
+                etAppealType.setText(c.appealType)
+                etAppealJudgmentDate.setText(c.appealJudgmentDate)
+                etAppealDeadline.setText(c.appealDeadline)
+                etFeesAgreed.setText(c.feesAgreed)
+                etFeesPaid.setText(c.feesPaid)
+                etFeesExpenses.setText(c.expenses)
+                updateFinanceRemaining()
+                deserializeSessionsLog(c.sessionsLog)
                 deserializeDocs(c.documentsNotes)
             }
     }
@@ -739,11 +967,11 @@ class CaseEditActivity : AppCompatActivity() {
                 db.document(caseId!!).set(case.copy(timestamp = oldTs))
                     .addOnSuccessListener {
                         val reminded = SessionReminder.schedule(this, caseId!!, title, case.nextSessionDate)
-                        Toast.makeText(
-                            this,
-                            "تم تحديث ملف الدعوى والمرفقات" + if (reminded) " 🔔 التذكير بالجلسة مفعّل (${case.nextSessionDate})" else "",
-                            Toast.LENGTH_LONG
-                        ).show()
+                        val appealOn = AppealReminder.schedule(this, caseId!!, title, case.appealDeadline)
+                        var msg = "تم تحديث ملف الدعوى والمرفقات"
+                        if (reminded) msg += " 🔔 الجلسة (${case.nextSessionDate})"
+                        if (appealOn) msg += " ⚖️ الطعن (${case.appealDeadline})"
+                        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                         finish()
                     }
             }
@@ -751,11 +979,11 @@ class CaseEditActivity : AppCompatActivity() {
             db.add(case)
                 .addOnSuccessListener { ref ->
                     val reminded = SessionReminder.schedule(this, ref.id, title, case.nextSessionDate)
-                    Toast.makeText(
-                        this,
-                        "تم حفظ ملف الدعوى والمرفقات بنجاح" + if (reminded) " 🔔 التذكير بالجلسة مفعّل (${case.nextSessionDate})" else "",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    val appealOn = AppealReminder.schedule(this, ref.id, title, case.appealDeadline)
+                    var msg = "تم حفظ ملف الدعوى والمرفقات بنجاح"
+                    if (reminded) msg += " 🔔 الجلسة (${case.nextSessionDate})"
+                    if (appealOn) msg += " ⚖️ الطعن (${case.appealDeadline})"
+                    Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
                     finish()
                 }
                 .addOnFailureListener {
@@ -771,6 +999,7 @@ class CaseEditActivity : AppCompatActivity() {
             .setMessage("سيُحذف ملف الدعوى وقراراتها من حسابك. المرفقات المحلية تبقى على الجهاز. هل أنت متأكد؟")
             .setPositiveButton("حذف نهائي") { _, _ ->
                 SessionReminder.cancel(this, caseId!!)
+                AppealReminder.cancel(this, caseId!!)
                 FirebaseFirestore.getInstance().collection("cases").document(caseId!!)
                     .delete()
                     .addOnSuccessListener {

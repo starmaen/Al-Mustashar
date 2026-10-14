@@ -73,6 +73,7 @@ class CasesActivity : AppCompatActivity() {
     private val displayedCases = mutableListOf<Case>()
     private lateinit var tvEmpty: TextView
     private lateinit var tvCount: TextView
+    private lateinit var tvStats: TextView
     private lateinit var etSearch: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -87,6 +88,7 @@ class CasesActivity : AppCompatActivity() {
 
         tvEmpty = findViewById(R.id.tvEmpty)
         tvCount = findViewById(R.id.tvCasesCount)
+        tvStats = findViewById(R.id.tvCasesStats)
         etSearch = findViewById(R.id.etSearchCases)
         val recycler = findViewById<RecyclerView>(R.id.recyclerCases)
         val fab = findViewById<FloatingActionButton>(R.id.fabAdd)
@@ -110,6 +112,16 @@ class CasesActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnImportBackup).setOnClickListener {
             importLauncher.launch(arrayOf("application/json", "*/*"))
+        }
+
+        findViewById<Button>(R.id.btnBackupSettings).setOnClickListener {
+            showBackupSettings()
+        }
+
+        // جدولة النسخ التلقائي اليومي حسب اختيار المستخدم (يدوي فقط = إلغاء)
+        try {
+            AutoBackupScheduler.ensure(this)
+        } catch (_: Exception) {
         }
 
         fab.setOnClickListener {
@@ -152,6 +164,7 @@ class CasesActivity : AppCompatActivity() {
                 }
                 // ترتيب حسب موعد الجلسة القادمة أو آخر تحديث
                 allCases.sortByDescending { it.timestamp }
+                updateStats()
                 filterCases(etSearch.text?.toString()?.trim() ?: "")
             }
             .addOnFailureListener { e ->
@@ -164,6 +177,103 @@ class CasesActivity : AppCompatActivity() {
             .replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
             .replace("ة", "ه").replace("ى", "ي")
             .replace(Regex("[^a-zA-Z0-9\u0621-\u064A]"), "")
+    }
+
+    // إعدادات النسخ: الوضع (يدوي/تلقائي/معاً) + الوجهات (الهاتف/Drive)
+    // ملاحظة: الذاكرة الخارجية (SD) يدوية فقط عبر زر التصدير (النظام يمنع الكتابة الصامتة لها)
+    private fun showBackupSettings() {
+        val modes = arrayOf("📝 يدوي فقط", "🤖 تلقائي يومي فقط", "🔀 الاثنان معاً")
+        var mode = BackupPrefs.mode(this)
+
+        val layout = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(50, 30, 50, 10)
+        }
+        val rg = android.widget.RadioGroup(this)
+        val radios = modes.mapIndexed { i, t ->
+            android.widget.RadioButton(this).apply {
+                text = t
+                isChecked = (i == mode)
+                setOnCheckedChangeListener { _, checked -> if (checked) mode = i }
+            }
+        }
+        radios.forEach { rg.addView(it) }
+        val cbPhone = android.widget.CheckBox(this).apply {
+            text = "📱 الهاتف (تلقائي: ملفات التطبيق + التنزيلات)"
+            isChecked = BackupPrefs.destPhone(this@CasesActivity)
+        }
+        val cbDrive = android.widget.CheckBox(this).apply {
+            text = "☁️ Google Drive (يحتاج دخول Google مرة واحدة)"
+            isChecked = BackupPrefs.destDrive(this@CasesActivity)
+        }
+        val tvLast = android.widget.TextView(this).apply {
+            val last = BackupPrefs.lastAuto(this@CasesActivity)
+            text = if (last.isBlank()) "آخر نسخة تلقائية: لم تتم بعد" else "آخر نسخة تلقائية: $last"
+            textSize = 12f
+        }
+        val tvNote = android.widget.TextView(this).apply {
+            text = "💾 الذاكرة الخارجية (SD): عبر زر «تصدير» — تختار المكان بنفسك كل مرة."
+            textSize = 12f
+        }
+        layout.addView(rg)
+        layout.addView(cbPhone)
+        layout.addView(cbDrive)
+        layout.addView(tvLast)
+        layout.addView(tvNote)
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("⚙️ إعدادات النسخ الاحتياطي")
+            .setView(layout)
+            .setPositiveButton("حفظ") { _, _ ->
+                BackupPrefs.setMode(this, mode)
+                BackupPrefs.setDest(this, cbPhone.isChecked, cbDrive.isChecked)
+                try {
+                    if (mode == BackupPrefs.MODE_MANUAL) AutoBackupScheduler.cancel(this)
+                    else AutoBackupScheduler.ensure(this)
+                } catch (_: Exception) {
+                }
+                val m = when (mode) {
+                    0 -> "يدوي فقط"
+                    1 -> "تلقائي يومي"
+                    else -> "الاثنان معاً"
+                }
+                Toast.makeText(this, "حُفظ: $m", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("إلغاء", null)
+            .show()
+    }
+
+    private fun daysUntil(dateStr: String): Long? {
+        return try {
+            val day = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).parse(dateStr)
+                ?: return null
+            val today = java.util.Calendar.getInstance().apply {
+                set(java.util.Calendar.HOUR_OF_DAY, 0)
+                set(java.util.Calendar.MINUTE, 0)
+                set(java.util.Calendar.SECOND, 0)
+                set(java.util.Calendar.MILLISECOND, 0)
+            }.time
+            (day.time - today.time) / (24 * 3600 * 1000L)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun updateStats() {
+        try {
+            val active = allCases.count { it.status.isBlank() || it.status.contains("نظر") }
+            var weekSessions = 0
+            var appealSoon = 0
+            for (c in allCases) {
+                daysUntil(c.nextSessionDate)?.let { if (it in 0..7) weekSessions++ }
+                daysUntil(c.appealDeadline)?.let { if (it <= 30) appealSoon++ }
+            }
+            val parts = mutableListOf("📊 قيد النظر: $active")
+            if (weekSessions > 0) parts.add("📅 جلسات هذا الأسبوع: $weekSessions")
+            if (appealSoon > 0) parts.add("⚖️ طعون قريبة/متأخرة: $appealSoon")
+            tvStats.text = parts.joinToString("  •  ")
+        } catch (_: Exception) {
+        }
     }
 
     // فهرس الأرشيف: بحث فوري باسم الموكل أو الرقم أو الموضوع (بكل الصيغ) ثم فتح الملف
@@ -182,7 +292,7 @@ class CasesActivity : AppCompatActivity() {
                             c.title, c.basisNumber, c.caseYear, c.clientName, c.clientRole,
                             c.clientPhone, c.opponentName, c.opponentLawyer, c.court,
                             c.chamber, c.judgeName, c.date, c.nextSessionDate,
-                            c.status, c.summary
+                            c.status, c.summary, c.appealType, c.appealDeadline
                         ).joinToString(" ")
                     )
                     if (terms.all { hay.contains(it) }) displayedCases.add(c)

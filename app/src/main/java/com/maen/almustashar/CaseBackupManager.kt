@@ -13,7 +13,7 @@ object CaseBackupManager {
     fun exportBackup(context: Context, cases: List<Case>, outputStream: OutputStream): Boolean {
         return try {
             val root = JSONObject()
-            root.put("version", 1)
+            root.put("version", 2)
             root.put("timestamp", System.currentTimeMillis())
             val casesArray = JSONArray()
 
@@ -41,6 +41,13 @@ object CaseBackupManager {
                     put("procedures", c.procedures)
                     put("status", c.status)
                     put("finalJudgment", c.finalJudgment)
+                    put("appealType", c.appealType)
+                    put("appealJudgmentDate", c.appealJudgmentDate)
+                    put("appealDeadline", c.appealDeadline)
+                    put("sessionsLog", c.sessionsLog)
+                    put("feesAgreed", c.feesAgreed)
+                    put("feesPaid", c.feesPaid)
+                    put("expenses", c.expenses)
                     put("documentsNotes", c.documentsNotes)
                     put("timestamp", c.timestamp)
                 }
@@ -90,6 +97,13 @@ object CaseBackupManager {
                     procedures = obj.optString("procedures"),
                     status = obj.optString("status", "قيد النظر"),
                     finalJudgment = obj.optString("finalJudgment"),
+                    appealType = obj.optString("appealType"),
+                    appealJudgmentDate = obj.optString("appealJudgmentDate"),
+                    appealDeadline = obj.optString("appealDeadline"),
+                    sessionsLog = obj.optString("sessionsLog"),
+                    feesAgreed = obj.optString("feesAgreed"),
+                    feesPaid = obj.optString("feesPaid"),
+                    expenses = obj.optString("expenses"),
                     documentsNotes = obj.optString("documentsNotes"),
                     timestamp = obj.optLong("timestamp", System.currentTimeMillis())
                 )

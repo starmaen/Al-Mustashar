@@ -23,6 +23,16 @@ data class Case(
     val procedures: String = "",
     val status: String = "قيد النظر",
     val finalJudgment: String = "",
+    // مواعيد الطعن (1): النوع + تاريخ صدور الحكم + آخر مهلة + تنبيه
+    val appealType: String = "",
+    val appealJudgmentDate: String = "",
+    val appealDeadline: String = "",
+    // سجل الجلسات المنظم (2): JSON [{d, decision, next}]
+    val sessionsLog: String = "",
+    // المتابعة المالية (3): أتعاب متفق/مدفوع + مصاريف (نصوص أرقام)
+    val feesAgreed: String = "",
+    val feesPaid: String = "",
+    val expenses: String = "",
     val documentsNotes: String = "",
     val userId: String = "",
     val timestamp: Long = System.currentTimeMillis()

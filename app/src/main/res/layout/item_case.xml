@@ -109,7 +109,32 @@
                 android:gravity="right" />
         </LinearLayout>
 
-        <!-- شريط إجراءات التواصل السريع مع الموكل -->
+        <!-- بطاقة مهلة الطعن القريبة -->
+        <TextView
+            android:id="@+id/tvAppealDeadline"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="#FFEBEE"
+            android:padding="8dp"
+            android:text="⚖️ مهلة الطعن: -"
+            android:textColor="#C62828"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:gravity="right"
+            android:visibility="gone" />
+
+        <!-- المرحلة الزمنية للدعوى -->
+        <TextView
+            android:id="@+id/tvCaseStage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text=""
+            android:textColor="#455A64"
+            android:textSize="12sp"
+            android:gravity="right" />
+
         <LinearLayout
             android:id="@+id/layoutClientActions"
             android:layout_width="match_parent"
