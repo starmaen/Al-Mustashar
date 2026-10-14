@@ -181,9 +181,37 @@ def repair_words(text):
     return text, count[0]
 
 
+# شظايا لا تقف وحدها أبداً: تتمة كلمة انشطرت آخر السطر (المحاكم\nات)
+_SPLIT_TAILS = ("ات", "ون", "ين", "وا", "وه", "تان", "تين", "نة", "ة")
+
+
+def join_split_words(text):
+    """يلحم الكلمات المنشطرة على سطرين (مع شرطة أو بدونها)."""
+    if not text:
+        return text
+    # شرطة نهاية السطر: المحاكم-\nات -> المحاكمات
+    text = re.sub(r"([^\s])[-–—]\n+([^\s])", r"\1\2", text)
+    # شظية بسطرها: ...المحاكم\nات... -> ...المحاكمات...
+    tails = "|".join(_SPLIT_TAILS)
+    text = re.sub(r"([\u0621-\u064A])\n(" + tails + r")(?![\u0621-\u064A])",
+                  r"\1\2", text)
+    return text
+
+
+def reflow_paragraphs(text):
+    """يوحد أسطر الفقرة الواحدة (سطر طويل/قصير) ويبقي الفاصل الفارغ."""
+    if not text:
+        return text
+    return re.sub(r"(?<!\n)\n(?!\n)", " ", text)
+
+
 def repair_text(text):
-    """خط الإصلاح الكامل: تطبيع + كلمات. يعيد (النص، عدد الاستبدالات)."""
+    """خط الإصلاح الكامل: تطبيع + لحم انشطار + كلمات. يعيد (النص، العدد)."""
     if not text:
         return text, 0
     text = normalize_nfkc(text)
-    return repair_words(text)
+    before = text
+    text = join_split_words(text)
+    n_join = 0 if text == before else 1
+    text, n_words = repair_words(text)
+    return text, n_join + n_words

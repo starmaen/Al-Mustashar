@@ -280,7 +280,7 @@ class LibraryActivity : AppCompatActivity() {
                     showPassage(i)
                 }
             }, start, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            val snippet = p.text.take(250).trim() + "…\n   (اضغط العنوان للعرض الكامل)\n\n───────────────────────\n\n"
+            val snippet = DeviceUtils.reflowForDisplay(p.text).take(250).trim() + "…\n   (اضغط العنوان للعرض الكامل)\n\n───────────────────────\n\n"
             sb.append(snippet)
         }
         tvResult.text = sb
@@ -295,7 +295,7 @@ class LibraryActivity : AppCompatActivity() {
         if (index < 0 || index >= currentList.size) return
         currentIndex = index
         val p = currentList[index]
-        tvResult.text = passageHeader(p) + p.text +
+        tvResult.text = passageHeader(p) + DeviceUtils.reflowForDisplay(p.text) +
             "\n\n───────────────────────\nالنتيجة ${index + 1} من ${currentList.size}"
         try {
             Linkify.addLinks(tvResult, Linkify.WEB_URLS)

@@ -262,7 +262,7 @@ object LawsRepository {
     private fun formatOutput(lawName: String, number: String, text: String, pdfUrl: String?): String {
         val sb = StringBuilder()
         sb.append("\ud83d\udcd6 $lawName - المادة $number:\n\n")
-        sb.append(text)
+        sb.append(DeviceUtils.reflowForDisplay(text))
         return sb.toString()
     }
 }

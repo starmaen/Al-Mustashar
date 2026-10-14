@@ -533,7 +533,7 @@ class SearchActivity : AppCompatActivity() {
                                     val art = arts.getJSONObject(j)
                                     val num = art.optInt("number")
                                     sb.append("\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(num).append("\n")
-                                    sb.append(cleanArticleText(art.optString("text"), num)).append("\n\n")
+                                    sb.append(DeviceUtils.reflowForDisplay(cleanArticleText(art.optString("text"), num))).append("\n\n")
                                     count++
                                 }
                                 continue
@@ -557,7 +557,7 @@ class SearchActivity : AppCompatActivity() {
                                     sb.append("\ud83d\udcdc ").append(lawName)
                                     if (lawYear.isNotEmpty() && lawYear != "\u063a\u064a\u0631-\u0645\u062d\u062f\u062f") sb.append(" (").append(lawYear).append(")")
                                     sb.append("\n\u25aa \u0627\u0644\u0645\u0627\u062f\u0629 ").append(artNum).append("\n")
-                                    sb.append(cleanArticleText(artText, artNum)).append("\n")
+                                    sb.append(DeviceUtils.reflowForDisplay(cleanArticleText(artText, artNum))).append("\n")
                                     sb.append("\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n")
                                     if (count >= 50) break
                                 }
