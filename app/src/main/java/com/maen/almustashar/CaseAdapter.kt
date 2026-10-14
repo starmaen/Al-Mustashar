@@ -79,7 +79,7 @@ class CaseAdapter(
             holder.tvAppealDeadline.text = when {
                 days == null -> "⚖️ مهلة الطعن$typeStr: ${c.appealDeadline}"
                 days < 0 -> "⛔ انتهت مهلة الطعن$typeStr بتاريخ ${c.appealDeadline}!"
-                days == 0 -> "🔴 مهلة الطعن$typeStr اليوم!"
+                days == 0L -> "🔴 مهلة الطعن$typeStr اليوم!"
                 days <= 7 -> "🔴 مهلة الطعن$typeStr بعد $days أيام (${c.appealDeadline})"
                 days <= 30 -> "🟠 مهلة الطعن$typeStr بعد $days يوماً (${c.appealDeadline})"
                 else -> "⚖️ مهلة الطعن$typeStr: ${c.appealDeadline}"
