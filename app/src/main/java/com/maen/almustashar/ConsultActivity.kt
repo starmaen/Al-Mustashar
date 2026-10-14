@@ -75,6 +75,22 @@ class ConsultActivity : AppCompatActivity() {
                                     .append("\nالرأي القانوني:\n").append(result).append("\n")
                                 etQuestion?.text?.clear()
                                 etQuestion?.hint = "تابع نفس الاستشارة بسؤال إضافي..."
+                                // ربط أرشيف الأسئلة: حفظ الاستشارة في سجل المستخدم
+                                try {
+                                    val user = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
+                                    if (user != null) {
+                                        com.google.firebase.firestore.FirebaseFirestore.getInstance()
+                                            .collection("queries").add(
+                                                hashMapOf(
+                                                    "question" to q,
+                                                    "answer" to result,
+                                                    "userId" to user.uid,
+                                                    "timestamp" to System.currentTimeMillis()
+                                                )
+                                            )
+                                    }
+                                } catch (_: Exception) {
+                                }
                             }
                         } catch (e: Throwable) {
                             tvAnswer?.text = "❌ تعذر إتمام الاستشارة حالياً: ${e.localizedMessage}"

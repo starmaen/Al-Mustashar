@@ -191,15 +191,27 @@ class GeneralSearchActivity : AppCompatActivity() {
 
                     try {
                         val user = FirebaseAuth.getInstance().currentUser
-                        FirebaseFirestore.getInstance().collection("general_queries").add(
-                            hashMapOf(
-                                "question" to question,
-                                "answer" to cleaned,
-                                "userId" to (user?.uid ?: "anonymous"),
-                                "email" to (user?.email ?: ""),
-                                "timestamp" to System.currentTimeMillis()
+                        if (user != null) {
+                            // مسجل: أرشيف الأسئلة الخاص — يغذي شاشة الأرشيف
+                            FirebaseFirestore.getInstance().collection("queries").add(
+                                hashMapOf(
+                                    "question" to question,
+                                    "answer" to cleaned,
+                                    "userId" to user.uid,
+                                    "timestamp" to System.currentTimeMillis()
+                                )
                             )
-                        )
+                        } else {
+                            FirebaseFirestore.getInstance().collection("general_queries").add(
+                                hashMapOf(
+                                    "question" to question,
+                                    "answer" to cleaned,
+                                    "userId" to "anonymous",
+                                    "email" to "",
+                                    "timestamp" to System.currentTimeMillis()
+                                )
+                            )
+                        }
                     } catch (_: Exception) {}
                 } else {
                     tvResult.text = answer.ifEmpty { "تعذر الحصول على رد حالياً." }

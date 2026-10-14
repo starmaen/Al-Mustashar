@@ -400,29 +400,6 @@ class DraftingStudioActivity : AppCompatActivity() {
         }
     }
 
-    private fun applyResultStyle() {
-        try {
-            etResult.textSize = fontSize
-            etResult.setTextColor(fontColor)
-        } catch (_: Exception) {
-        }
-    }
-
-    private fun showColorPicker() {
-        val names = arrayOf("كحلي", "أسود", "أخضر داكن", "عنابي", "أزرق", "رمادي داكن")
-        val values = intArrayOf(
-            Color.parseColor("#0F2042"), Color.BLACK, Color.parseColor("#1B5E20"),
-            Color.parseColor("#6A1B1B"), Color.parseColor("#0D47A1"), Color.parseColor("#37474F")
-        )
-        AlertDialog.Builder(this)
-            .setTitle("🎨 لون الخط")
-            .setItems(names) { _, which ->
-                fontColor = values[which]
-                applyResultStyle()
-            }
-            .show()
-    }
-
     private fun copyResult() {
         val text = etResult.text.toString()
         if (text.isNotEmpty()) {
