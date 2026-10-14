@@ -1,21 +1,21 @@
 {
-  "generated_at": "2026-10-14T10:57:00.250612",
+  "generated_at": "2026-10-14T16:15:35.820960",
   "total_laws": 21,
   "warnings": [],
   "laws": [
+    {
+      "id": "قانون-الكاتب-بالعدل-رقم-11-2014",
+      "name": "قانون الكاتب بالعدل رقم 11",
+      "articles_count": 43,
+      "prev_count": null,
+      "status": "new",
+      "method": "PyMuPDF"
+    },
     {
       "id": "قانون-الجمارك-رقم-109-2026",
       "name": "قانون الجمارك رقم 109",
       "articles_count": 79,
       "prev_count": 79,
-      "status": "unchanged",
-      "method": "Tesseract"
-    },
-    {
-      "id": "اساس-قانون-الكاتب-بالعدل-رقم-15-2014",
-      "name": "اساس قانون الكاتب بالعدل رقم 15",
-      "articles_count": 43,
-      "prev_count": 43,
       "status": "unchanged",
       "method": "Tesseract"
     },
