@@ -103,12 +103,7 @@ class LibraryActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnLibrarySearch).setOnClickListener { doSearch() }
         findViewById<Button>(R.id.btnLibraryAsk).setOnClickListener { doAsk() }
-        findViewById<Button>(R.id.btnGeneralDrafting).setOnClickListener {
-            try {
-                startActivity(Intent(this, DraftingStudioActivity::class.java))
-            } catch (_: Exception) {
-            }
-        }
+        // قسم الصياغة العامة مستقل من درج التنقل فقط — لا زر داخل المكتبة (إزالة التداخل).
         etSearch.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_SEARCH) {
                 doSearch()

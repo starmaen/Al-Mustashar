@@ -69,6 +69,16 @@
                 android:textIsSelectable="true"
                 android:gravity="right"
                 android:textDirection="rtl" />
+
+            <TextView
+                android:id="@+id/tvProvider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:text="المصدر: —"
+                android:textColor="#64748B"
+                android:textSize="11sp" />
         </LinearLayout>
     </ScrollView>
 

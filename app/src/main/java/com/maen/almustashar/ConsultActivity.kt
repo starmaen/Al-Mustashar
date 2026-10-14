@@ -36,6 +36,7 @@ class ConsultActivity : AppCompatActivity() {
             val btnAsk = findViewById<Button>(R.id.btnAsk)
             val progressBar = findViewById<ProgressBar>(R.id.progressBar)
             val tvAnswer = findViewById<TextView>(R.id.tvAnswer)
+            val tvProvider = findViewById<TextView>(R.id.tvProvider)
             val btnCopy = findViewById<Button>(R.id.btnCopy)
             val btnShare = findViewById<Button>(R.id.btnShare)
 
@@ -71,6 +72,7 @@ class ConsultActivity : AppCompatActivity() {
                             val result = AIClient.askLegalQuestion(prompt, this@ConsultActivity)
                             tvAnswer?.text = result
                             try {
+                                tvProvider?.text = "المصدر: ${AIClient.lastProvider}"
                                 Toast.makeText(this@ConsultActivity, "المصدر: ${AIClient.lastProvider}", Toast.LENGTH_SHORT).show()
                             } catch (_: Exception) {}
                             if (!result.startsWith("❌")) {
