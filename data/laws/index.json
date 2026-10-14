@@ -1,5 +1,5 @@
 {
-  "last_updated": "2026-10-14T02:58:48.571592",
+  "last_updated": "2026-10-14T04:12:39.947784",
   "total_laws": 21,
   "laws": [
     {
@@ -134,7 +134,7 @@
       "year": "2014",
       "type": "معدل",
       "file": "قانون-البينات-2014.json",
-      "articles_count": 152,
+      "articles_count": 153,
       "extraction_method": "PyMuPDF"
     },
     {

@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-14T02:58:48.570413",
+  "generated_at": "2026-10-14T04:12:39.946688",
   "total_laws": 21,
   "warnings": [],
   "laws": [
@@ -7,8 +7,8 @@
       "id": "قانون-الجمارك-رقم-109-2026",
       "name": "قانون الجمارك رقم 109",
       "articles_count": 79,
-      "prev_count": null,
-      "status": "new",
+      "prev_count": 79,
+      "status": "unchanged",
       "method": "Tesseract"
     },
     {
@@ -118,9 +118,9 @@
     {
       "id": "قانون-البينات-2014",
       "name": "قانون البينات",
-      "articles_count": 152,
+      "articles_count": 153,
       "prev_count": 152,
-      "status": "unchanged",
+      "status": "updated",
       "method": "PyMuPDF"
     },
     {
