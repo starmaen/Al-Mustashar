@@ -48,14 +48,18 @@ class ConsultActivity : AppCompatActivity() {
 
                     lifecycleScope.launch {
                         try {
-                            // تأسيس الاستشارة على مواد القوانين (المحلية أولاً) للاستشهاد الدقيق
+                            // تأسيس الاستشارة على مواد القوانين — التحميل والبحث الثقيل على خيط الخلفية لعدم تجميد الواجهة
                             val pool = try {
-                                LawsLocalCache.loadPool(applicationContext)
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    LawsLocalCache.loadPool(applicationContext)
+                                }
                             } catch (_: Exception) {
                                 null
                             }
                             val localLaws = try {
-                                LawsRepository.searchRelevantLaws(q, null, pool?.first, pool?.second).take(2500)
+                                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                    LawsRepository.searchRelevantLaws(q, null, pool?.first, pool?.second).take(2500)
+                                }
                             } catch (_: Exception) {
                                 ""
                             }

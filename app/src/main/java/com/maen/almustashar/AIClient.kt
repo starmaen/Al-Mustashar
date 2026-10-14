@@ -142,8 +142,10 @@ object AIClient {
     }
 
     // سلسلة Gemini بالترتيب: 4 ثم 3.8 ثم 3.5 — يجرّب كل اسم فعلياً حتى لو غاب عن قائمة النماذج المعلنة لمفتاحك
+    // آخر نموذج نجح يُجرَّب أولاً لتفادي انتظار محاولات فاشلة في كل سؤال (تسريع)
+    @Volatile private var lastWorkingGemini: String? = null
     private fun geminiChain(): List<String> =
-        listOf(GEMINI_PRIMARY, GEMINI_FALLBACK, "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash", resolveGemini()).distinct()
+        (listOfNotNull(lastWorkingGemini) + listOf(GEMINI_PRIMARY, GEMINI_FALLBACK, "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash", resolveGemini())).distinct()
 
     private var lastGeminiError: AIResult.Error? = null
 
@@ -151,7 +153,7 @@ object AIClient {
         lastGeminiError = null
         for (m in geminiChain()) {
             when (val r = call(m)) {
-                is AIResult.Success -> { markProvider("Gemini:$m"); return finalizeAnswer(r.text, origPrompt) }
+                is AIResult.Success -> { lastWorkingGemini = m; markProvider("Gemini:$m"); return finalizeAnswer(r.text, origPrompt) }
                 is AIResult.Error -> lastGeminiError = r
             }
         }
