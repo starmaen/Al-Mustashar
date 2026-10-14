@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-14T04:12:39.946688",
+  "generated_at": "2026-10-14T10:57:00.250612",
   "total_laws": 21,
   "warnings": [],
   "laws": [
@@ -119,8 +119,8 @@
       "id": "قانون-البينات-2014",
       "name": "قانون البينات",
       "articles_count": 153,
-      "prev_count": 152,
-      "status": "updated",
+      "prev_count": 153,
+      "status": "unchanged",
       "method": "PyMuPDF"
     },
     {
