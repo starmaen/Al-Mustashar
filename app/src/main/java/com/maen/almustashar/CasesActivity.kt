@@ -118,6 +118,13 @@ class CasesActivity : AppCompatActivity() {
             showBackupSettings()
         }
 
+        findViewById<Button>(R.id.btnGeneralDrafting).setOnClickListener {
+            try {
+                startActivity(Intent(this, DraftingStudioActivity::class.java))
+            } catch (_: Exception) {
+            }
+        }
+
         // جدولة النسخ التلقائي اليومي حسب اختيار المستخدم (يدوي فقط = إلغاء)
         try {
             AutoBackupScheduler.ensure(this)

@@ -25,6 +25,11 @@ class MainActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
     private lateinit var drawer: DrawerLayout
 
+    companion object {
+        @Volatile
+        private var checkInProgress = false
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -41,6 +46,13 @@ class MainActivity : AppCompatActivity() {
 
         drawer = findViewById(R.id.drawerLayout)
         auth = FirebaseAuth.getInstance()
+
+        // طلب داخلي لاستثناء التطبيق من قاتل الخلفية (مرة واحدة فقط).
+        // يفتح نافذة النظام الرسمية بدل الذهاب اليدوي للإعدادات.
+        try {
+            BatteryHelper.requestUnrestrictedOnce(this)
+        } catch (_: Exception) {
+        }
 
         findViewById<ImageView>(R.id.ivMenu).setOnClickListener {
             drawer.openDrawer(GravityCompat.END)
@@ -126,6 +138,11 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, LibraryActivity::class.java))
         }
 
+        findViewById<View>(R.id.navDrafting)?.setOnClickListener {
+            drawer.closeDrawer(GravityCompat.END)
+            startActivity(Intent(this, DraftingStudioActivity::class.java))
+        }
+
         findViewById<View>(R.id.navQueries).setOnClickListener {
             drawer.closeDrawer(GravityCompat.END)
             requireLogin {
@@ -150,16 +167,21 @@ class MainActivity : AppCompatActivity() {
         checkNewLaws()
     }
 
-    // تنبيه القوانين الجديدة المضافة على Drive (مرة واحدة لكل جديد)
+    // تنبيه القوانين الجديدة: مخفف داخلياً لأجهزة 4GB.
+    // - يعمل مرة واحدة فقط لكل عملية (process) بدل كل onResume.
+    // - لا يعيد تحميل index.json مرتين ولا يزامن ثقيلاً هنا (المزامنة تتم في App.onCreate).
+    // - هذا يمنع التهنيق والإحساس بإعادة التحميل عند الخروج والعودة.
     private fun checkNewLaws() {
+        if (App.newLawsNotified || checkInProgress) return
+        checkInProgress = true
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // الفحص قبل المزامنة: وإلا محت المقارنة ولم يظهر التنبيه أبداً
                 val fresh = LawsLocalCache.checkNewRemote(applicationContext)
-                LawsLocalCache.syncIfNeeded(applicationContext)
                 if (!fresh.isNullOrEmpty()) {
+                    App.newLawsNotified = true
                     runOnUiThread {
                         try {
+                            if (isFinishing || isDestroyed) return@runOnUiThread
                             AlertDialog.Builder(this@MainActivity)
                                 .setTitle("📚 قوانين جديدة في المكتبة")
                                 .setMessage("أُضيفت حديثاً:\n\n• " + fresh.joinToString("\n• "))
@@ -173,6 +195,8 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             } catch (_: Exception) {
+            } finally {
+                checkInProgress = false
             }
         }
     }

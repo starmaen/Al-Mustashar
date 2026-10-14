@@ -85,6 +85,19 @@
                     android:textSize="11sp"
                     android:padding="0dp"
                     app:strokeColor="#C5A059" />
+
+                <Button
+                    android:id="@+id/btnGeneralDrafting"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="38dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="✍️ صياغة"
+                    android:textColor="#FFFFFF"
+                    android:textSize="11sp"
+                    android:padding="0dp"
+                    app:strokeColor="#C5A059" />
             </LinearLayout>
 
             <TextView
