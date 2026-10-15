@@ -29,6 +29,8 @@
             android:background="#FFFFFF"
             android:padding="12dp"
             android:textSize="14sp"
+            android:textColor="#212121"
+            android:textColorHint="#757575"
             android:layout_marginBottom="12dp" />
 
         <EditText
@@ -40,7 +42,31 @@
             android:background="#FFFFFF"
             android:padding="12dp"
             android:textSize="14sp"
-            android:layout_marginBottom="16dp" />
+            android:textColor="#212121"
+            android:textColorHint="#757575"
+            android:layout_marginBottom="12dp" />
+
+        <EditText
+            android:id="@+id/etCustomerPhone"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:hint="رقم الهاتف / الواتساب"
+            android:inputType="phone"
+            android:background="#FFFFFF"
+            android:padding="12dp"
+            android:textSize="14sp"
+            android:textColor="#212121"
+            android:textColorHint="#757575"
+            android:layout_marginBottom="12dp" />
+
+        <CheckBox
+            android:id="@+id/cbGifted"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🎁 ترخيص مجاني كهدية"
+            android:textColor="#212121"
+            android:textSize="14sp"
+            android:layout_marginBottom="12dp" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -86,7 +112,7 @@
             android:layout_width="match_parent"
             android:layout_height="52dp"
             android:text="توليد كود التفعيل وأرشفته"
-            android:textColor="#0F2042"
+            android:textColor="#FFFFFF"
             android:backgroundTint="#1A237E"
             android:textSize="15sp"
             android:layout_marginBottom="20dp" />
@@ -132,7 +158,7 @@
                     android:layout_height="44dp"
                     android:layout_weight="1"
                     android:text="نسخ الكود"
-                    android:textColor="#0F2042"
+                    android:textColor="#FFFFFF"
                     android:backgroundTint="#5E35B1" />
 
                 <View
@@ -145,10 +171,50 @@
                     android:layout_height="44dp"
                     android:layout_weight="1"
                     android:text="مشاركة واتساب"
-                    android:textColor="#0F2042"
+                    android:textColor="#FFFFFF"
                     android:backgroundTint="#2E7D32" />
             </LinearLayout>
         </LinearLayout>
+
+        <!-- أرشيف المرخصين: مرتبط بالتوليد أعلاه -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="📋 أرشيف المرخصين"
+            android:textColor="#263238"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:layout_marginBottom="8dp" />
+
+        <EditText
+            android:id="@+id/etSearchLicenses"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:hint="🔍 بحث بالاسم أو الهاتف أو الكود..."
+            android:background="#FFFFFF"
+            android:padding="12dp"
+            android:textSize="13sp"
+            android:textColor="#212121"
+            android:textColorHint="#757575"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:id="@+id/tvLicensesEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="لا مرخصين بعد — ولّد أول ترخيص أعلاه."
+            android:textColor="#757575"
+            android:textSize="13sp"
+            android:gravity="center"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/layoutLicensesList"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
 
     </LinearLayout>
 </ScrollView>

@@ -2,7 +2,9 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
 
     <!-- الثيم الرئيسي -->
-    <style name="Theme.AlMustashar" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <!-- فاتح إجباري: لا توجد موارد ليلية، والوضع الداكن يجعل النص الأسود
+         الثابت غير مقروء على الخلفيات الداكنة (شكوى المالك) -->
+    <style name="Theme.AlMustashar" parent="Theme.MaterialComponents.Light.NoActionBar">
         <!-- الألوان الأساسية -->
         <item name="colorPrimary">@color/primary</item>
         <item name="colorPrimaryVariant">@color/primary_dark</item>

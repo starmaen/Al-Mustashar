@@ -54,6 +54,12 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // أرشيف التراخيص: المالك (admin) فقط — يُنشر من Firebase Console
+    match /licenses/{licenseId} {
+      allow read, write: if request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
     match /legalDocuments/{document} {
       allow read: if request.auth != null &&
                      (resource.data.userId == request.auth.uid ||

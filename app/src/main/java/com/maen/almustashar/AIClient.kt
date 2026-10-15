@@ -82,7 +82,10 @@ object AIClient {
     }
 
     private fun withLangGuard(userPrompt: String): String =
-        if (wantsEnglish(userPrompt)) userPrompt else userPrompt + AR_ONLY_RULE
+        if (wantsEnglish(userPrompt)) userPrompt else userPrompt + AR_ONLY_RULE + NUMBERS_RULE
+
+    // قاعدة الأرقام للمحاكم: الرقم رقماً دائماً — كتابته حروفاً خطأ مهني
+    private const val NUMBERS_RULE = "\n[قاعدة أرقام ملزمة للمحاكم: اكتب كل الأرقام أرقاماً لاتينية كما هي تماماً (أرقام المواد والقوانين والسنوات والمدد والنسب). مثال: المادة 103، القانون 59 لعام 1953، مهلة 30 يوماً. يمنع منعاً باتاً كتابة أي رقم بالحروف (لا تكتب مائة وثلاثة أبداً). عند الاستشهاد بمادة اكتب رقمها رقمياً دائماً.]"
 
     // قاموس إسعافي لأشهر المصطلحات الإنجليزية التي تسربت سابقاً (من لقطات المستخدم)
     // يطبق فقط عندما لم يطلب المستخدم الإنجليزية.
@@ -123,7 +126,39 @@ object AIClient {
     // عزل أي مقطع لاتيني متبقٍ بمحارف FSI/PDI حتى لا يكسر اتجاه السطر العربي
     private val LATIN_RUN = Regex("[A-Za-z][A-Za-z0-9 \\t\\-_,.;:'\"()/]*[A-Za-z0-9)]|[A-Za-z]")
     private fun isolateBidi(text: String): String {
-        return LATIN_RUN.replace(text) { m -> "\u2066${m.value}\u2069" }
+        return LATIN_RUN.replace(text) { m -> "⁦${m.value}⁩" }
+    }
+
+    // كشف التسرب الأجنبي الثقيل (جمل كاملة لا تصلحها الترجمة المفرداتية)
+    private val LATIN_WORD = Regex("[A-Za-z]{4,}")
+    private fun needsArabicRetry(text: String): Boolean {
+        if (text.startsWith("❌") || text.isBlank()) return false
+        val words = LATIN_WORD.findAll(text).count()
+        if (words >= 3) return true
+        val latin = LATIN_WORD.findAll(text).sumOf { it.value.length }
+        return latin.toDouble() / text.length.toDouble() > 0.03
+    }
+
+    // إعادة صياغة واحدة بالعربية الخالصة عبر أقوى مزود (للمحاكم: النص المختلط مرفوض)
+    private fun repairArabicOnce(text: String): String {
+        val fix = "أعد كتابة النص التالي باللغة العربية الفصحى الخالصة حصراً. ممنوع أي حرف لاتيني إطلاقاً: ترجم كل مصطلح أجنبي إلى مقابله العربي (الزوج، الزوجة، الإجراءات، المحكمة، كاتب المحكمة...). حافظ على المعنى والأرقام والنصوص القانونية المقتبسة حرفياً. قاعدة الأرقام: اكتب كل الأرقام أرقاماً لاتينية كما هي (المادة 103) ويمنع كتابتها حروفاً. أخرج النص العربي فقط بلا مقدمات ولا شروح:\n\n$text"
+        for (m in geminiChain()) {
+            when (val r = callGemini(m, fix)) {
+                is AIResult.Success -> {
+                    lastWorkingGemini = m
+                    markProvider("Gemini:$m-repair")
+                    return purifiedAnswer(r.text, "")
+                }
+                is AIResult.Error -> lastGeminiError = r
+            }
+        }
+        return text // بقي الأصل إن فشلت الإعادة
+    }
+
+    private fun purifiedAnswer(text: String, userPrompt: String): String {
+        val fin = finalizeAnswer(text, userPrompt)
+        if (wantsEnglish(userPrompt) || !needsArabicRetry(fin)) return fin
+        return repairArabicOnce(fin)
     }
 
     private fun finalizeAnswer(raw: String, userPrompt: String): String {
@@ -153,7 +188,7 @@ object AIClient {
         lastGeminiError = null
         for (m in geminiChain()) {
             when (val r = call(m)) {
-                is AIResult.Success -> { lastWorkingGemini = m; markProvider("Gemini:$m"); return finalizeAnswer(r.text, origPrompt) }
+                is AIResult.Success -> { lastWorkingGemini = m; markProvider("Gemini:$m"); return purifiedAnswer(r.text, origPrompt) }
                 is AIResult.Error -> lastGeminiError = r
             }
         }
@@ -166,14 +201,14 @@ object AIClient {
         tryGeminiChain({ m -> callGemini(m, guarded) }, prompt)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(guarded)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, prompt) }
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, prompt) }
 
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
-        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, prompt) }
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, prompt) }
 
         val gm = resolveGroq()
         val groqRes = callGroq(gm, guarded, SYSTEM_PROMPT)
-        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext finalizeAnswer(groqRes.text, prompt) }
+        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext purifiedAnswer(groqRes.text, prompt) }
 
         return@withContext when {
             lastGeminiError != null -> "❌ فشل الاتصال: ${lastGeminiError?.message}"
@@ -190,14 +225,14 @@ object AIClient {
         tryGeminiChain({ m -> callGemini(m, guarded) }, prompt)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(guarded)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, prompt) }
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, prompt) }
 
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
-        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, prompt) }
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, prompt) }
 
         val gm = resolveGroq()
         val groqRes = callGroq(gm, guarded, SYSTEM_PROMPT)
-        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext finalizeAnswer(groqRes.text, prompt) }
+        if (groqRes is AIResult.Success) { markProvider("Groq:$gm"); return@withContext purifiedAnswer(groqRes.text, prompt) }
 
         return@withContext "❌ تعذر الاتصال بمزود الخدمة."
     }
@@ -209,13 +244,13 @@ object AIClient {
         tryGeminiChain({ m -> callGemini(m, guarded) }, rawQ)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(guarded)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, rawQ) }
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, rawQ) }
 
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
-        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, rawQ) }
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, rawQ) }
 
         val groqRes = callGroq(resolveGroq(), guarded, SYSTEM_PROMPT)
-        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext finalizeAnswer(groqRes.text, rawQ) }
+        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext purifiedAnswer(groqRes.text, rawQ) }
 
         return@withContext ""
     }
@@ -231,13 +266,13 @@ object AIClient {
         tryGeminiChain({ m -> callGeminiWithParts(m, fullPrompt, attachmentsBase64) }, userNotes)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(fullPrompt)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, userNotes) }
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, userNotes) }
 
         val orRes = callOpenRouter(guardedNotes, DRAFTING_SYSTEM_PROMPT)
-        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, userNotes) }
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, userNotes) }
 
         val groqRes = callGroq(resolveGroq(), guardedNotes, DRAFTING_SYSTEM_PROMPT)
-        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext finalizeAnswer(groqRes.text, userNotes) }
+        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext purifiedAnswer(groqRes.text, userNotes) }
 
         return@withContext when {
             lastGeminiError != null -> "❌ فشل التوليد: ${lastGeminiError?.message}"
@@ -362,13 +397,13 @@ $passages
         tryGeminiChain({ m -> callGeminiWithParts(m, libPrompt, emptyList()) }, question)?.let { return@withContext it }
 
         val sparkRes = callMuseSpark(libPrompt)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext finalizeAnswer(sparkRes.text, question) }
+        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, question) }
 
         val orRes = callOpenRouter(libPrompt, SYSTEM_PROMPT)
-        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext finalizeAnswer(orRes.text, question) }
+        if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, question) }
 
         val groqRes = callGroq(resolveGroq(), libPrompt, libPrompt.substringBefore("\n\nالمراجع:"))
-        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext finalizeAnswer(groqRes.text, question) }
+        if (groqRes is AIResult.Success) { markProvider("Groq"); return@withContext purifiedAnswer(groqRes.text, question) }
 
         return@withContext "❌ تعذر الاتصال بمزود الخدمة."
     }
