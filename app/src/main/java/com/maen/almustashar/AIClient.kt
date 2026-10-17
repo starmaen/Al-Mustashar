@@ -19,7 +19,7 @@ sealed class AIResult {
 
 object AIClient {
     // المفاتيح تُحقن من BuildConfig عبر GitHub Secrets — لا توجد مفاتيح نصية هنا.
-    // الترتيب المعتمد: Gemini أولاً (4 ثم 3.8 ثم البدلاء)، ثم Muse Spark لدقته، ثم OpenRouter، وGroq أخيراً.
+    // الترتيب المعتمد: Gemini أولاً (4 ثم 3.8 ثم البدلاء)، ثم DeepSeek لدقته، ثم OpenRouter، وGroq أخيراً.
     // أسماء الموديلات ثابتة هنا (مدروسة ومجربة) — لا Secrets لها لتفادي فخ القيم الفارغة.
     // Gemini 4 صدر اليوم وهو اختيارك الأول، ثم 3.8 (اشتراكك)، ثم 3.5-lite السريع
     private const val GEMINI_PRIMARY = "gemini-4-flash"
@@ -27,6 +27,11 @@ object AIClient {
     // موديل Groq الأصلي السريع (المثبت تاريخياً في التطبيق) — والاكتشاف يرقّيه تلقائياً إن تقاعد
     private const val GROQ_MODEL = "llama-3.1-8b-instant"
     private const val OR_MODEL = "google/gemma-4-31b-it:free"
+    // DeepSeek V4.1 Flash عبر OpenCode Zen (المزود الثاني بعد Gemini) — المجاني حالياً.
+    // نفس مفتاح OPENCODE_ZEN_API_KEY الحالي، ونقطة النهاية القياسية المتوافقة مع OpenAI.
+    private const val DEEPSEEK_MODEL = "deepseek-v4.1-flash-free"
+    private const val ZEN_ENDPOINT = "https://opencode.ai/inference/openai/v1/chat/completions"
+    private const val ZEN_MODELS_ENDPOINT = "https://opencode.ai/inference/v1/models"
     private fun geminiKey(): String = try { BuildConfig.GEMINI_API_KEY } catch (_: Exception) { "" }
     private fun zenKey(): String = try { BuildConfig.OPENCODE_ZEN_API_KEY } catch (_: Exception) { "" }
     private fun groqKey(): String = try { BuildConfig.GROQ_API_KEY } catch (_: Exception) { "" }
@@ -163,11 +168,10 @@ object AIClient {
         return text // بقي الأصل إن فشلت الإعادة
     }
 
-    private fun purifiedAnswer(text: String, userPrompt: String): String {
+private fun purifiedAnswer(text: String, userPrompt: String): String {
         val fin = finalizeAnswer(text, userPrompt)
-        if (wantsEnglish(userPrompt) || looksArabic(fin)) return fin
-        val repaired = repairArabicText(fin)
-        return if (looksArabic(repaired)) isolateBidi(arabizeCommonTerms(repaired)) else ARABIC_ONLY_FAILURE
+        if (wantsEnglish(userPrompt)) return fin
+        return if (needsArabicRetry(fin)) repairArabicOnce(fin) else arabizeCommonTerms(fin)
     }
 
     private fun finalizeAnswer(raw: String, userPrompt: String): String {
@@ -204,13 +208,13 @@ object AIClient {
         return null
     }
 
-    // 1. الاستشارة القانونية — الترتيب: Gemini (4/3.8/3.5) ثم Muse Spark ثم OpenRouter وGroq أخيراً
+    // 1. الاستشارة القانونية — الترتيب: Gemini (4/3.8/3.5) ثم DeepSeek ثم OpenRouter وGroq أخيراً
     suspend fun askLegalQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
         val guarded = withLangGuard(prompt)
         tryGeminiChain({ m -> callGemini(m, guarded) }, prompt)?.let { return@withContext it }
 
-        val sparkRes = callMuseSpark(guarded)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, prompt) }
+        val deepseekRes = callDeepSeek(resolveDeepSeek(), guarded)
+        if (deepseekRes is AIResult.Success) { markProvider("DeepSeek"); return@withContext purifiedAnswer(deepseekRes.text, prompt) }
 
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
         if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, prompt) }
@@ -221,20 +225,20 @@ object AIClient {
 
         return@withContext when {
             lastGeminiError != null -> "❌ فشل الاتصال: ${lastGeminiError?.message}"
-            sparkRes is AIResult.Error -> "❌ فشل اتصال ماوي سبارك: ${sparkRes.message}"
+            deepseekRes is AIResult.Error -> "❌ فشل اتصال DeepSeek: ${deepseekRes.message}"
             orRes is AIResult.Error -> "❌ فشل اتصال البديل الثالث: ${orRes.message}"
             groqRes is AIResult.Error -> "❌ فشل اتصال Groq: ${groqRes.message}"
             else -> "❌ تعذر إتمام الطلب، يرجى التحقق من اتصال الإنترنت."
         }
     }
 
-    // 2. البحث العام — نفس الترتيب: Gemini ثم Muse Spark ثم OpenRouter وGroq أخيراً
+    // 2. البحث العام — نفس الترتيب: Gemini ثم DeepSeek ثم OpenRouter وGroq أخيراً
     suspend fun askGeneralQuestion(prompt: String, context: Context? = null): String = withContext(Dispatchers.IO) {
         val guarded = withLangGuard(prompt)
         tryGeminiChain({ m -> callGemini(m, guarded) }, prompt)?.let { return@withContext it }
 
-        val sparkRes = callMuseSpark(guarded)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, prompt) }
+        val deepseekRes = callDeepSeek(resolveDeepSeek(), guarded)
+        if (deepseekRes is AIResult.Success) { markProvider("DeepSeek"); return@withContext purifiedAnswer(deepseekRes.text, prompt) }
 
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
         if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, prompt) }
@@ -252,8 +256,8 @@ object AIClient {
         val guarded = withLangGuard(searchPrompt)
         tryGeminiChain({ m -> callGemini(m, guarded) }, rawQ)?.let { return@withContext it }
 
-        val sparkRes = callMuseSpark(guarded)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, rawQ) }
+        val deepseekRes = callDeepSeek(resolveDeepSeek(), guarded)
+        if (deepseekRes is AIResult.Success) { markProvider("DeepSeek"); return@withContext purifiedAnswer(deepseekRes.text, rawQ) }
 
         val orRes = callOpenRouter(guarded, SYSTEM_PROMPT)
         if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, rawQ) }
@@ -274,8 +278,8 @@ object AIClient {
 
         tryGeminiChain({ m -> callGeminiWithParts(m, fullPrompt, attachmentsBase64) }, userNotes)?.let { return@withContext it }
 
-        val sparkRes = callMuseSpark(fullPrompt)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, userNotes) }
+        val deepseekRes = callDeepSeek(resolveDeepSeek(), guardedNotes, DRAFTING_SYSTEM_PROMPT)
+        if (deepseekRes is AIResult.Success) { markProvider("DeepSeek"); return@withContext purifiedAnswer(deepseekRes.text, userNotes) }
 
         val orRes = callOpenRouter(guardedNotes, DRAFTING_SYSTEM_PROMPT)
         if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, userNotes) }
@@ -285,7 +289,7 @@ object AIClient {
 
         return@withContext when {
             lastGeminiError != null -> "❌ فشل التوليد: ${lastGeminiError?.message}"
-            sparkRes is AIResult.Error -> "❌ فشل ماوي سبارك: ${sparkRes.message}"
+            deepseekRes is AIResult.Error -> "❌ فشل DeepSeek: ${deepseekRes.message}"
             orRes is AIResult.Error -> "❌ فشل البديل الثالث: ${orRes.message}"
             groqRes is AIResult.Error -> "❌ فشل البديل: ${groqRes.message}"
             else -> "❌ تعذر إتمام الصياغة، يرجى إعادة المحاولة."
@@ -296,6 +300,7 @@ object AIClient {
     private var geminiResolved: Pair<String, Long>? = null
     private var groqResolved: Pair<String, Long>? = null
     private var orResolved: Pair<String, Long>? = null
+    private var zenResolved: Pair<String, Long>? = null
 
     private fun errFor(code: Int, body: String): AIResult {
         return if (body.trimStart().startsWith("<")) {
@@ -373,6 +378,31 @@ object AIClient {
         return OR_MODEL
     }
 
+    // اكتشاف ذاتي لموديل DeepSeek من قائمة OpenCode Zen — يفضّل المجاني ثم أي Flash، وإلا الاسم الثابت
+    private fun resolveDeepSeek(): String {
+        fresh(zenResolved)?.let { return it }
+        val key = zenKey()
+        if (key.isNotBlank()) {
+            val list = httpGet(ZEN_MODELS_ENDPOINT, mapOf("Authorization" to "Bearer $key"))
+            val freeFlash = pickFromList(list, "data", "id", "") {
+                it.contains("deepseek", true) && it.contains("flash", true) && it.contains("free", true)
+            }
+            if (!freeFlash.isNullOrBlank() && freeFlash.contains("deepseek", true)) {
+                zenResolved = freeFlash to System.currentTimeMillis()
+                return freeFlash
+            }
+            val anyFlash = pickFromList(list, "data", "id", "") {
+                it.contains("deepseek", true) && it.contains("flash", true)
+            }
+            // لا نقبل إلا موديل DeepSeek فعلاً (نتفادى الوقوع على أول موديل في القائمة)
+            if (!anyFlash.isNullOrBlank() && anyFlash.contains("deepseek", true)) {
+                zenResolved = anyFlash to System.currentTimeMillis()
+                return anyFlash
+            }
+        }
+        return DEEPSEEK_MODEL
+    }
+
     private fun pickFromList(
         listJson: String?, arrayKey: String, idKey: String, prefix: String,
         prefer: (String) -> Boolean
@@ -405,8 +435,8 @@ $passages
 السؤال: ${withLangGuard(question)}"""
         tryGeminiChain({ m -> callGeminiWithParts(m, libPrompt, emptyList()) }, question)?.let { return@withContext it }
 
-        val sparkRes = callMuseSpark(libPrompt)
-        if (sparkRes is AIResult.Success) { markProvider("MuseSpark"); return@withContext purifiedAnswer(sparkRes.text, question) }
+        val deepseekRes = callDeepSeek(resolveDeepSeek(), libPrompt)
+        if (deepseekRes is AIResult.Success) { markProvider("DeepSeek"); return@withContext purifiedAnswer(deepseekRes.text, question) }
 
         val orRes = callOpenRouter(libPrompt, SYSTEM_PROMPT)
         if (orRes is AIResult.Success) { markProvider("OpenRouter"); return@withContext purifiedAnswer(orRes.text, question) }
@@ -524,17 +554,29 @@ $passages
         }
     }
 
-    // ماوي سبارك 1.3 المجاني عبر OpenCode Zen (الثاني بعد Gemini لدقته، وGroq أخيراً).
-    // Endpoint: https://opencode.ai/zen/v1/responses — بروتوكول OpenAI Responses.
-    // المفتاح من لوحة https://opencode.ai/console ويُحقن عبر OPENCODE_ZEN_API_KEY.
-    private fun callMuseSpark(prompt: String): AIResult {
+    // DeepSeek V4.1 Flash عبر OpenCode Zen (المزود الثاني بعد Gemini، وقبل OpenRouter وGroq).
+    // Endpoint: https://opencode.ai/inference/openai/v1/chat/completions — بروتوكول OpenAI القياسي.
+    // المفتاح من لوحة https://opencode.ai/console ويُحقن عبر OPENCODE_ZEN_API_KEY (نفس مفتاح ماوي سبارك السابق).
+    private fun callDeepSeek(model: String, prompt: String, systemPrompt: String = SYSTEM_PROMPT): AIResult {
         return try {
             val key = zenKey()
-            if (key.isBlank()) return AIResult.Error("مفتاح ماوي سبارك غير مضبوط")
-            val url = "https://opencode.ai/zen/v1/responses"
+            if (key.isBlank()) return AIResult.Error("مفتاح DeepSeek غير مضبوط")
+            val url = ZEN_ENDPOINT
             val rootJson = JsonObject()
-            rootJson.addProperty("model", "muse-spark-1.3-contributor-free")
-            rootJson.addProperty("input", "$SYSTEM_PROMPT\n\nالسؤال القانوني: $prompt")
+            rootJson.addProperty("model", model)
+            val messagesArr = JsonArray()
+
+            val sysMsg = JsonObject()
+            sysMsg.addProperty("role", "system")
+            sysMsg.addProperty("content", systemPrompt)
+            messagesArr.add(sysMsg)
+
+            val userMsg = JsonObject()
+            userMsg.addProperty("role", "user")
+            userMsg.addProperty("content", prompt)
+            messagesArr.add(userMsg)
+
+            rootJson.add("messages", messagesArr)
 
             val body = rootJson.toString().toRequestBody("application/json".toMediaType())
             val request = Request.Builder()
@@ -547,11 +589,15 @@ $passages
             client.newCall(request).execute().use { response ->
                 val respStr = response.body?.string().orEmpty()
                 if (response.isSuccessful) {
-                    val text = extractResponsesText(respStr)
+                    val parsed = JsonParser.parseString(respStr).asJsonObject
+                    val text = parsed.getAsJsonArray("choices")
+                        ?.get(0)?.asJsonObject
+                        ?.getAsJsonObject("message")
+                        ?.get("content")?.asString
                     if (!text.isNullOrBlank()) {
                         AIResult.Success(text)
                     } else {
-                        AIResult.Error("رد فارغ من ماوي سبارك")
+                        AIResult.Error("رد فارغ من DeepSeek")
                     }
                 } else {
                     errFor(response.code, respStr)
@@ -559,27 +605,6 @@ $passages
             }
         } catch (e: Exception) {
             AIResult.Error(e.localizedMessage ?: "خطأ في الاتصال")
-        }
-    }
-
-    // استخراج النص من استجابة OpenAI Responses بعدة أشكال محتملة
-    private fun extractResponsesText(respStr: String): String? {
-        return try {
-            val parsed = JsonParser.parseString(respStr).asJsonObject
-            // الشكل 1: حقل output_text المباشر
-            parsed.get("output_text")?.takeIf { it.isJsonPrimitive }?.asString?.takeIf { it.isNotBlank() }?.let { return it }
-            // الشكل 2: مصفوفة output -> message -> content -> text
-            val sb = StringBuilder()
-            parsed.getAsJsonArray("output")?.forEach { item ->
-                val obj = item?.asJsonObject ?: return@forEach
-                obj.getAsJsonArray("content")?.forEach { part ->
-                    val p = part?.asJsonObject ?: return@forEach
-                    p.get("text")?.takeIf { it.isJsonPrimitive }?.asString?.let { sb.append(it) }
-                }
-            }
-            sb.toString().takeIf { it.isNotBlank() }
-        } catch (_: Exception) {
-            null
         }
     }
 
