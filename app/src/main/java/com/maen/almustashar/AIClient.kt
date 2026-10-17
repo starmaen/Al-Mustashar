@@ -168,10 +168,11 @@ object AIClient {
         return text // بقي الأصل إن فشلت الإعادة
     }
 
-private fun purifiedAnswer(text: String, userPrompt: String): String {
+    private fun purifiedAnswer(text: String, userPrompt: String): String {
         val fin = finalizeAnswer(text, userPrompt)
-        if (wantsEnglish(userPrompt)) return fin
-        return if (needsArabicRetry(fin)) repairArabicOnce(fin) else arabizeCommonTerms(fin)
+        if (wantsEnglish(userPrompt) || looksArabic(fin)) return fin
+        val repaired = repairArabicText(fin)
+        return if (looksArabic(repaired)) isolateBidi(arabizeCommonTerms(repaired)) else ARABIC_ONLY_FAILURE
     }
 
     private fun finalizeAnswer(raw: String, userPrompt: String): String {
