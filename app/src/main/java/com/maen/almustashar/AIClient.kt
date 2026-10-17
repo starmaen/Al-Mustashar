@@ -49,7 +49,8 @@ object AIClient {
 - أجب باللغة العربية الفصحى حصراً ومن اليمين إلى اليسار. يمنع منعاً باتاً كتابة أي جملة أو عبارة باللغة الإنجليزية داخل الجواب.
 - ترجم كل المصطلحات القانونية إلى العربية (مثال: الزوج بدل Husband، الزوجة بدل wife، الإجراءات بدل procedures، كاتب المحكمة بدل clerk of the court، المحكمة بدل the court، الشخصي بدل Personal، حكومي بدل governmental، تشريعي بدل legislative، قانوني بدل Legal). لا تترك أي مصطلح إنجليزي له مقابل عربي.
 - عند الضرورة القصوى لاسم علم أجنبي لا يقبل الترجمة ضعه وحده بين قوسين عربيين ( ... ) في سطر مستقل أو آخر الجملة، ولا تدمجه وسط الكلام العربي.
-- اكتب كل فقرة بسطر مستقل، وابدأ كل بند برقم عربي ثم نقطة، ولا تدمج لغتين في سطر واحد أبداً."""
+- اكتب كل فقرة بسطر مستقل، وابدأ كل بند برقم عربي ثم نقطة، ولا تدمج لغتين في سطر واحد أبداً.
+- يُمنع منعاً باتاً إخراج كلام مشوّش أو حشو أو خلط لغات غير مفهوم. إن لم تتوفر معرفة كافية فاكتب ذلك بالعربية الفصحى بوضوح، ولا تُخرج نصاً غير عربي إطلاقاً."""
 
     private const val DRAFTING_SYSTEM_PROMPT = """أنت محامٍ ومستشار قضائي سوري متمرس وخبير في أصول المحاكمات السورية والصياغة القانونية الرصينة.
 مهمتك: صياغة مذكرات قضائية، لوائح جوابية، واستدعاءات رسمية وإدارية للبلديات والمحاكم بدقة لغوية وقانونية متناهية.
@@ -129,25 +130,32 @@ object AIClient {
         return LATIN_RUN.replace(text) { m -> "⁦${m.value}⁩" }
     }
 
-    // كشف التسرب الأجنبي الثقيل (جمل كاملة لا تصلحها الترجمة المفرداتية)
-    private val LATIN_WORD = Regex("[A-Za-z]{4,}")
-    private fun needsArabicRetry(text: String): Boolean {
-        if (text.startsWith("❌") || text.isBlank()) return false
-        val words = LATIN_WORD.findAll(text).count()
-        if (words >= 3) return true
-        val latin = LATIN_WORD.findAll(text).sumOf { it.value.length }
-        return latin.toDouble() / text.length.toDouble() > 0.03
+    // ===== بوابة اللغة على المخرَج: لا يُعرض للمستخدم نص غير عربي أو مشوّش أبداً =====
+    private val ARABIC_LETTER = Regex("[\u0621-\u064A\u0671-\u06D3\u06FA-\u06FF]")
+    private val LATIN_LETTER = Regex("[A-Za-z]")
+
+    // نص مقبول: عربي الطابع (العربية على الأقل ثلثا الحروف). الركام الأجنبي/المشوّش مرفوض.
+    private fun looksArabic(text: String): Boolean {
+        if (text.isBlank() || text.startsWith("❌")) return true
+        val arabic = ARABIC_LETTER.findAll(text).count()
+        if (arabic == 0) return false
+        val latin = LATIN_LETTER.findAll(text).count()
+        return arabic * 2 >= latin
     }
 
-    // إعادة صياغة واحدة بالعربية الخالصة عبر أقوى مزود (للمحاكم: النص المختلط مرفوض)
-    private fun repairArabicOnce(text: String): String {
-        val fix = "أعد كتابة النص التالي باللغة العربية الفصحى الخالصة حصراً. ممنوع أي حرف لاتيني إطلاقاً: ترجم كل مصطلح أجنبي إلى مقابله العربي (الزوج، الزوجة، الإجراءات، المحكمة، كاتب المحكمة...). حافظ على المعنى والأرقام والنصوص القانونية المقتبسة حرفياً. قاعدة الأرقام: اكتب كل الأرقام أرقاماً لاتينية كما هي (المادة 103) ويمنع كتابتها حروفاً. أخرج النص العربي فقط بلا مقدمات ولا شروح:\n\n$text"
+    // رسالة الفشل الأخيرة: نمنع عرض أي مخرَج أجنبي أو مشوّش مهما كان السبب
+    private const val ARABIC_ONLY_FAILURE =
+        "❌ تعذر الحصول على إجابة عربية سليمة من مزود الخدمة حالياً. يرجى إعادة المحاولة بعد قليل، أو استخدام وضع البحث في الويب 🌐."
+
+    // إعادة صياغة عربية واحدة عبر Gemini — بلا استدعاء متداخل (يمنع أي تكرار لا نهائي)
+    private fun repairArabicText(text: String): String {
+        val fix = "أعد كتابة النص التالي باللغة العربية الفصحى الخالصة حصراً. ممنوع أي حرف لاتيني أو أي كلمة بلغة أخرى إطلاقاً؛ النص الحالي مشوّش ويجب أن يصبح عربية فصيحة مفهومة. إن كان مشوّشاً تماماً لا يحمل معنى فاكتب: تعذر فهم النص. حافظ على المعنى والأرقام والنصوص القانونية المقتبسة حرفياً. قاعدة الأرقام: اكتب كل الأرقام أرقاماً لاتينية كما هي (المادة 103). أخرج النص العربي فقط بلا مقدمات ولا شروح:\n\n$text"
         for (m in geminiChain()) {
             when (val r = callGemini(m, fix)) {
                 is AIResult.Success -> {
                     lastWorkingGemini = m
                     markProvider("Gemini:$m-repair")
-                    return purifiedAnswer(r.text, "")
+                    return arabizeCommonTerms(r.text)
                 }
                 is AIResult.Error -> lastGeminiError = r
             }
@@ -157,8 +165,9 @@ object AIClient {
 
     private fun purifiedAnswer(text: String, userPrompt: String): String {
         val fin = finalizeAnswer(text, userPrompt)
-        if (wantsEnglish(userPrompt) || !needsArabicRetry(fin)) return fin
-        return repairArabicOnce(fin)
+        if (wantsEnglish(userPrompt) || looksArabic(fin)) return fin
+        val repaired = repairArabicText(fin)
+        return if (looksArabic(repaired)) isolateBidi(arabizeCommonTerms(repaired)) else ARABIC_ONLY_FAILURE
     }
 
     private fun finalizeAnswer(raw: String, userPrompt: String): String {
